@@ -105,43 +105,43 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BRIEF-01 | TBD | Pending |
-| BRIEF-02 | TBD | Pending |
-| BRIEF-03 | TBD | Pending |
-| BRIEF-04 | TBD | Pending |
-| BRIEF-05 | TBD | Pending |
-| BRIEF-06 | TBD | Pending |
-| BRIEF-07 | TBD | Pending |
-| VOICE-01 | TBD | Pending |
-| VOICE-02 | TBD | Pending |
-| VOICE-03 | TBD | Pending |
-| VOICE-04 | TBD | Pending |
-| VOICE-05 | TBD | Pending |
-| INTG-01 | TBD | Pending |
-| INTG-02 | TBD | Pending |
-| INTG-03 | TBD | Pending |
-| INTG-04 | TBD | Pending |
-| INTG-05 | TBD | Pending |
-| ACT-01 | TBD | Pending |
-| ACT-02 | TBD | Pending |
-| ACT-03 | TBD | Pending |
-| ACT-04 | TBD | Pending |
-| ACT-05 | TBD | Pending |
-| ACT-06 | TBD | Pending |
-| PERS-01 | TBD | Pending |
-| PERS-02 | TBD | Pending |
-| PERS-03 | TBD | Pending |
-| SEC-01 | TBD | Pending |
-| SEC-02 | TBD | Pending |
-| SEC-03 | TBD | Pending |
-| SEC-04 | TBD | Pending |
-| SEC-05 | TBD | Pending |
+| BRIEF-01 | Phase 2 | Pending |
+| BRIEF-02 | Phase 2 | Pending |
+| BRIEF-03 | Phase 2 | Pending |
+| BRIEF-04 | Phase 2 | Pending |
+| BRIEF-05 | Phase 2 | Pending |
+| BRIEF-06 | Phase 2 | Pending |
+| BRIEF-07 | Phase 3 | Pending |
+| VOICE-01 | Phase 5 | Pending |
+| VOICE-02 | Phase 5 | Pending |
+| VOICE-03 | Phase 5 | Pending |
+| VOICE-04 | Phase 5 | Pending |
+| VOICE-05 | Phase 5 | Pending |
+| INTG-01 | Phase 1 | Pending |
+| INTG-02 | Phase 1 | Pending |
+| INTG-03 | Phase 1 | Pending |
+| INTG-04 | Phase 1 | Pending |
+| INTG-05 | Phase 1 | Pending |
+| ACT-01 | Phase 4 | Pending |
+| ACT-02 | Phase 4 | Pending |
+| ACT-03 | Phase 4 | Pending |
+| ACT-04 | Phase 4 | Pending |
+| ACT-05 | Phase 4 | Pending |
+| ACT-06 | Phase 4 | Pending |
+| PERS-01 | Phase 3 | Pending |
+| PERS-02 | Phase 3 | Pending |
+| PERS-03 | Phase 2 | Pending |
+| SEC-01 | Phase 1 | Pending |
+| SEC-02 | Phase 2 | Pending |
+| SEC-03 | Phase 1 | Pending |
+| SEC-04 | Phase 1 | Pending |
+| SEC-05 | Phase 2 | Pending |
 
 **Coverage:**
 - v1 requirements: 31 total
-- Mapped to phases: 0 (populated during roadmap creation)
-- Unmapped: 31 ⚠️
+- Mapped to phases: 31
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-05*
-*Last updated: 2026-04-05 after initial definition*
+*Last updated: 2026-04-05 after roadmap creation*
