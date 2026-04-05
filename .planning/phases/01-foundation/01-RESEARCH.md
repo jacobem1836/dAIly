@@ -591,22 +591,25 @@ This is a greenfield codebase — no renaming or migration in scope. Included fo
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Google Cloud Project setup: is Jacob creating a new project or using an existing one?**
    - What we know: OAuth requires a Google Cloud Console project with Gmail API and Calendar API enabled
    - What's unclear: Whether test credentials already exist or need to be created as part of Phase 1
    - Recommendation: Include "create Google Cloud project + enable APIs" as a Wave 0 task
+   - **RESOLVED (default):** Create a new Google Cloud project. This is a new personal project with no existing GCP credentials. Follow the `user_setup` steps in Plan 03 to create the project, enable Gmail API and Calendar API, and create an OAuth 2.0 Client ID of type "Desktop App".
 
 2. **Azure AD app registration: personal Microsoft account vs Entra ID tenant?**
    - What we know: Personal Microsoft accounts (outlook.com) can use a consumer-facing app registration; enterprise/Entra accounts require tenant-specific setup
    - What's unclear: Which Microsoft account type Jacob is testing with
    - Recommendation: Register app for "Accounts in any organizational directory and personal Microsoft accounts" to cover both cases
+   - **RESOLVED (default):** Use a personal Microsoft account (outlook.com / hotmail.com). Register the Azure AD app with supported account types set to "Accounts in any organizational directory and personal Microsoft accounts (e.g. Skype, Xbox)" — this covers personal accounts without requiring an enterprise tenant. Use `common` as the tenant ID in `MICROSOFT_TENANT_ID`.
 
 3. **Slack workspace: does a test workspace exist?**
    - What we know: Slack internal apps must be created in an actual Slack workspace
    - What's unclear: Whether Jacob has a dedicated test workspace or will use a personal workspace
    - Recommendation: Create a free Slack workspace for development if none exists
+   - **RESOLVED (default):** Create a new free Slack workspace specifically for dAIly development. Go to https://slack.com/create, create a workspace (e.g. "dAIly Dev"), then follow the `user_setup` steps in Plan 04 to register an internal Slack app in that workspace.
 
 ---
 
