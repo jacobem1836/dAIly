@@ -87,7 +87,53 @@ def calendar():
 @connect_app.command()
 def slack():
     """Connect Slack workspace via OAuth."""
-    typer.echo("Slack OAuth flow not yet implemented (Plan 04)")
+    from daily.config import Settings
+    from daily.db.engine import make_engine, make_session_factory
+    from daily.integrations.slack.auth import (
+        SLACK_BOT_SCOPES,
+        run_slack_oauth_flow,
+        store_slack_token,
+    )
+
+    settings = Settings()
+
+    if not settings.slack_client_id or not settings.slack_client_secret:
+        typer.echo(
+            "Error: SLACK_CLIENT_ID and SLACK_CLIENT_SECRET must be set in .env",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    vault_key = base64.b64decode(settings.vault_key) if settings.vault_key else b""
+    if len(vault_key) != 32:
+        typer.echo(
+            "Error: VAULT_KEY must be a 32-byte base64-encoded key", err=True
+        )
+        raise typer.Exit(1)
+
+    scopes_display = ", ".join(SLACK_BOT_SCOPES)
+    typer.echo("Opening browser for Slack OAuth authorization...")
+    typer.echo(f"Scopes: {scopes_display}")
+
+    bot_token = run_slack_oauth_flow(
+        client_id=settings.slack_client_id,
+        client_secret=settings.slack_client_secret,
+    )
+
+    engine = make_engine(settings.database_url)
+    session_factory = make_session_factory(engine)
+
+    # Default to user_id=1 for Phase 1 single-user setup
+    asyncio.run(
+        store_slack_token(
+            bot_token=bot_token,
+            user_id=1,
+            vault_key=vault_key,
+            session_factory=session_factory,
+        )
+    )
+
+    typer.echo("Slack OAuth complete. Slack workspace connected.")
 
 
 @connect_app.command()
