@@ -18,6 +18,7 @@ dependencies = [
     "msal>=1.35.0",
     "msgraph-sdk>=1.55.0",
     "greenlet>=3.3.2",
+    "uvicorn>=0.43.0",
 ]
 
 [project.scripts]
