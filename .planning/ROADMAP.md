@@ -32,11 +32,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Raw email and message bodies are not persisted to the database — only summaries and metadata columns exist in the schema
 **Plans:** 5 plans
 Plans:
-- [ ] 01-01-PLAN.md — Project scaffold, DB schema, token vault, test infrastructure
-- [ ] 01-02-PLAN.md — Adapter interfaces, Pydantic models, CLI entrypoint
-- [ ] 01-03-PLAN.md — Google OAuth flow, Gmail + Calendar adapters
-- [ ] 01-04-PLAN.md — Slack OAuth flow, Slack adapter
-- [ ] 01-05-PLAN.md — Microsoft Graph OAuth, Outlook adapters, token refresh
+- [x] 01-01-PLAN.md — Project scaffold, DB schema, token vault, test infrastructure
+- [x] 01-02-PLAN.md — Adapter interfaces, Pydantic models, CLI entrypoint
+- [x] 01-03-PLAN.md — Google OAuth flow, Gmail + Calendar adapters
+- [x] 01-04-PLAN.md — Slack OAuth flow, Slack adapter
+- [x] 01-05-PLAN.md — Microsoft Graph OAuth, Outlook adapters, token refresh
 
 ### Phase 2: Briefing Pipeline
 **Goal**: The system produces a ranked, LLM-generated briefing narrative on a precomputed schedule every morning
