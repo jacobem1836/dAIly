@@ -30,7 +30,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. System can successfully read emails, calendar events, and Slack messages from connected accounts using stored tokens
   4. Background process proactively refreshes tokens before they expire without user interaction
   5. Raw email and message bodies are not persisted to the database — only summaries and metadata columns exist in the schema
-**Plans**: TBD
+**Plans:** 5 plans
+Plans:
+- [ ] 01-01-PLAN.md — Project scaffold, DB schema, token vault, test infrastructure
+- [ ] 01-02-PLAN.md — Adapter interfaces, Pydantic models, CLI entrypoint
+- [ ] 01-03-PLAN.md — Google OAuth flow, Gmail + Calendar adapters
+- [ ] 01-04-PLAN.md — Slack OAuth flow, Slack adapter
+- [ ] 01-05-PLAN.md — Microsoft Graph OAuth, Outlook adapters, token refresh
 
 ### Phase 2: Briefing Pipeline
 **Goal**: The system produces a ranked, LLM-generated briefing narrative on a precomputed schedule every morning
@@ -87,7 +93,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/TBD | Not started | - |
+| 1. Foundation | 0/5 | Planning complete | - |
 | 2. Briefing Pipeline | 0/TBD | Not started | - |
 | 3. Orchestrator | 0/TBD | Not started | - |
 | 4. Action Layer | 0/TBD | Not started | - |
