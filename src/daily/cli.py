@@ -139,7 +139,53 @@ def slack():
 @connect_app.command()
 def outlook():
     """Connect Microsoft Outlook via OAuth."""
-    typer.echo("Microsoft OAuth flow not yet implemented (Plan 05)")
+    from daily.config import Settings
+    from daily.db.engine import make_engine, make_session_factory
+    from daily.integrations.microsoft.auth import (
+        MICROSOFT_READONLY_SCOPES,
+        run_microsoft_oauth_flow,
+        store_microsoft_tokens,
+    )
+
+    settings = Settings()
+
+    if not settings.microsoft_client_id or not settings.microsoft_tenant_id:
+        typer.echo(
+            "Error: MICROSOFT_CLIENT_ID and MICROSOFT_TENANT_ID must be set in .env",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    vault_key = base64.b64decode(settings.vault_key) if settings.vault_key else b""
+    if len(vault_key) != 32:
+        typer.echo(
+            "Error: VAULT_KEY must be a 32-byte base64-encoded key", err=True
+        )
+        raise typer.Exit(1)
+
+    scopes_display = ", ".join(MICROSOFT_READONLY_SCOPES)
+    typer.echo("Opening browser for Microsoft OAuth authorization...")
+    typer.echo(f"Scopes: {scopes_display}")
+
+    result = run_microsoft_oauth_flow(
+        client_id=settings.microsoft_client_id,
+        tenant_id=settings.microsoft_tenant_id,
+    )
+
+    engine = make_engine(settings.database_url)
+    session_factory = make_session_factory(engine)
+
+    # Default to user_id=1 for Phase 1 single-user setup
+    asyncio.run(
+        store_microsoft_tokens(
+            result=result,
+            user_id=1,
+            vault_key=vault_key,
+            session_factory=session_factory,
+        )
+    )
+
+    typer.echo("Microsoft OAuth complete. Outlook connected.")
 
 
 if __name__ == "__main__":
