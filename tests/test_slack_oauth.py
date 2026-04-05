@@ -60,6 +60,7 @@ async def test_store_slack_token_encrypts_bot_token(vault_key):
     mock_session = AsyncMock()
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session.__aexit__ = AsyncMock(return_value=False)
+    mock_session.add = MagicMock()
     mock_session_factory = MagicMock(return_value=mock_session)
 
     with patch("daily.integrations.slack.auth.encrypt_token") as mock_encrypt:
@@ -81,6 +82,7 @@ async def test_store_slack_token_uses_vault_key(vault_key):
     mock_session = AsyncMock()
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session.__aexit__ = AsyncMock(return_value=False)
+    mock_session.add = MagicMock()
     mock_session_factory = MagicMock(return_value=mock_session)
 
     with patch("daily.integrations.slack.auth.encrypt_token") as mock_encrypt:
