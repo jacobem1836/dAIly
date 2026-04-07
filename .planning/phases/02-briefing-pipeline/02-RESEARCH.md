@@ -477,22 +477,22 @@ narrative: str = result["narrative"]
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Schedule time timezone handling**
    - What we know: User configures `HH:MM` via CLI. APScheduler CronTrigger accepts `hour`/`minute`.
    - What's unclear: Should schedule be stored in UTC or local time? The host machine's local timezone may differ from the user's timezone.
-   - Recommendation: Store in UTC. Accept user input in local time, convert at `daily config set` time using `python-dateutil` + `datetime.astimezone(timezone.utc)`. Document the conversion in CLI output.
+   - RESOLVED: Store in UTC. Accept user input in local time, convert at `daily config set` time using `python-dateutil` + `datetime.astimezone(timezone.utc)`. Implemented in Plan 04 Task 1.
 
 2. **Briefing pipeline error handling — partial failures**
    - What we know: The pipeline fetches from three separate sources (email, calendar, Slack).
    - What's unclear: If one source fails (e.g. Slack token expired), should the whole briefing fail or proceed with available data?
-   - Recommendation: Proceed with available sources; include a one-sentence note per failed source ("Slack data unavailable today."). Log the error. This matches D-08 spirit (always delivers).
+   - RESOLVED: Proceed with available sources; include a one-sentence note per failed source ("Slack data unavailable today."). Log the error. Implemented in Plan 02 Task 2 partial failure handling.
 
 3. **VIP sender list — storage and lookup**
    - What we know: `daily vip add <email>` stores to PostgreSQL. Scoring function needs the VIP set.
    - What's unclear: Should the VIP set be loaded once at pipeline start or queried per email?
-   - Recommendation: Load the full VIP set as a Python `frozenset[str]` once per pipeline run (single DB query). At M1 scale, VIP list is small (< 100 entries).
+   - RESOLVED: Load the full VIP set as a Python `frozenset[str]` once per pipeline run (single DB query). Implemented in Plan 02 build_context signature.
 
 ---
 

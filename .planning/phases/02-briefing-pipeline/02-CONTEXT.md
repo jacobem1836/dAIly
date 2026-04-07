@@ -118,6 +118,31 @@ Requirements in scope: BRIEF-01, BRIEF-02, BRIEF-03, BRIEF-04, BRIEF-05, BRIEF-0
 
 </deferred>
 
+<dev-tooling>
+## Ruflo MCP — Dev Tool Integration
+
+Ruflo is available as a dev-side tool (not part of the dAIly app). Use it to improve execution quality during this phase.
+
+### Session Lifecycle
+- **Phase start:** call `mcp__ruflo__agentdb_session-start` with project=`daily`, phase=`02-briefing-pipeline`
+- **Phase end:** call `mcp__ruflo__agentdb_session-end` to snapshot outcomes
+
+### Decision Recall
+- Before planning or executing any plan, call `mcp__ruflo__agentdb_hierarchical-store` to load the decisions from `<decisions>` above into AgentDB
+- During execution, use `mcp__ruflo__agentdb_context-synthesize` to surface relevant decisions (e.g. "what rate limiting pattern applies here?")
+- Use `mcp__ruflo__agentdb_semantic-route` to find related decisions when implementing a new component
+
+### Parallel Execution (Wave 2)
+- Plans 02-02 (ranker + context builder) and 02-03 (redactor + narrator) are independent wave 2 plans
+- Use `mcp__ruflo__swarm_init` + `mcp__ruflo__agent_spawn` to run them as parallel agents instead of serial execution
+- Coordinate completion via `mcp__ruflo__coordination_sync` before proceeding to wave 3 (Plan 02-04)
+
+### Post-Plan Persistence
+- After each plan completes, call `mcp__ruflo__agentdb_hierarchical-store` with the key decisions made during implementation
+- This builds a queryable knowledge base for Phase 3+ planning
+
+</dev-tooling>
+
 ---
 
 *Phase: 02-briefing-pipeline*
