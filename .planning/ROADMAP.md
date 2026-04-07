@@ -13,7 +13,7 @@ dAIly is built in five phases that mirror the system's dependency graph. Authent
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Foundation** - Encrypted OAuth token vault, read adapters for Gmail/GCal/Outlook/Slack, PostgreSQL schema with correct data lifecycle
-- [ ] **Phase 2: Briefing Pipeline** - Precomputed briefing cron, async context builder, Redis cache, heuristic priority ranking, LLM narrative generation
+- [x] **Phase 2: Briefing Pipeline** - Precomputed briefing cron, async context builder, Redis cache, heuristic priority ranking, LLM narrative generation (completed 2026-04-07)
 - [ ] **Phase 3: Orchestrator** - LLM gateway with dual-model routing, LangGraph agent loop, in-session context, user profile, signal capture
 - [ ] **Phase 4: Action Layer** - Approval gate, action executor (email/Slack/calendar), append-only action log, action sandboxing
 - [ ] **Phase 5: Voice Interface** - Deepgram STT with VAD, Cartesia TTS streaming, barge-in detection, end-to-end voice session loop
@@ -49,13 +49,13 @@ Plans:
   4. Briefing includes today's and next 48h calendar events with conflict detection noted
   5. Briefing includes Slack mentions and DMs from priority channels
   6. External data passes through a summarisation/redaction layer before reaching the LLM — no raw bodies in LLM context
-**Plans:** 5 plans
+**Plans:** 5/5 plans complete
 Plans:
 - [x] 02-01-PLAN.md — Dependencies, pipeline models, adapter extensions, DB schema
 - [x] 02-02-PLAN.md — Heuristic email ranker, context builder, calendar conflicts
 - [x] 02-03-PLAN.md — Redactor (LLM summarise + credential strip), narrator (LLM narrative)
 - [x] 02-04-PLAN.md — Redis cache, APScheduler cron, pipeline orchestrator, CLI config
-- [ ] 02-05-PLAN.md — Gap closure: BRIEF-02 schedule persistence (DB read on startup)
+- [x] 02-05-PLAN.md — Gap closure: BRIEF-02 schedule persistence (DB read on startup)
 
 ### Phase 3: Orchestrator
 **Goal**: Users can ask follow-up questions during the briefing and receive contextually-aware answers; the system knows their preferences
@@ -100,7 +100,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/5 | Planning complete | - |
-| 2. Briefing Pipeline | 0/5 | Gap closure planned | - |
+| 2. Briefing Pipeline | 5/5 | Complete   | 2026-04-07 |
 | 3. Orchestrator | 0/TBD | Not started | - |
 | 4. Action Layer | 0/TBD | Not started | - |
 | 5. Voice Interface | 0/TBD | Not started | - |
