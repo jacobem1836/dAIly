@@ -88,6 +88,7 @@ class MockEmailAdapter(EmailAdapter):
         """pages: list of (emails, next_page_token) tuples."""
         self._pages = pages
         self._page_index = 0
+        # Replace get_email_body with AsyncMock for call_count inspection in tests.
         self.get_email_body = AsyncMock(side_effect=lambda msg_id: f"body of {msg_id}")
 
     async def list_emails(self, since: datetime, page_token: str | None = None) -> EmailPage:
@@ -97,6 +98,10 @@ class MockEmailAdapter(EmailAdapter):
         emails, next_token = self._pages[idx]
         self._page_index += 1
         return EmailPage(emails=emails, next_page_token=next_token)
+
+    async def get_email_body(self, message_id: str) -> str:  # type: ignore[override]
+        """Concrete ABC implementation — replaced by AsyncMock in __init__."""
+        return f"body of {message_id}"
 
 
 class MockCalendarAdapter(CalendarAdapter):
@@ -115,6 +120,7 @@ class MockMessageAdapter(MessageAdapter):
     def __init__(self, pages: list[tuple[list[MessageMetadata], str | None]]):
         self._pages = pages
         self._page_index = 0
+        # Replace get_message_text with AsyncMock for call_count inspection in tests.
         self.get_message_text = AsyncMock(side_effect=lambda msg_id, ch_id: f"text of {msg_id}")
 
     async def list_messages(self, channels: list[str], since: datetime) -> MessagePage:
@@ -124,6 +130,10 @@ class MockMessageAdapter(MessageAdapter):
         msgs, next_cursor = self._pages[idx]
         self._page_index += 1
         return MessagePage(messages=msgs, next_cursor=next_cursor)
+
+    async def get_message_text(self, message_id: str, channel_id: str) -> str:  # type: ignore[override]
+        """Concrete ABC implementation — replaced by AsyncMock in __init__."""
+        return f"text of {message_id}"
 
 
 # ─── find_conflicts tests ──────────────────────────────────────────────────────
