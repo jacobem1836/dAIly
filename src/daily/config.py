@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
     database_url: str = "postgresql+asyncpg://daily:daily_dev@localhost:5432/daily"
+    database_url_psycopg: str = "postgresql://daily:daily_dev@localhost:5432/daily"
     vault_key: str = ""
 
     google_client_id: str = ""
