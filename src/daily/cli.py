@@ -344,5 +344,145 @@ def outlook():
     typer.echo("Microsoft OAuth complete. Outlook connected.")
 
 
+# ---------------------------------------------------------------------------
+# Chat session helpers — module-level imports for testability
+# ---------------------------------------------------------------------------
+from redis.asyncio import Redis
+
+from daily.db.engine import async_session
+from daily.orchestrator.graph import build_graph
+from daily.orchestrator.session import (
+    create_session_config,
+    initialize_session_state,
+    run_session,
+    set_email_adapters,
+)
+
+
+async def _resolve_email_adapters(user_id: int, settings) -> list:
+    """Load integration tokens and instantiate real email adapters.
+
+    Follows same pattern as briefing/scheduler.py resolve_pipeline_kwargs.
+    Tokens are decrypted in-memory only — never logged (T-03-12).
+
+    Args:
+        user_id: User whose integration tokens to load.
+        settings: Settings instance providing vault_key.
+
+    Returns:
+        List of EmailAdapter instances (GmailAdapter, OutlookAdapter).
+        Empty list if no tokens are stored or vault_key is unset.
+    """
+    from sqlalchemy import select
+
+    from daily.db.engine import async_session
+    from daily.db.models import IntegrationToken
+    from daily.integrations.google.adapter import GmailAdapter
+    from daily.integrations.microsoft.adapter import OutlookAdapter
+    from daily.vault.crypto import decrypt_token
+
+    vault_key = base64.b64decode(settings.vault_key) if settings.vault_key else b""
+    adapters = []
+
+    async with async_session() as session:
+        result = await session.execute(
+            select(IntegrationToken).where(IntegrationToken.user_id == user_id)
+        )
+        tokens = result.scalars().all()
+
+    for token in tokens:
+        try:
+            decrypted = decrypt_token(token.encrypted_access_token, vault_key)
+            if token.provider == "google":
+                adapters.append(GmailAdapter(credentials=decrypted))
+            elif token.provider == "microsoft":
+                adapters.append(OutlookAdapter(credentials=decrypted))
+        except Exception:
+            # Skip tokens that fail decryption — don't block the session
+            pass
+
+    return adapters
+
+
+async def _run_chat_session(user_id: int = 1) -> None:
+    """Async helper for interactive orchestrator chat session.
+
+    Wires real email adapters from stored tokens so BRIEF-07 thread
+    summarisation works end-to-end (per D-10). Uses MemorySaver for Phase 3
+    CLI; AsyncPostgresSaver will be wired in Phase 5 (FastAPI lifespan).
+
+    Args:
+        user_id: User ID for the session. Defaults to 1 (single-user Phase 3).
+    """
+    from daily.config import Settings
+
+    settings = Settings()
+
+    # 1. Instantiate real email adapters from stored tokens
+    adapters = await _resolve_email_adapters(user_id, settings)
+    set_email_adapters(adapters)
+
+    # 2. Build graph (MemorySaver for Phase 3 CLI — no Postgres checkpointing yet)
+    from langgraph.checkpoint.memory import MemorySaver  # noqa: PLC0415
+    graph = build_graph(checkpointer=MemorySaver())
+
+    # 3. Create session config and load initial state from cache + profile
+    config = await create_session_config(user_id)
+    redis = Redis.from_url(settings.redis_url)
+    try:
+        async with async_session() as db_sess:
+            initial_state = await initialize_session_state(user_id, redis, db_sess)
+    finally:
+        await redis.aclose()
+
+    # 4. Interactive loop
+    print("dAIly chat session started. Type 'exit' or 'quit' to end.")
+    if adapters:
+        print(f"  {len(adapters)} email adapter(s) connected.")
+    else:
+        print("  No email adapters connected. Thread summaries won't work.")
+        print("  Run 'daily connect gmail' or 'daily connect outlook' first.")
+    print()
+
+    first_turn = True
+    while True:
+        user_input = input("You: ").strip()
+        if not user_input:
+            continue
+        if user_input.lower() in ("exit", "quit"):
+            print("Session ended.")
+            break
+
+        result = await run_session(
+            graph,
+            user_input,
+            config,
+            initial_state=initial_state if first_turn else None,
+        )
+        first_turn = False
+
+        # Extract last AI message and print
+        messages = result.get("messages", [])
+        if messages:
+            last_msg = messages[-1]
+            content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+            print(f"dAIly: {content}")
+        print()
+
+
+@app.command()
+def chat():
+    """Start an interactive chat session with the orchestrator.
+
+    The orchestrator loads your cached briefing and can answer follow-up
+    questions. Ask "summarise that email chain" to use BRIEF-07 thread
+    summarisation with real email adapters.
+
+    Example:
+      daily chat
+    """
+    asyncio.run(_run_chat_session(user_id=1))
+
+
 if __name__ == "__main__":
     app()
