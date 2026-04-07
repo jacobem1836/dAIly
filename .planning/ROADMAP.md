@@ -66,7 +66,11 @@ Plans:
   2. User preferences (tone, briefing length, category order) are stored in a profile and applied to subsequent briefings
   3. Interaction signals (skips, corrections, re-requests) are captured and stored for future ranking use
   4. LLM outputs are structured intent JSON only — the orchestrator dispatches all actions; no LLM tool calls invoke external APIs directly
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 03-01-PLAN.md — Dependencies, DB schema (user_profile + signal_log), profile/signal services, orchestrator models
+- [ ] 03-02-PLAN.md — LangGraph StateGraph, orchestrator nodes (respond + summarise_thread), signal capture
+- [ ] 03-03-PLAN.md — CLI profile commands, narrator preference injection
 
 ### Phase 4: Action Layer
 **Goal**: Users can instruct the system to draft replies and calendar changes, approve them by voice, and see a full audit trail
@@ -101,6 +105,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/5 | Planning complete | - |
 | 2. Briefing Pipeline | 5/5 | Complete   | 2026-04-07 |
-| 3. Orchestrator | 0/TBD | Not started | - |
+| 3. Orchestrator | 0/3 | Planning complete | - |
 | 4. Action Layer | 0/TBD | Not started | - |
 | 5. Voice Interface | 0/TBD | Not started | - |
