@@ -20,6 +20,7 @@ import logging
 from langchain_core.messages import AIMessage
 from openai import AsyncOpenAI
 
+from daily.briefing.redactor import summarise_and_redact
 from daily.orchestrator.models import OrchestratorIntent
 from daily.orchestrator.state import SessionState
 from daily.profile.signals import SignalType
@@ -127,7 +128,6 @@ async def summarise_thread_node(state: SessionState) -> dict:
     Returns:
         State update dict with AIMessage containing the thread summary.
     """
-    from daily.briefing.redactor import summarise_and_redact
     from daily.orchestrator.session import get_email_adapters
 
     adapters = get_email_adapters()
