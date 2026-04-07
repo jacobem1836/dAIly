@@ -403,7 +403,7 @@ class UserProfile(Base):
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **langchain-openai compatibility with openai>=2.0.0**
    - What we know: `langchain-openai 1.1.12` is the latest. `openai>=2.0.0,<3.0.0` is pinned in the project.
