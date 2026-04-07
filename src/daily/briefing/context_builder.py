@@ -111,13 +111,11 @@ async def _fetch_all_messages(
     """
     all_messages: list[MessageMetadata] = []
     for adapter in adapters:
-        cursor: str | None = None
-        while True:
-            page = await adapter.list_messages(channels=[], since=since)
-            all_messages.extend(page.messages)
-            cursor = page.next_cursor
-            if cursor is None:
-                break
+        # TODO: Pass cursor to list_messages once MessageAdapter.list_messages accepts cursor param
+        page = await adapter.list_messages(channels=[], since=since)
+        all_messages.extend(page.messages)
+        # Single page only — adapter signature does not accept cursor yet.
+        # Multi-page support requires extending MessageAdapter.list_messages signature.
     return all_messages
 
 
