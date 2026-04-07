@@ -38,6 +38,49 @@ app.add_typer(vip_app, name="vip")
 # Async helpers for config commands (bridged via asyncio.run)
 # ---------------------------------------------------------------------------
 
+async def _upsert_profile(user_id: int, key: str, value: str) -> str:
+    """Async helper for profile preference upsert. Called via asyncio.run() from CLI.
+
+    Validates key and value before calling upsert_preference.
+    Returns a success or error message string.
+
+    Supported keys: tone, briefing_length, category_order (T-03-09: validated before DB write)
+    """
+    from daily.db.engine import async_session
+    from daily.profile.service import upsert_preference
+
+    valid_keys = {"tone", "briefing_length", "category_order"}
+    if key not in valid_keys:
+        return f"Unknown profile key: {key}. Valid keys: {', '.join(sorted(valid_keys))}"
+
+    if key == "tone" and value not in ("formal", "casual", "conversational"):
+        return f"Invalid tone: {value}. Must be: formal, casual, conversational"
+    if key == "briefing_length" and value not in ("concise", "standard", "detailed"):
+        return f"Invalid briefing_length: {value}. Must be: concise, standard, detailed"
+
+    async with async_session() as session:
+        await upsert_preference(user_id, key, value, session)
+        return f"Set profile.{key} = {value}"
+
+
+async def _get_profile(user_id: int) -> str:
+    """Async helper to load and display current profile preferences.
+
+    Returns formatted string of all current preference values.
+    Uses defaults if no profile row exists for this user.
+    """
+    from daily.db.engine import async_session
+    from daily.profile.service import load_profile
+
+    async with async_session() as session:
+        prefs = await load_profile(user_id, session)
+        return (
+            f"tone: {prefs.tone}\n"
+            f"briefing_length: {prefs.briefing_length}\n"
+            f"category_order: {', '.join(prefs.category_order)}"
+        )
+
+
 async def _upsert_config(user_id: int, key: str, value: str) -> str:
     """Async helper for config upsert. Called via asyncio.run() from CLI.
 
@@ -124,18 +167,46 @@ async def _list_vips(user_id: int) -> list[str]:
 
 @config_app.command("set")
 def config_set(key: str, value: str):
-    """Set a briefing config value.
+    """Set a briefing or profile config value.
 
     Keys:
       briefing.schedule_time  -- daily precompute time, format HH:MM (UTC)
       briefing.email_top_n    -- number of top emails to include in briefing
+      profile.tone            -- narrative tone: formal, casual, conversational
+      profile.briefing_length -- length: concise, standard, detailed
+      profile.category_order  -- comma-separated section order (e.g. calendar,emails,slack)
 
     Examples:
       daily config set briefing.schedule_time 06:00
       daily config set briefing.email_top_n 10
+      daily config set profile.tone casual
+      daily config set profile.briefing_length detailed
+      daily config set profile.category_order calendar,emails,slack
     """
+    if key.startswith("profile."):
+        profile_key = key.removeprefix("profile.")
+        result = asyncio.run(_upsert_profile(user_id=1, key=profile_key, value=value))
+        typer.echo(result)
+        return
     result = asyncio.run(_upsert_config(user_id=1, key=key, value=value))
     typer.echo(result)
+
+
+@config_app.command("get")
+def config_get(key: str):
+    """Get current config values.
+
+    Keys:
+      profile  -- show all user profile preferences
+
+    Example:
+      daily config get profile
+    """
+    if key == "profile":
+        result = asyncio.run(_get_profile(user_id=1))
+        typer.echo(result)
+    else:
+        typer.echo(f"Unknown get key: {key}. Supported: profile")
 
 
 # ---------------------------------------------------------------------------
