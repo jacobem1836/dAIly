@@ -244,3 +244,37 @@ class OutlookAdapter(EmailAdapter, CalendarAdapter):
                 )
 
         return events
+
+    async def get_email_body(self, message_id: str) -> str:
+        """Fetch the plain-text body of a single Outlook message via Graph API.
+
+        Calls GET /me/messages/{message_id} selecting body and bodyPreview.
+        Returns body.content (plain text preferred) or bodyPreview as fallback.
+
+        T-02-01: Returned body is stored in BriefingContext.raw_bodies only.
+        Never persisted to DB or cache.
+
+        Args:
+            message_id: Microsoft Graph message ID.
+
+        Returns:
+            Plain-text body content as a string, or empty string if unavailable.
+        """
+        from msgraph.generated.users.item.messages.item.message_item_request_builder import (
+            MessageItemRequestBuilder,
+        )
+
+        query_params = MessageItemRequestBuilder.MessageItemRequestBuilderGetQueryParameters(
+            select=["body", "bodyPreview"],
+        )
+        from kiota_abstractions.base_request_configuration import RequestConfiguration
+
+        request_config = RequestConfiguration(query_parameters=query_params)
+        message = await self._client.me.messages.by_message_id(message_id).get(
+            request_configuration=request_config
+        )
+        if message and message.body and message.body.content:
+            return message.body.content
+        if message and message.body_preview:
+            return message.body_preview
+        return ""

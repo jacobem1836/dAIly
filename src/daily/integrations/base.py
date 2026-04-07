@@ -30,6 +30,23 @@ class EmailAdapter(ABC):
         """
         ...
 
+    @abstractmethod
+    async def get_email_body(self, message_id: str) -> str:
+        """
+        Fetch the plain-text body of a single email (per D-01).
+
+        The returned body is stored in BriefingContext.raw_bodies (exclude=True)
+        and consumed by the redactor before any LLM call. Raw content is never
+        persisted to DB or cache (SEC-02/T-02-01).
+
+        Args:
+            message_id: Provider-specific message identifier.
+
+        Returns:
+            Plain-text body of the email as a string.
+        """
+        ...
+
 
 class CalendarAdapter(ABC):
     @abstractmethod
@@ -64,5 +81,23 @@ class MessageAdapter(ABC):
         Returns:
             MessagePage containing metadata-only MessageMetadata objects and
             an optional next_cursor for pagination.
+        """
+        ...
+
+    @abstractmethod
+    async def get_message_text(self, message_id: str, channel_id: str) -> str:
+        """
+        Fetch the plain text of a single message (per D-01).
+
+        The returned text is stored in BriefingContext.raw_bodies (exclude=True)
+        and consumed by the redactor before any LLM call. Raw content is never
+        persisted to DB or cache (SEC-02/T-02-01).
+
+        Args:
+            message_id: Provider-specific message identifier.
+            channel_id: Channel the message belongs to.
+
+        Returns:
+            Plain text of the message as a string.
         """
         ...

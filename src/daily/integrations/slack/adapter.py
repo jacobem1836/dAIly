@@ -86,3 +86,31 @@ class SlackAdapter(MessageAdapter):
             last_cursor = cursor
 
         return MessagePage(messages=all_messages, next_cursor=last_cursor)
+
+    async def get_message_text(self, message_id: str, channel_id: str) -> str:
+        """Fetch the text of a single Slack message.
+
+        Calls conversations_history with latest=message_id, inclusive=True,
+        limit=1 to retrieve the specific message.
+
+        T-02-01: Returned text is stored in BriefingContext.raw_bodies only.
+        Never persisted to DB or cache.
+
+        Args:
+            message_id: Slack message timestamp (ts) used as message ID.
+            channel_id: Channel the message belongs to.
+
+        Returns:
+            Message text as a string, or empty string if not found.
+        """
+        response = await asyncio.to_thread(
+            self._client.conversations_history,
+            channel=channel_id,
+            latest=message_id,
+            inclusive=True,
+            limit=1,
+        )
+        messages = response.get("messages", [])
+        if messages:
+            return messages[0].get("text", "")
+        return ""

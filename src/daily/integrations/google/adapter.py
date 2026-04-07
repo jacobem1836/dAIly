@@ -114,6 +114,50 @@ class GmailAdapter(EmailAdapter):
 
         return await asyncio.to_thread(_fetch)
 
+    async def get_email_body(self, message_id: str) -> str:
+        """Fetch the plain-text body of a single Gmail message.
+
+        Calls Gmail API messages.get with format='full' and extracts the
+        plain-text part from the payload. Returns empty string if no text/plain
+        part is found.
+
+        T-02-01: Returned body is stored in BriefingContext.raw_bodies only.
+        Never persisted to DB or cache.
+
+        Args:
+            message_id: Gmail message ID.
+
+        Returns:
+            Decoded plain-text body, or empty string if unavailable.
+        """
+        import base64
+
+        def _fetch() -> str:
+            msg = (
+                self._service.users()
+                .messages()
+                .get(userId="me", id=message_id, format="full")
+                .execute()
+            )
+
+            def _extract_text(payload: dict) -> str:
+                mime_type = payload.get("mimeType", "")
+                if mime_type == "text/plain":
+                    data = payload.get("body", {}).get("data", "")
+                    if data:
+                        return base64.urlsafe_b64decode(data + "==").decode(
+                            "utf-8", errors="replace"
+                        )
+                for part in payload.get("parts", []):
+                    result = _extract_text(part)
+                    if result:
+                        return result
+                return ""
+
+            return _extract_text(msg.get("payload", {}))
+
+        return await asyncio.to_thread(_fetch)
+
 
 class GoogleCalendarAdapter(CalendarAdapter):
     """Read adapter for Google Calendar using google-api-python-client."""
