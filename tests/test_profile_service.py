@@ -126,19 +126,40 @@ async def test_load_profile_returns_stored_preferences():
 
 
 # ---------------------------------------------------------------------------
+# _ensure_default_user tests (mocked session)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ensure_default_user_executes_insert():
+    """_ensure_default_user calls session.execute with an INSERT statement."""
+    from daily.profile.service import _ensure_default_user
+
+    mock_session = AsyncMock(spec=AsyncSession)
+
+    await _ensure_default_user(user_id=1, session=mock_session)
+
+    mock_session.execute.assert_called_once()
+    # Verify the statement compiled contains the users table (not a select)
+    call_args = mock_session.execute.call_args[0][0]
+    assert "insert" in str(call_args).lower() or hasattr(call_args, "table")
+
+
+# ---------------------------------------------------------------------------
 # upsert_preference service tests (mocked session)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_upsert_preference_creates_row_when_none_exists():
-    """upsert_preference creates a new row and returns updated preferences."""
+    """upsert_preference ensures default user exists, creates a new profile row, and returns updated preferences."""
     from daily.profile.models import UserPreferences
     from daily.profile.service import upsert_preference
 
     mock_session = AsyncMock(spec=AsyncSession)
     mock_result = MagicMock()
     mock_result.scalars.return_value.first.return_value = None
+    # Both execute calls (user insert + profile select) return mock_result safely
     mock_session.execute.return_value = mock_result
 
     prefs = await upsert_preference(user_id=1, key="tone", value="casual", session=mock_session)
@@ -147,6 +168,8 @@ async def test_upsert_preference_creates_row_when_none_exists():
     assert prefs.tone == "casual"
     mock_session.add.assert_called_once()
     mock_session.commit.assert_called_once()
+    # execute called twice: once for _ensure_default_user, once for profile select
+    assert mock_session.execute.call_count == 2
 
 
 @pytest.mark.asyncio
