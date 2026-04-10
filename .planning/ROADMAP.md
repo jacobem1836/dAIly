@@ -68,10 +68,11 @@ Plans:
   4. LLM outputs are structured intent JSON only — the orchestrator dispatches all actions; no LLM tool calls invoke external APIs directly
 **Plans:** 4 plans
 Plans:
-- [ ] 03-01-PLAN.md — Dependencies, profile package (UserProfile ORM, UserPreferences, service functions)
-- [ ] 03-01b-PLAN.md — Signal log, orchestrator models (SessionState, OrchestratorIntent), Alembic migration
-- [ ] 03-02-PLAN.md — LangGraph StateGraph, orchestrator nodes, CLI chat command with real adapter wiring (BRIEF-07)
-- [ ] 03-03-PLAN.md — CLI profile commands, narrator preference injection
+- [x] 03-01-PLAN.md — Dependencies, profile package (UserProfile ORM, UserPreferences, service functions)
+- [x] 03-01b-PLAN.md — Signal log, orchestrator models (SessionState, OrchestratorIntent), Alembic migration
+- [x] 03-02-PLAN.md — LangGraph StateGraph, orchestrator nodes, CLI chat command with real adapter wiring (BRIEF-07)
+- [x] 03-03-PLAN.md — CLI profile commands, narrator preference injection
+
 ### Phase 4: Action Layer
 **Goal**: Users can instruct the system to draft replies and calendar changes, approve them by voice, and see a full audit trail
 **Depends on**: Phase 3
@@ -82,7 +83,11 @@ Plans:
   3. No external-facing action executes without an explicit confirm from the user — there is no code path that bypasses approval
   4. Every action attempt is recorded in an append-only log with timestamp, type, target, content summary, approval status, and outcome
   5. Action executor validates recipient, content type, and scope against a whitelist before dispatch — malformed or out-of-scope actions are rejected
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 04-01-PLAN.md — Action layer models, ABCs, action log, whitelist, LangGraph approval gate
+- [ ] 04-02-PLAN.md — LLM draft generation with style matching, CLI approval flow
+- [ ] 04-03-PLAN.md — Concrete ActionExecutors (Gmail, Slack, Calendar, Outlook) and dispatch wiring
 
 ### Phase 5: Voice Interface
 **Goal**: Users can receive the morning briefing, interrupt it, and complete the full action workflow entirely by voice
@@ -106,5 +111,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Foundation | 0/5 | Planning complete | - |
 | 2. Briefing Pipeline | 5/5 | Complete   | 2026-04-07 |
 | 3. Orchestrator | 0/4 | Planning complete | - |
-| 4. Action Layer | 0/TBD | Not started | - |
+| 4. Action Layer | 0/3 | Planning complete | - |
 | 5. Voice Interface | 0/TBD | Not started | - |
