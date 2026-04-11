@@ -117,6 +117,27 @@ async def _upsert_config(user_id: int, key: str, value: str) -> str:
         return f"Set {key} = {value}"
 
 
+async def _get_briefing_config(key: str, user_id: int) -> str:
+    """Async helper to read a briefing config value."""
+    from sqlalchemy import select
+
+    from daily.db.engine import async_session
+    from daily.db.models import BriefingConfig
+
+    async with async_session() as session:
+        result = await session.execute(
+            select(BriefingConfig).where(BriefingConfig.user_id == user_id)
+        )
+        config = result.scalar_one_or_none()
+        if config is None:
+            return f"{key}: (not set)"
+        if key == "briefing.schedule_time":
+            return f"{config.schedule_hour:02d}:{config.schedule_minute:02d}"
+        elif key == "briefing.email_top_n":
+            return str(config.email_top_n)
+        return f"Unknown key: {key}"
+
+
 async def _add_vip(user_id: int, email: str) -> str:
     """Async helper to add a VIP sender. Called via asyncio.run() from CLI."""
     from daily.db.engine import async_session
@@ -205,8 +226,14 @@ def config_get(key: str):
     if key == "profile":
         result = asyncio.run(_get_profile(user_id=1))
         typer.echo(result)
+    elif key == "briefing.schedule_time":
+        result = asyncio.run(_get_briefing_config(key, user_id=1))
+        typer.echo(result)
+    elif key == "briefing.email_top_n":
+        result = asyncio.run(_get_briefing_config(key, user_id=1))
+        typer.echo(result)
     else:
-        typer.echo(f"Unknown get key: {key}. Supported: profile")
+        typer.echo(f"Unknown get key: {key}. Supported: profile, briefing.schedule_time, briefing.email_top_n")
 
 
 # ---------------------------------------------------------------------------
