@@ -311,9 +311,9 @@ async def _fetch_style_examples(client: AsyncOpenAI) -> str:
     try:
         since = datetime.now() - timedelta(days=30)
         # Fetch recent emails for style examples
-        sent_emails = await adapters[0].list_emails(since=since)
+        page = await adapters[0].list_emails(since=since)
         # Limit to _MAX_STYLE_EXAMPLES to avoid bloating the prompt
-        sent_emails = sent_emails[:_MAX_STYLE_EXAMPLES]
+        sent_emails = page.emails[:_MAX_STYLE_EXAMPLES]
 
         if not sent_emails:
             return ""
