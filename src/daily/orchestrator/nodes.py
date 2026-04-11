@@ -363,11 +363,25 @@ async def draft_node(state: SessionState) -> dict:
         State update dict with pending_action set to an ActionDraft, and an AIMessage.
         On error: returns error message without setting pending_action.
     """
-    # Extract instruction from last human message
+    # Check if this is an edit loop re-entry (approval_decision starts with "edit:")
+    edit_instruction = None
+    if state.approval_decision and state.approval_decision.startswith("edit:"):
+        edit_instruction = state.approval_decision[len("edit:"):]
+
+    # Extract instruction from last human message (or use edit instruction for re-draft)
     instruction = state.messages[-1].content if state.messages else "draft an email"
 
-    # Infer action type from instruction keywords
-    action_type = _infer_action_type(instruction)
+    # Infer action type: reuse existing type on edit, infer from instruction on fresh draft
+    if edit_instruction and state.pending_action:
+        action_type = state.pending_action.action_type
+        # Combine edit instruction with original draft context for re-drafting
+        instruction = (
+            f"Original draft:\n{state.pending_action.body}\n\n"
+            f"Edit instruction: {edit_instruction}"
+        )
+    else:
+        # Infer action type from instruction keywords
+        action_type = _infer_action_type(instruction)
 
     tone = state.preferences.get("tone", "conversational")
     briefing_narrative = state.briefing_narrative or "(no briefing loaded)"
@@ -435,6 +449,7 @@ async def draft_node(state: SessionState) -> dict:
         action_label = action_type.value.replace("_", " ")
         return {
             "pending_action": draft,
+            "approval_decision": None,  # Clear so next approval loop starts fresh
             "messages": [AIMessage(content=f"Here's what I'd {action_label}:")],
         }
 
@@ -515,7 +530,8 @@ async def _build_executor_for_type(
     from daily.vault import decrypt_token
 
     settings = Settings()
-    vault_key = settings.vault_key.encode() if settings.vault_key else b""
+    import base64
+    vault_key = base64.urlsafe_b64decode(settings.vault_key) if settings.vault_key else b""
 
     if action_type in (ActionType.draft_email, ActionType.compose_email):
         async with async_session() as session:
