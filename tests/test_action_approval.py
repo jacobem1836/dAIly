@@ -271,17 +271,30 @@ class TestApprovalGateInterrupt:
             except Exception:
                 pass  # Expected interrupt
 
-        # Resume with confirm (outside mock — no LLM call needed for resume)
-        result = await graph.ainvoke(
-            Command(resume="confirm"),
-            config=config,
+        # Resume with confirm — patch executor factory so no DB/API calls needed
+        from unittest.mock import AsyncMock as _AsyncMock, MagicMock as _MagicMock
+        from daily.actions.base import ActionResult as _ActionResult
+
+        mock_executor = _MagicMock()
+        mock_executor.validate = _AsyncMock(return_value=None)
+        mock_executor.execute = _AsyncMock(
+            return_value=_ActionResult(success=True, external_id="msg-test-001")
         )
+
+        with patch(
+            "daily.orchestrator.nodes._build_executor_for_type",
+            new=_AsyncMock(return_value=mock_executor),
+        ):
+            result = await graph.ainvoke(
+                Command(resume="confirm"),
+                config=config,
+            )
 
         # After confirm, execute_node should produce a success message
         messages = result.get("messages", [])
         message_contents = [m.content for m in messages if hasattr(m, "content")]
         combined = " ".join(message_contents).lower()
-        assert "done" in combined or "executed" in combined or "success" in combined or "action" in combined
+        assert "done" in combined or "executed" in combined or "success" in combined or "sent" in combined
 
     @pytest.mark.asyncio
     async def test_reject_cancels_without_executing(self):

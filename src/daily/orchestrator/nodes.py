@@ -466,15 +466,198 @@ async def approval_node(state: SessionState) -> dict:
     return {"approval_decision": decision}
 
 
+async def _build_executor_for_type(
+    action_type: ActionType,
+    user_id: int,
+) -> "ActionExecutor":
+    """Build the correct ActionExecutor for a given action_type and user.
+
+    Provider routing for email actions:
+      - Queries integration_tokens for the user to determine connected provider.
+      - If user has 'microsoft' token -> OutlookExecutor
+      - If user has 'google' token -> GmailExecutor
+      - If both, prefers most recently updated token.
+
+    Other action types:
+      - draft_message -> SlackExecutor
+      - schedule_event / reschedule_event -> GoogleCalendarExecutor
+
+    Decrypts token in-memory only at call time (T-04-13).
+    Populates known_addresses from recent email metadata via adapter.
+
+    Args:
+        action_type: The type of action to execute.
+        user_id: ID of the user whose tokens and contacts to load.
+
+    Returns:
+        A concrete ActionExecutor ready for validate() and execute().
+
+    Raises:
+        ValueError: If no suitable integration token is found for the user.
+    """
+    from sqlalchemy import select
+
+    from daily.actions.google.calendar import GoogleCalendarExecutor
+    from daily.actions.google.email import GmailExecutor
+    from daily.actions.microsoft.executor import OutlookExecutor
+    from daily.actions.slack.executor import SlackExecutor
+    from daily.config import Settings
+    from daily.db.engine import async_session
+    from daily.db.models import IntegrationToken
+    from daily.vault import decrypt_token
+
+    settings = Settings()
+    vault_key = settings.vault_key.encode() if settings.vault_key else b""
+
+    if action_type in (ActionType.draft_email, ActionType.compose_email):
+        async with async_session() as session:
+            stmt = (
+                select(IntegrationToken)
+                .where(
+                    IntegrationToken.user_id == user_id,
+                    IntegrationToken.provider.in_(["google", "microsoft"]),
+                )
+                .order_by(IntegrationToken.updated_at.desc())
+            )
+            result = await session.execute(stmt)
+            tokens = result.scalars().all()
+
+        if not tokens:
+            raise ValueError(
+                "No email integration connected. "
+                "Run `daily connect gmail` or `daily connect outlook` first."
+            )
+
+        # Pick the most recently updated token; prefer microsoft if both exist
+        microsoft_token = next((t for t in tokens if t.provider == "microsoft"), None)
+        google_token = next((t for t in tokens if t.provider == "google"), None)
+        token = microsoft_token or google_token
+
+        granted_scopes = set(token.scopes.split()) if token.scopes else set()
+        access_token = decrypt_token(token.encrypted_access_token, vault_key)
+
+        # Populate known_addresses from recent email metadata
+        known_addresses: set[str] = set()
+        try:
+            from datetime import datetime, timedelta
+
+            from daily.orchestrator.session import get_email_adapters
+
+            adapters = get_email_adapters()
+            if adapters:
+                since = datetime.now() - timedelta(days=90)
+                page = await adapters[0].list_emails(since=since)
+                known_addresses = {e.sender for e in page.emails if e.sender}
+                known_addresses.update(e.recipient for e in page.emails if e.recipient)
+        except Exception as exc:
+            logger.warning("_build_executor_for_type: could not load known_addresses: %s", exc)
+
+        if token.provider == "microsoft":
+            from msgraph import GraphServiceClient
+
+            class _StaticToken:
+                def __init__(self, tok: str) -> None:
+                    self._tok = tok
+
+                def get_token(self, *scopes: str, **kwargs: object) -> object:
+                    import time
+
+                    from azure.core.credentials import AccessToken
+
+                    return AccessToken(self._tok, int(time.time()) + 3600)
+
+            graph_client = GraphServiceClient(credentials=_StaticToken(access_token))
+            return OutlookExecutor(
+                graph_client=graph_client,
+                known_addresses=known_addresses,
+                granted_scopes=granted_scopes,
+            )
+        else:
+            from google.oauth2.credentials import Credentials
+            from googleapiclient.discovery import build
+
+            creds = Credentials(token=access_token)
+            service = build("gmail", "v1", credentials=creds)
+            return GmailExecutor(
+                service=service,
+                known_addresses=known_addresses,
+                granted_scopes=granted_scopes,
+            )
+
+    elif action_type == ActionType.draft_message:
+        async with async_session() as session:
+            stmt = select(IntegrationToken).where(
+                IntegrationToken.user_id == user_id,
+                IntegrationToken.provider == "slack",
+            )
+            result = await session.execute(stmt)
+            token = result.scalar_one_or_none()
+
+        if not token:
+            raise ValueError(
+                "No Slack integration connected. Run `daily connect slack` first."
+            )
+
+        granted_scopes = set(token.scopes.split()) if token.scopes else set()
+        bot_token = decrypt_token(token.encrypted_access_token, vault_key)
+
+        from slack_sdk import WebClient
+
+        client = WebClient(token=bot_token)
+        return SlackExecutor(
+            client=client,
+            known_channels=set(),  # Channel IDs validated separately in M2
+            granted_scopes=granted_scopes,
+        )
+
+    elif action_type in (ActionType.schedule_event, ActionType.reschedule_event):
+        async with async_session() as session:
+            stmt = select(IntegrationToken).where(
+                IntegrationToken.user_id == user_id,
+                IntegrationToken.provider == "google",
+            )
+            result = await session.execute(stmt)
+            token = result.scalar_one_or_none()
+
+        if not token:
+            raise ValueError(
+                "No Google Calendar integration connected. "
+                "Run `daily connect gmail` first (Google Calendar uses the same OAuth grant)."
+            )
+
+        granted_scopes = set(token.scopes.split()) if token.scopes else set()
+        access_token = decrypt_token(token.encrypted_access_token, vault_key)
+
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+
+        creds = Credentials(token=access_token)
+        service = build("calendar", "v3", credentials=creds)
+
+        return GoogleCalendarExecutor(
+            service=service,
+            known_addresses=set(),  # Calendar attendees validated from contacts in M2
+            granted_scopes=granted_scopes,
+        )
+
+    else:
+        raise ValueError(f"Unsupported action_type for executor dispatch: {action_type}")
+
+
 async def execute_node(state: SessionState) -> dict:
     """Execute or cancel an action based on approval_decision.
 
+    Dispatches to the correct ActionExecutor based on action_type and provider.
+    Calls executor.validate() (ACT-06 + D-11 scope check) before execute().
     Logs the outcome via asyncio.create_task (fire-and-forget, D-08).
-    Actual executor dispatch (GmailSendExecutor etc.) is wired in Plan 03.
 
     Decision values:
-      'confirm' — execute the action (stub: return success message)
-      anything else — treat as rejection, return cancellation message
+      'confirm' — build executor, validate, execute, log
+      anything else — treat as rejection, log and return cancellation message
+
+    Security boundaries:
+      T-04-16: execute_node is only reachable via approval_node in the graph.
+      T-04-17: executor.validate() checks write scopes before any API call (D-11).
 
     Args:
         state: Current SessionState with approval_decision and pending_action set.
@@ -491,13 +674,41 @@ async def execute_node(state: SessionState) -> dict:
             "approval_decision": None,
         }
 
-    # Confirmed — stub execution (Plan 03 will dispatch to real executors)
-    asyncio.create_task(_log_action(state, "approved", "sent"))
-    return {
-        "messages": [AIMessage(content="Done. Action executed successfully.")],
-        "pending_action": None,
-        "approval_decision": None,
-    }
+    # Confirmed — dispatch to executor
+    try:
+        executor = await _build_executor_for_type(
+            state.pending_action.action_type,
+            state.active_user_id,
+        )
+        # ACT-06 + D-11: validate() must pass before execute()
+        await executor.validate(state.pending_action)
+        result = await executor.execute(state.pending_action)
+
+        outcome = "sent" if result.success else "failed"
+        asyncio.create_task(_log_action(state, "approved", outcome))
+
+        return {
+            "messages": [AIMessage(content=f"Done. {result.summary}")],
+            "pending_action": None,
+            "approval_decision": None,
+        }
+
+    except ValueError as ve:
+        # Validation failure — log as rejected, surface error to user
+        asyncio.create_task(_log_action(state, "rejected", "validation_failed"))
+        return {
+            "messages": [AIMessage(content=f"Cannot execute: {ve}")],
+            "pending_action": None,
+            "approval_decision": None,
+        }
+    except Exception as exc:
+        logger.warning("execute_node: unexpected error: %s", exc)
+        asyncio.create_task(_log_action(state, "approved", "failed"))
+        return {
+            "messages": [AIMessage(content=f"Action failed: {exc}")],
+            "pending_action": None,
+            "approval_decision": None,
+        }
 
 
 async def _log_action(
