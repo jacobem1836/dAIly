@@ -34,8 +34,14 @@ class UserPreferences(BaseModel):
 
     Values are validated on read via model_validate(). Invalid values are
     rejected at this layer (T-03-01: Literal types restrict allowed values).
+
+    Phase 4 additions:
+        rejection_behaviour: Controls what happens after a user rejects an action draft.
+            'ask_why' — prompt the user for a reason and allow edit (default per D-03).
+            'discard' — silently discard the draft without prompting.
     """
 
     tone: Literal["formal", "casual", "conversational"] = "conversational"
     briefing_length: Literal["concise", "standard", "detailed"] = "standard"
     category_order: list[str] = ["emails", "calendar", "slack"]
+    rejection_behaviour: Literal["ask_why", "discard"] = "ask_why"
