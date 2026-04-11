@@ -12,6 +12,8 @@ Covers:
 - No direct edge from START to execute_node (approval gate cannot be bypassed)
 """
 import inspect
+import json
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import HumanMessage
@@ -181,6 +183,22 @@ class TestGraphTopologyNoBypss:
 # ---------------------------------------------------------------------------
 
 
+def _make_mock_llm_response(body: str = "Hi, I'm on it!") -> MagicMock:
+    """Return a mock OpenAI response for draft_node."""
+    mock_resp = MagicMock()
+    mock_resp.choices = [MagicMock()]
+    mock_resp.choices[0].message.content = json.dumps({
+        "recipient": "test@example.com",
+        "subject": "Re: Test",
+        "body": body,
+        "event_title": None,
+        "start_dt": None,
+        "end_dt": None,
+        "attendees": [],
+    })
+    return mock_resp
+
+
 class TestApprovalGateInterrupt:
     """Tests for interrupt/resume approval flow using MemorySaver checkpointer."""
 
@@ -195,29 +213,32 @@ class TestApprovalGateInterrupt:
 
         draft = _make_email_draft()
 
-        # Invoke graph with a pending_action to trigger draft -> approval path
-        # The approval_node calls interrupt(), which causes LangGraph to pause
-        # and return with an interrupted status
-        try:
-            result = await graph.ainvoke(
-                {
-                    "messages": [HumanMessage(content="draft a reply")],
-                    "pending_action": draft,
-                    "active_user_id": 1,
-                },
-                config=config,
-            )
-            # If we get here without interrupt, the test should still verify
-            # the interrupt key is present (LangGraph may return interrupted state)
-            # Check for interrupt marker in result
-            assert "__interrupt__" in result or result.get("approval_decision") is None
-        except Exception as exc:
-            # LangGraph raises GraphInterrupt or similar for human-in-the-loop
-            # This is the expected behavior when interrupt() is called
-            exc_type = type(exc).__name__
-            assert "interrupt" in exc_type.lower() or "Interrupt" in str(exc), (
-                f"Expected interrupt exception, got: {exc_type}: {exc}"
-            )
+        # Mock LLM so draft_node doesn't call real OpenAI
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=_make_mock_llm_response())
+
+        with (
+            patch("daily.orchestrator.nodes.AsyncOpenAI", return_value=mock_client),
+            patch("daily.orchestrator.nodes.get_email_adapters", return_value=[]),
+        ):
+            # Invoke graph with a pending_action to trigger draft -> approval path
+            # The approval_node calls interrupt(), which causes LangGraph to pause
+            try:
+                result = await graph.ainvoke(
+                    {
+                        "messages": [HumanMessage(content="draft a reply")],
+                        "pending_action": draft,
+                        "active_user_id": 1,
+                    },
+                    config=config,
+                )
+                # LangGraph may return interrupted state with __interrupt__ key
+                assert "__interrupt__" in result or result.get("approval_decision") is None
+            except Exception as exc:
+                exc_type = type(exc).__name__
+                assert "interrupt" in exc_type.lower() or "Interrupt" in str(exc), (
+                    f"Expected interrupt exception, got: {exc_type}: {exc}"
+                )
 
     @pytest.mark.asyncio
     async def test_confirm_resumes_to_execute(self):
@@ -230,20 +251,27 @@ class TestApprovalGateInterrupt:
 
         draft = _make_email_draft()
 
-        # First invocation — should interrupt at approval
-        try:
-            await graph.ainvoke(
-                {
-                    "messages": [HumanMessage(content="draft a reply")],
-                    "pending_action": draft,
-                    "active_user_id": 1,
-                },
-                config=config,
-            )
-        except Exception:
-            pass  # Expected interrupt
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=_make_mock_llm_response())
 
-        # Resume with confirm
+        with (
+            patch("daily.orchestrator.nodes.AsyncOpenAI", return_value=mock_client),
+            patch("daily.orchestrator.nodes.get_email_adapters", return_value=[]),
+        ):
+            # First invocation — should interrupt at approval
+            try:
+                await graph.ainvoke(
+                    {
+                        "messages": [HumanMessage(content="draft a reply")],
+                        "pending_action": draft,
+                        "active_user_id": 1,
+                    },
+                    config=config,
+                )
+            except Exception:
+                pass  # Expected interrupt
+
+        # Resume with confirm (outside mock — no LLM call needed for resume)
         result = await graph.ainvoke(
             Command(resume="confirm"),
             config=config,
@@ -266,18 +294,25 @@ class TestApprovalGateInterrupt:
 
         draft = _make_email_draft()
 
-        # First invocation — should interrupt at approval
-        try:
-            await graph.ainvoke(
-                {
-                    "messages": [HumanMessage(content="draft a reply")],
-                    "pending_action": draft,
-                    "active_user_id": 1,
-                },
-                config=config,
-            )
-        except Exception:
-            pass  # Expected interrupt
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=_make_mock_llm_response())
+
+        with (
+            patch("daily.orchestrator.nodes.AsyncOpenAI", return_value=mock_client),
+            patch("daily.orchestrator.nodes.get_email_adapters", return_value=[]),
+        ):
+            # First invocation — should interrupt at approval
+            try:
+                await graph.ainvoke(
+                    {
+                        "messages": [HumanMessage(content="draft a reply")],
+                        "pending_action": draft,
+                        "active_user_id": 1,
+                    },
+                    config=config,
+                )
+            except Exception:
+                pass  # Expected interrupt
 
         # Resume with reject
         result = await graph.ainvoke(

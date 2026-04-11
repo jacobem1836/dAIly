@@ -27,6 +27,13 @@ def _make_mock_graph():
         "messages": [AIMessage(content="You have 3 important emails today.")]
     })
     mock_graph.checkpointer = MagicMock()
+
+    # Return a non-interrupted state (next=[]) so the approval flow is not triggered
+    mock_state = MagicMock()
+    mock_state.next = []
+    mock_state.tasks = []
+    mock_graph.aget_state = AsyncMock(return_value=mock_state)
+
     return mock_graph
 
 

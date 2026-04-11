@@ -418,8 +418,10 @@ def outlook():
 # ---------------------------------------------------------------------------
 # Chat session helpers — module-level imports for testability
 # ---------------------------------------------------------------------------
+from langgraph.types import Command
 from redis.asyncio import Redis
 
+from daily.actions.base import ActionDraft
 from daily.db.engine import async_session
 from daily.orchestrator.graph import build_graph
 from daily.orchestrator.session import (
@@ -428,6 +430,133 @@ from daily.orchestrator.session import (
     run_session,
     set_email_adapters,
 )
+
+# ---------------------------------------------------------------------------
+# Approval flow helpers
+# ---------------------------------------------------------------------------
+
+_SEPARATOR = "-" * 40
+
+
+def _parse_approval_decision(user_input: str) -> str:
+    """Parse user input during an approval prompt into a decision string.
+
+    Decision mapping:
+      - confirm/yes/y/send/ok  -> 'confirm'
+      - reject/no/n/cancel     -> 'reject'
+      - anything else          -> 'edit:{input}' (re-enter draft with edit instruction)
+
+    Args:
+        user_input: Raw input string from the user.
+
+    Returns:
+        'confirm', 'reject', or 'edit:{instruction}'.
+    """
+    lowered = user_input.strip().lower()
+    if lowered in ("confirm", "yes", "y", "send", "ok"):
+        return "confirm"
+    if lowered in ("reject", "no", "n", "cancel"):
+        return "reject"
+    return f"edit:{user_input.strip()}"
+
+
+def _display_draft_card(draft: ActionDraft) -> None:
+    """Display the draft action card in structured format for CLI approval (D-04).
+
+    Format:
+        ----------------------------------------
+        DRAFT: {action_type}
+        ----------------------------------------
+        {card_text from ActionDraft}
+        ----------------------------------------
+        Confirm, reject, or describe changes (e.g. 'make it shorter'):
+
+    Args:
+        draft: ActionDraft to display.
+    """
+    print(_SEPARATOR)
+    print(f"DRAFT: {draft.action_type.value}")
+    print(_SEPARATOR)
+    print(draft.card_text())
+    print(_SEPARATOR)
+    print("Confirm, reject, or describe changes (e.g. 'make it shorter'):")
+
+
+def _display_cancellation_message(rejection_behaviour: str = "ask_why") -> None:
+    """Display the action cancellation message to the user.
+
+    For both ask_why and discard behaviours, show "Action cancelled."
+    ask_why re-entry happens naturally: the user can continue chatting
+    to re-enter the draft flow without special prompting.
+
+    Args:
+        rejection_behaviour: 'ask_why' or 'discard' from user preferences.
+    """
+    print("dAIly: Action cancelled.")
+
+
+async def _handle_approval_flow(
+    graph,
+    state,
+    config: dict,
+) -> dict:
+    """Handle the approval sub-loop when the graph is interrupted at approval_node.
+
+    Extracts the draft preview from the interrupt payload, displays the card,
+    reads user input, parses the decision, and resumes the graph with
+    Command(resume=decision).
+
+    For edit decisions (decision.startswith("edit:")):
+    - The graph is resumed with the edit decision.
+    - The caller (_run_chat_session) should re-invoke the graph with the
+      edit instruction as a new user message to trigger another draft pass.
+
+    Args:
+        graph: Compiled LangGraph StateGraph with checkpointer.
+        state: LangGraph state snapshot with interrupted tasks.
+        config: LangGraph config dict with thread_id.
+
+    Returns:
+        Dict with 'messages' from the resumed graph, and optionally
+        'edit_instruction' if the user requested edits.
+    """
+    # Extract interrupt payload from the first interrupted task
+    preview_text = ""
+    action_type_str = "action"
+
+    if state.tasks:
+        for task in state.tasks:
+            if hasattr(task, "interrupts") and task.interrupts:
+                interrupt_value = task.interrupts[0].value
+                if isinstance(interrupt_value, dict):
+                    preview_text = interrupt_value.get("preview", "")
+                    action_type_str = interrupt_value.get("action_type", "action")
+                break
+
+    # Display the draft card
+    # Build a minimal ActionDraft-like object for display if needed
+    # Since we have card_text in the payload, print it directly
+    print(_SEPARATOR)
+    print(f"DRAFT: {action_type_str}")
+    print(_SEPARATOR)
+    print(preview_text)
+    print(_SEPARATOR)
+    print("Confirm, reject, or describe changes (e.g. 'make it shorter'):")
+
+    user_input = input("You: ").strip()
+    if not user_input:
+        user_input = "reject"
+
+    decision = _parse_approval_decision(user_input)
+
+    # Resume graph with the decision
+    result = await graph.ainvoke(Command(resume=decision), config=config)
+
+    # Return result with optional edit instruction for re-entry loop
+    output = dict(result) if isinstance(result, dict) else {"messages": []}
+    if decision.startswith("edit:"):
+        output["edit_instruction"] = decision[len("edit:"):]
+    return output
 
 
 async def _resolve_email_adapters(user_id: int, settings) -> list:
@@ -482,6 +611,10 @@ async def _run_chat_session(user_id: int = 1) -> None:
     summarisation works end-to-end (per D-10). Uses MemorySaver for Phase 3
     CLI; AsyncPostgresSaver will be wired in Phase 5 (FastAPI lifespan).
 
+    Phase 4: Handles approval flow when the graph is interrupted at approval_node.
+    Displays the draft card, prompts for confirm/reject/edit, and resumes via
+    Command(resume=decision). Edit decisions re-enter the draft loop (D-01).
+
     Args:
         user_id: User ID for the session. Defaults to 1 (single-user Phase 3).
     """
@@ -524,20 +657,74 @@ async def _run_chat_session(user_id: int = 1) -> None:
             print("Session ended.")
             break
 
-        result = await run_session(
-            graph,
-            user_input,
-            config,
-            initial_state=initial_state if first_turn else None,
-        )
+        try:
+            result = await run_session(
+                graph,
+                user_input,
+                config,
+                initial_state=initial_state if first_turn else None,
+            )
+        except Exception as exc:
+            from openai import OpenAIError  # noqa: PLC0415
+            if isinstance(exc, OpenAIError):
+                print(
+                    "Error: OpenAI API key not configured. "
+                    "Set OPENAI_API_KEY environment variable to use chat."
+                )
+                break
+            raise
         first_turn = False
 
-        # Extract last AI message and print
-        messages = result.get("messages", [])
-        if messages:
-            last_msg = messages[-1]
-            content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-            print(f"dAIly: {content}")
+        # Check if graph was interrupted (approval gate fired)
+        graph_state = await graph.aget_state(config)
+        if graph_state.next:
+            # Approval interrupt: handle approval sub-loop (D-01 unlimited edit rounds)
+            approval_result = await _handle_approval_flow(
+                graph=graph,
+                state=graph_state,
+                config=config,
+            )
+
+            # Display result (confirmed or cancelled)
+            ap_messages = approval_result.get("messages", [])
+            if ap_messages:
+                last_msg = ap_messages[-1]
+                content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+                print(f"dAIly: {content}")
+
+            # If edit decision: re-enter loop with edit instruction as new user message (D-01)
+            edit_instruction = approval_result.get("edit_instruction")
+            if edit_instruction:
+                # Automatically send the edit instruction as a new message
+                # to re-invoke the draft flow
+                try:
+                    result = await run_session(graph, edit_instruction, config)
+                    # After re-draft, graph will interrupt again — let the loop handle it
+                    graph_state2 = await graph.aget_state(config)
+                    if graph_state2.next:
+                        approval_result2 = await _handle_approval_flow(
+                            graph=graph,
+                            state=graph_state2,
+                            config=config,
+                        )
+                        ap2_messages = approval_result2.get("messages", [])
+                        if ap2_messages:
+                            last_msg2 = ap2_messages[-1]
+                            content2 = (
+                                last_msg2.content
+                                if hasattr(last_msg2, "content")
+                                else str(last_msg2)
+                            )
+                            print(f"dAIly: {content2}")
+                except Exception:
+                    pass
+        else:
+            # Normal (non-interrupted) response
+            messages = result.get("messages", [])
+            if messages:
+                last_msg = messages[-1]
+                content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+                print(f"dAIly: {content}")
         print()
 
 
