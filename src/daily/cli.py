@@ -694,10 +694,7 @@ async def _run_chat_session(user_id: int = 1) -> None:
         except Exception as exc:
             from openai import OpenAIError  # noqa: PLC0415
             if isinstance(exc, OpenAIError):
-                print(
-                    "Error: OpenAI API key not configured. "
-                    "Set OPENAI_API_KEY environment variable to use chat."
-                )
+                print(f"Error: OpenAI API error: {exc}")
                 break
             raise
         first_turn = False

@@ -37,6 +37,14 @@ from daily.profile.signals import SignalType
 
 logger = logging.getLogger(__name__)
 
+
+def _openai_client() -> AsyncOpenAI:
+    """Build AsyncOpenAI with explicit key from Settings (never relies on env)."""
+    from daily.config import Settings  # noqa: PLC0415
+
+    return AsyncOpenAI(api_key=Settings().openai_api_key)
+
+
 # ---------------------------------------------------------------------------
 # System prompts
 # ---------------------------------------------------------------------------
@@ -110,7 +118,7 @@ async def respond_node(state: SessionState) -> dict:
         length=state.preferences.get("briefing_length", "standard"),
     )
 
-    client = AsyncOpenAI()
+    client = _openai_client()
     try:
         response = await client.chat.completions.create(
             model="gpt-4.1-mini",
@@ -174,7 +182,7 @@ async def summarise_thread_node(state: SessionState) -> dict:
     # In Phase 3 this is a best-effort lookup; Phase 5 will wire full context
     message_id = last_content  # pass through so adapter can match by subject/id
 
-    client = AsyncOpenAI()
+    client = _openai_client()
 
     try:
         # Fetch raw body via first available email adapter
@@ -364,7 +372,7 @@ async def draft_node(state: SessionState) -> dict:
     tone = state.preferences.get("tone", "conversational")
     briefing_narrative = state.briefing_narrative or "(no briefing loaded)"
 
-    client = AsyncOpenAI()
+    client = _openai_client()
 
     # Fetch style examples (T-04-07: all bodies redacted before prompt inclusion)
     style_examples = await _fetch_style_examples(client)
