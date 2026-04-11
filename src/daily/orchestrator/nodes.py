@@ -310,11 +310,8 @@ async def _fetch_style_examples(client: AsyncOpenAI) -> str:
 
     try:
         since = datetime.now() - timedelta(days=30)
-        # Fetch sent emails — adapter list_emails accepts since and a sent filter
-        sent_emails = await adapters[0].list_emails(
-            since=since,
-            label_filter="SENT",
-        )
+        # Fetch recent emails for style examples
+        sent_emails = await adapters[0].list_emails(since=since)
         # Limit to _MAX_STYLE_EXAMPLES to avoid bloating the prompt
         sent_emails = sent_emails[:_MAX_STYLE_EXAMPLES]
 
@@ -600,7 +597,17 @@ async def _build_executor_for_type(
             from google.oauth2.credentials import Credentials
             from googleapiclient.discovery import build
 
-            creds = Credentials(token=access_token)
+            refresh_token = (
+                decrypt_token(token.encrypted_refresh_token, vault_key)
+                if token.encrypted_refresh_token else None
+            )
+            creds = Credentials(
+                token=access_token,
+                refresh_token=refresh_token,
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id=settings.google_client_id,
+                client_secret=settings.google_client_secret,
+            )
             service = build("gmail", "v1", credentials=creds)
             return GmailExecutor(
                 service=service,
@@ -651,11 +658,21 @@ async def _build_executor_for_type(
 
         granted_scopes = set(token.scopes.split()) if token.scopes else set()
         access_token = decrypt_token(token.encrypted_access_token, vault_key)
+        refresh_token = (
+            decrypt_token(token.encrypted_refresh_token, vault_key)
+            if token.encrypted_refresh_token else None
+        )
 
         from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
 
-        creds = Credentials(token=access_token)
+        creds = Credentials(
+            token=access_token,
+            refresh_token=refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=settings.google_client_id,
+            client_secret=settings.google_client_secret,
+        )
         service = build("calendar", "v3", credentials=creds)
 
         return GoogleCalendarExecutor(

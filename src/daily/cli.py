@@ -621,10 +621,18 @@ async def _resolve_email_adapters(user_id: int, settings) -> list:
         try:
             decrypted = decrypt_token(token.encrypted_access_token, vault_key)
             if token.provider == "google":
-                # GmailAdapter expects a google.oauth2.credentials.Credentials object,
-                # not a raw token string. Wrap the decrypted access token.
                 from google.oauth2.credentials import Credentials as GoogleCredentials
-                creds = GoogleCredentials(token=decrypted)
+                refresh_token = (
+                    decrypt_token(token.encrypted_refresh_token, vault_key)
+                    if token.encrypted_refresh_token else None
+                )
+                creds = GoogleCredentials(
+                    token=decrypted,
+                    refresh_token=refresh_token,
+                    token_uri="https://oauth2.googleapis.com/token",
+                    client_id=settings.google_client_id,
+                    client_secret=settings.google_client_secret,
+                )
                 adapters.append(GmailAdapter(credentials=creds))
             elif token.provider == "microsoft":
                 # OutlookAdapter expects access_token (str), not credentials=
