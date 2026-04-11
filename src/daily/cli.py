@@ -280,7 +280,7 @@ def gmail():
     from daily.config import Settings
     from daily.db.engine import make_engine, make_session_factory
     from daily.integrations.google.auth import (
-        GOOGLE_READONLY_SCOPES,
+        GOOGLE_ACTION_SCOPES,
         run_google_oauth_flow,
         store_google_tokens,
     )
@@ -302,12 +302,12 @@ def gmail():
         raise typer.Exit(1)
 
     typer.echo("Opening browser for Google OAuth authorization...")
-    typer.echo("Scopes: Gmail (readonly) + Google Calendar (readonly)")
+    typer.echo("Scopes: Gmail (read + send) + Google Calendar (read + write)")
 
     credentials = run_google_oauth_flow(
         client_id=settings.google_client_id,
         client_secret=settings.google_client_secret,
-        scopes=GOOGLE_READONLY_SCOPES,
+        scopes=GOOGLE_ACTION_SCOPES,
     )
 
     engine = make_engine(settings.database_url)
@@ -621,9 +621,14 @@ async def _resolve_email_adapters(user_id: int, settings) -> list:
         try:
             decrypted = decrypt_token(token.encrypted_access_token, vault_key)
             if token.provider == "google":
-                adapters.append(GmailAdapter(credentials=decrypted))
+                # GmailAdapter expects a google.oauth2.credentials.Credentials object,
+                # not a raw token string. Wrap the decrypted access token.
+                from google.oauth2.credentials import Credentials as GoogleCredentials
+                creds = GoogleCredentials(token=decrypted)
+                adapters.append(GmailAdapter(credentials=creds))
             elif token.provider == "microsoft":
-                adapters.append(OutlookAdapter(credentials=decrypted))
+                # OutlookAdapter expects access_token (str), not credentials=
+                adapters.append(OutlookAdapter(access_token=decrypted))
         except Exception:
             # Skip tokens that fail decryption — don't block the session
             pass
@@ -703,45 +708,38 @@ async def _run_chat_session(user_id: int = 1) -> None:
         graph_state = await graph.aget_state(config)
         if graph_state.next:
             # Approval interrupt: handle approval sub-loop (D-01 unlimited edit rounds)
-            approval_result = await _handle_approval_flow(
-                graph=graph,
-                state=graph_state,
-                config=config,
-            )
+            # Loop until the user confirms or rejects — edit decisions loop back
+            # through draft -> approval via the graph's conditional edge.
+            while True:
+                approval_result = await _handle_approval_flow(
+                    graph=graph,
+                    state=graph_state,
+                    config=config,
+                )
 
-            # Display result (confirmed or cancelled)
-            ap_messages = approval_result.get("messages", [])
-            if ap_messages:
-                last_msg = ap_messages[-1]
-                content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-                print(f"dAIly: {content}")
+                edit_instruction = approval_result.get("edit_instruction")
+                if not edit_instruction:
+                    # Confirm or reject — display result and break
+                    ap_messages = approval_result.get("messages", [])
+                    if ap_messages:
+                        last_msg = ap_messages[-1]
+                        content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+                        print(f"dAIly: {content}")
+                    break
 
-            # If edit decision: re-enter loop with edit instruction as new user message (D-01)
-            edit_instruction = approval_result.get("edit_instruction")
-            if edit_instruction:
-                # Automatically send the edit instruction as a new message
-                # to re-invoke the draft flow
-                try:
-                    result = await run_session(graph, edit_instruction, config)
-                    # After re-draft, graph will interrupt again — let the loop handle it
-                    graph_state2 = await graph.aget_state(config)
-                    if graph_state2.next:
-                        approval_result2 = await _handle_approval_flow(
-                            graph=graph,
-                            state=graph_state2,
-                            config=config,
-                        )
-                        ap2_messages = approval_result2.get("messages", [])
-                        if ap2_messages:
-                            last_msg2 = ap2_messages[-1]
-                            content2 = (
-                                last_msg2.content
-                                if hasattr(last_msg2, "content")
-                                else str(last_msg2)
-                            )
-                            print(f"dAIly: {content2}")
-                except Exception:
-                    pass
+                # Edit decision: graph routes back to draft -> approval automatically.
+                # The graph.ainvoke(Command(resume=...)) in _handle_approval_flow
+                # already resumed the graph. Check if it interrupted again at approval.
+                graph_state = await graph.aget_state(config)
+                if not graph_state.next:
+                    # Graph completed without interrupting — shouldn't happen on edit,
+                    # but handle gracefully
+                    ap_messages = approval_result.get("messages", [])
+                    if ap_messages:
+                        last_msg = ap_messages[-1]
+                        content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+                        print(f"dAIly: {content}")
+                    break
         else:
             # Normal (non-interrupted) response
             messages = result.get("messages", [])

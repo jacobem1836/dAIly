@@ -13,6 +13,7 @@ T-1-11: Tokens are encrypted via encrypt_token before DB write — never logged 
 """
 
 import asyncio
+import os
 import threading
 import webbrowser
 from typing import Any
@@ -26,10 +27,17 @@ from daily.db.models import IntegrationToken
 from daily.vault.crypto import encrypt_token
 
 # SEC-03: Phase 1 minimum readonly scopes only.
-# Compose/events write scopes deferred to Phase 4.
 GOOGLE_READONLY_SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/calendar.readonly",
+]
+
+# Phase 4: read + write scopes for action layer.
+GOOGLE_ACTION_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/calendar.events",
 ]
 
 
@@ -78,6 +86,9 @@ def run_google_oauth_flow(
         prompt="consent",  # Pitfall 1: force consent screen so refresh_token is always issued
         include_granted_scopes="true",
     )
+
+    # Allow HTTP localhost callback during local development.
+    os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 
     webbrowser.open(auth_url)
 
