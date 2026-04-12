@@ -10,6 +10,7 @@ Provides:
 - run_session: Single-turn graph execution via ainvoke (not invoke — Pitfall 2).
 """
 
+import logging
 from datetime import date
 
 from redis.asyncio import Redis
@@ -17,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from daily.briefing.cache import get_briefing
 from daily.profile.service import load_profile
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Email adapter registry
@@ -93,10 +96,34 @@ async def initialize_session_state(
     d = session_date or date.today()
     briefing = await get_briefing(redis, user_id, d)
     preferences = await load_profile(user_id, db_session)
+
+    email_context: list[dict] = []
+    adapters = get_email_adapters()
+    if adapters:
+        try:
+            from datetime import timedelta
+
+            since = d - timedelta(days=7)
+            page = await adapters[0].list_emails(since=since)
+            email_context = [
+                {
+                    "message_id": e.message_id,
+                    "thread_id": e.thread_id,
+                    "subject": e.subject,
+                    "sender": e.sender,
+                    "recipient": e.recipient,
+                    "timestamp": e.timestamp.isoformat(),
+                }
+                for e in page.emails
+            ]
+        except Exception:
+            logger.warning("initialize_session_state: could not load email context")
+
     return {
         "briefing_narrative": briefing.narrative if briefing else "",
         "active_user_id": user_id,
         "preferences": preferences.model_dump(),
+        "email_context": email_context,
     }
 
 

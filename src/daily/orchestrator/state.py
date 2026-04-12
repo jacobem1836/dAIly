@@ -11,10 +11,14 @@ Phase 4 additions:
   pending_action: Holds an ActionDraft awaiting user approval.
   approval_decision: Holds the user's decision string ('confirm', 'reject', 'edit:*').
 """
-from typing import Annotated, Any
+from __future__ import annotations
+
+from typing import Annotated
 
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
+
+from daily.actions.base import ActionDraft
 
 
 class SessionState(BaseModel):
@@ -26,11 +30,14 @@ class SessionState(BaseModel):
         active_user_id: The user whose session is active (0 = no active user).
         preferences: User preference snapshot loaded at session start.
         active_section: Pointer to the current section being discussed.
-        pending_action: ActionDraft awaiting user approval (Phase 4). Typed as Any
-                        to avoid circular imports — always an ActionDraft instance
-                        or None at runtime.
+        pending_action: ActionDraft awaiting user approval (Phase 4).
         approval_decision: User's approval decision string (Phase 4).
                            Expected values: 'confirm', 'reject', 'edit:*'.
+        email_context: Recent email metadata (sender, subject, thread_id, message_id,
+                       recipient, timestamp) loaded at session init. Used by draft_node
+                       to match user intent to a specific email thread. Stored as plain
+                       dicts (not EmailMetadata) for clean LangGraph state serialisation.
+                       Only metadata is stored — never raw bodies (SEC-04).
     """
 
     messages: Annotated[list, add_messages] = Field(default_factory=list)
@@ -38,5 +45,6 @@ class SessionState(BaseModel):
     active_user_id: int = 0
     preferences: dict = Field(default_factory=dict)
     active_section: str = ""  # current briefing section pointer
-    pending_action: Any = None  # ActionDraft | None at runtime
+    pending_action: ActionDraft | None = None
     approval_decision: str | None = None
+    email_context: list[dict] = Field(default_factory=list)
