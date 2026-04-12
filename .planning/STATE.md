@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 Phase: 04 (action-layer) — EXECUTING
 Plan: 1 of 3
 Status: Executing Phase 04
-Last activity: 2026-04-11 - Completed quick task 260411-vlh: Fix Google credentials reconstruction
+Last activity: 2026-04-12 - Completed quick task 260412-gak: Fix null recipient in draft_node
 
 Progress: [██░░░░░░░░] 20%
 
@@ -79,6 +79,7 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260411-vlh | Fix Google credentials reconstruction | 2026-04-11 | dc41c9f | [260411-vlh-fix-google-credentials-reconstruction-bu](./quick/260411-vlh-fix-google-credentials-reconstruction-bu/) |
+| 260412-gak | Fix null recipient in draft_node — pass email metadata to LLM prompt | 2026-04-12 | 60975dd | [260412-gak-fix-null-recipient-in-draft-node-pass-em](./quick/260412-gak-fix-null-recipient-in-draft-node-pass-em/) |
 
 ## Session Continuity
 
