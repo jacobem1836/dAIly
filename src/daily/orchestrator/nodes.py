@@ -69,18 +69,49 @@ DRAFT_SYSTEM_PROMPT = (
     "You are a personal assistant drafting a {action_type} on behalf of the user.\n"
     "Match the user's writing style based on these recent sent emails:\n\n"
     "{style_examples}\n\n"
+    "AVAILABLE EMAILS (use to identify the correct recipient and thread):\n"
+    "{email_context}\n\n"
     "USER PREFERENCES: tone={tone}\n"
     "USER INSTRUCTION: {instruction}\n\n"
     "BRIEFING CONTEXT (for reference):\n{briefing_narrative}\n\n"
+    "When the user wants to reply to an email, match their description to the correct "
+    "email from the AVAILABLE EMAILS list and use that email's sender as the recipient. "
+    "Include the thread_id and message_id from the matched email in your output.\n\n"
     "Output MUST be valid JSON with these fields:\n"
     '{{"recipient": "email@example.com or null", "subject": "Re: ... or null", '
-    '"body": "the full draft text", "event_title": "null or title", '
+    '"body": "the full draft text", "thread_id": "matched thread_id or null", '
+    '"message_id": "matched message_id or null", '
+    '"event_title": "null or title", '
     '"start_dt": "null or ISO datetime", "end_dt": "null or ISO datetime", '
     '"attendees": []}}'
 )
 
 # Maximum number of sent emails to use as style examples (D-06)
 _MAX_STYLE_EXAMPLES = 5
+
+
+def _format_email_context(email_context: list[dict]) -> str:
+    """Format email metadata list into a compact table for the LLM prompt.
+
+    Only metadata fields are included — never raw bodies (SEC-04).
+
+    Args:
+        email_context: List of email metadata dicts with sender, subject,
+                       thread_id, and message_id keys.
+
+    Returns:
+        A numbered, human-readable string for inclusion in the LLM prompt,
+        or a placeholder string if the list is empty.
+    """
+    if not email_context:
+        return "(no emails available)"
+    lines = []
+    for i, e in enumerate(email_context, 1):
+        lines.append(
+            f"{i}. From: {e['sender']} | Subject: {e['subject']} | "
+            f"thread_id: {e['thread_id']} | message_id: {e['message_id']}"
+        )
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -388,10 +419,36 @@ async def draft_node(state: SessionState) -> dict:
     # Fetch style examples (T-04-07: all bodies redacted before prompt inclusion)
     style_examples = await _fetch_style_examples(client)
 
+    # Populate email context for recipient/thread matching
+    # Fallback: if email_context is empty (e.g. non-briefing session), fetch live
+    email_ctx = state.email_context
+    if not email_ctx:
+        adapters = get_email_adapters()
+        if adapters:
+            try:
+                page = await adapters[0].list_emails(since=datetime.now() - timedelta(days=7))
+                email_ctx = [
+                    {
+                        "message_id": e.message_id,
+                        "thread_id": e.thread_id,
+                        "subject": e.subject,
+                        "sender": e.sender,
+                        "recipient": e.recipient,
+                        "timestamp": e.timestamp.isoformat(),
+                    }
+                    for e in page.emails
+                ]
+            except Exception as exc:
+                logger.debug("draft_node: fallback email fetch failed: %s", exc)
+                email_ctx = []
+
+    email_context_str = _format_email_context(email_ctx)
+
     # Build system prompt
     system_content = DRAFT_SYSTEM_PROMPT.format(
         action_type=action_type.value.replace("_", " "),
         style_examples=style_examples or "(no style examples available)",
+        email_context=email_context_str,
         tone=tone,
         instruction=instruction,
         briefing_narrative=briefing_narrative,
@@ -437,6 +494,8 @@ async def draft_node(state: SessionState) -> dict:
             recipient=parsed.get("recipient") or None,
             subject=parsed.get("subject") or None,
             body=parsed.get("body") or "(no content)",
+            thread_id=parsed.get("thread_id") or None,
+            thread_message_id=parsed.get("message_id") or None,
             event_title=parsed.get("event_title") or None,
             start_dt=start_dt,
             end_dt=end_dt,
