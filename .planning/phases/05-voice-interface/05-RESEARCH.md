@@ -552,22 +552,13 @@ def finalize_transcript_line(text: str) -> None:
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Deepgram SDK 6.x exact async namespace**
-   - What we know: SDK 6.1.1 is on PyPI; v6 announcement confirmed `AsyncDeepgramClient`; deepwiki shows `client.listen.v2.connect()` for sync and `asynclive` for async
-   - What's unclear: Whether it's `client.listen.asynclive.v1()`, `client.listen.v2.connect()`, or another namespace in 6.1.1
-   - Recommendation: Wave 0 of Plan 2 should include a 5-line smoke test to confirm the correct import path before implementing the full STT pipeline
+1. **Deepgram SDK 6.x exact async namespace** — RESOLVED: Plan 05-02 Task 1 includes a Wave 0 smoke test to confirm the exact namespace (`asynclive.v1()` vs `asyncwebsocket.v1()`) before full STT implementation. Task action handles both variants with a fallback.
 
-2. **Cartesia voice ID for Sonic-3**
-   - What we know: The example voice ID `6ccbfb76-1fc6-48f7-b71d-91ac6298247b` appears in Cartesia docs
-   - What's unclear: Whether this is a stable default or a sample placeholder
-   - Recommendation: Plan 1 Wave 0 should call `client.voices.list()` and document available Sonic-3 voices; store chosen ID in config
+2. **Cartesia voice ID for Sonic-3** — RESOLVED: Within Claude's Discretion (CONTEXT.md). Plan 05-01 uses `DEFAULT_VOICE_ID = "6ccbfb76-1fc6-48f7-b71d-91ac6298247b"` as an overridable default. Voice ID selection is an implementation detail, not a locked decision.
 
-3. **AEC (acoustic echo cancellation) for speaker mode**
-   - What we know: sounddevice has no built-in AEC; headphone use avoids the issue
-   - What's unclear: Whether M1 usage is exclusively headphones or also speakers
-   - Recommendation: Add a "suppress barge-in during TTS playback" flag as a simple heuristic; document as known limitation
+3. **AEC (acoustic echo cancellation) for speaker mode** — RESOLVED: Plan 05-03 Task 1 implements a `_tts_active` echo suppression flag that suppresses `speech_started` events during TTS playback. Documented as a known M1 limitation (headphone use recommended).
 
 ---
 
