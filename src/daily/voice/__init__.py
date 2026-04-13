@@ -13,6 +13,18 @@ Public API:
 from daily.voice.tts import TTSPipeline, split_sentences
 from daily.voice.stt import STTPipeline
 from daily.voice.barge_in import VoiceTurnManager
-from daily.voice.loop import run_voice_session
+
+# Lazy-load loop module to avoid pulling postgres deps at package import time.
+# The submodule is still directly importable as `daily.voice.loop`.
+import importlib as _importlib
+
+def __getattr__(name: str):
+    if name == "run_voice_session":
+        _loop = _importlib.import_module("daily.voice.loop")
+        return _loop.run_voice_session
+    if name == "loop":
+        return _importlib.import_module("daily.voice.loop")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = ["TTSPipeline", "split_sentences", "STTPipeline", "VoiceTurnManager", "run_voice_session"]
