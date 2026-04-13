@@ -772,5 +772,23 @@ def chat():
     asyncio.run(_run_chat_session(user_id=1))
 
 
+@app.command()
+def voice():
+    """Start an interactive voice session with the orchestrator.
+
+    Uses microphone for input (Deepgram Nova-3 STT) and speaker for output
+    (Cartesia Sonic-3 TTS). Supports barge-in (interrupt mid-sentence) and
+    the full approval workflow by voice.
+
+    Requires DEEPGRAM_API_KEY and CARTESIA_API_KEY in .env.
+    Requires Docker services running: docker compose up -d
+
+    Example:
+      daily voice
+    """
+    from daily.voice.loop import run_voice_session
+    asyncio.run(run_voice_session(user_id=1))
+
+
 if __name__ == "__main__":
     app()
