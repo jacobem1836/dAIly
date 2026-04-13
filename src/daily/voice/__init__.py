@@ -7,8 +7,10 @@ Public API (populated as modules are built across Phase 5 plans):
     - TTSPipeline: Cartesia WebSocket TTS with sentence streaming
     - split_sentences: Sentence splitter utility for TTS input
     - STTPipeline: Deepgram Nova-3 WebSocket STT with mic capture and UtteranceEnd turn detection
+    - VoiceTurnManager: Barge-in coordination layer (TTS/STT concurrency with echo suppression)
 """
 from daily.voice.tts import TTSPipeline, split_sentences
 from daily.voice.stt import STTPipeline
+from daily.voice.barge_in import VoiceTurnManager
 
-__all__ = ["TTSPipeline", "split_sentences", "STTPipeline"]
+__all__ = ["TTSPipeline", "split_sentences", "STTPipeline", "VoiceTurnManager"]
