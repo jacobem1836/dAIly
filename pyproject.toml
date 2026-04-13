@@ -28,6 +28,9 @@ dependencies = [
     "psycopg[binary]>=3.3.3",
     "psycopg-pool>=3.3.0",
     "langchain-openai>=1.1.12",
+    "deepgram-sdk>=6.1.1",
+    "sounddevice>=0.5.5",
+    "cartesia[websockets]>=3.0.2",
 ]
 
 [project.scripts]

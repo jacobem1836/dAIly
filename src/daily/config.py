@@ -20,5 +20,7 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://localhost:6379/0"
     openai_api_key: str = ""
+    deepgram_api_key: str = ""
+    cartesia_api_key: str = ""
     briefing_email_top_n: int = 5  # per D-05
     briefing_schedule_time: str = "05:00"  # per D-13, default precompute time
