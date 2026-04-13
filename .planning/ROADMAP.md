@@ -85,9 +85,9 @@ Plans:
   5. Action executor validates recipient, content type, and scope against a whitelist before dispatch — malformed or out-of-scope actions are rejected
 **Plans:** 3 plans
 Plans:
-- [ ] 04-01-PLAN.md — Action layer models, ABCs, action log, whitelist, LangGraph approval gate
-- [ ] 04-02-PLAN.md — LLM draft generation with style matching, CLI approval flow
-- [ ] 04-03-PLAN.md — Concrete ActionExecutors (Gmail, Slack, Calendar, Outlook) and dispatch wiring
+- [x] 04-01-PLAN.md — Action layer models, ABCs, action log, whitelist, LangGraph approval gate
+- [x] 04-02-PLAN.md — LLM draft generation with style matching, CLI approval flow
+- [x] 04-03-PLAN.md — Concrete ActionExecutors (Gmail, Slack, Calendar, Outlook) and dispatch wiring
 
 ### Phase 5: Voice Interface
 **Goal**: Users can receive the morning briefing, interrupt it, and complete the full action workflow entirely by voice
@@ -99,12 +99,17 @@ Plans:
   3. User can interrupt the briefing mid-sentence and the system stops speaking and responds to the new input
   4. User can ask follow-up questions and receive answers that reflect the current session context (not isolated single-turn responses)
 **UI hint**: yes
-**Plans**: TBD
+**Plans:** 4 plans
+Plans:
+- [ ] 05-01-PLAN.md — TTS pipeline (Cartesia WebSocket + sentence splitter + sounddevice playback)
+- [ ] 05-02-PLAN.md — STT pipeline (Deepgram WebSocket + mic capture + transcript handling)
+- [ ] 05-03-PLAN.md — Barge-in (asyncio task coordination, stop_event, VAD interrupt loop)
+- [ ] 05-04-PLAN.md — Full voice loop integration (daily voice command, AsyncPostgresSaver, end-to-end wiring)
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -112,4 +117,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Briefing Pipeline | 5/5 | Complete   | 2026-04-07 |
 | 3. Orchestrator | 0/4 | Planning complete | - |
 | 4. Action Layer | 0/3 | Planning complete | - |
-| 5. Voice Interface | 0/TBD | Not started | - |
+| 5. Voice Interface | 0/4 | Planning complete | - |
