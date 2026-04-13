@@ -71,6 +71,25 @@ def route_intent(state: SessionState) -> str:
     return "respond"
 
 
+def route_after_approval(state: SessionState) -> str:
+    """Route after approval_node based on the user's decision.
+
+    Decision routing:
+      - 'confirm' or 'reject' -> 'execute' (execute handles both)
+      - 'edit:*' -> 'draft' (re-enter draft with edit instruction)
+
+    Args:
+        state: Current SessionState with approval_decision set.
+
+    Returns:
+        Node name: 'execute' or 'draft'.
+    """
+    decision = state.approval_decision or ""
+    if decision.startswith("edit:"):
+        return "draft"
+    return "execute"
+
+
 def build_graph(checkpointer=None):
     """Build and compile the orchestrator StateGraph.
 
@@ -78,9 +97,10 @@ def build_graph(checkpointer=None):
     - START -> conditional edge using route_intent
     - respond node -> END
     - summarise_thread node -> END
-    - draft node -> approval node -> execute node -> END  (Phase 4, T-04-02)
+    - draft -> approval -> conditional(execute | draft) -> END  (Phase 4, T-04-02)
 
-    The draft -> approval -> execute chain enforces the approval gate.
+    The draft -> approval chain enforces the approval gate.
+    Edit decisions loop back to draft for unlimited re-drafting (D-01).
     There is NO direct edge from START to execute — approval cannot be bypassed.
 
     Args:
@@ -124,10 +144,19 @@ def build_graph(checkpointer=None):
     builder.add_edge("respond", END)
     builder.add_edge("summarise_thread", END)
 
-    # Phase 4 action chain: draft -> approval -> execute -> END
+    # Phase 4 action chain: draft -> approval -> conditional -> END
     # approval_node uses interrupt() which pauses the graph — no bypass possible
+    # After approval, route_after_approval sends edit decisions back to draft
+    # for unlimited re-drafting (D-01), or forward to execute for confirm/reject.
     builder.add_edge("draft", "approval")
-    builder.add_edge("approval", "execute")
+    builder.add_conditional_edges(
+        "approval",
+        route_after_approval,
+        {
+            "execute": "execute",
+            "draft": "draft",
+        },
+    )
     builder.add_edge("execute", END)
 
     return builder.compile(checkpointer=checkpointer)

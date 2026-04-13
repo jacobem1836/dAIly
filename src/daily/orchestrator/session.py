@@ -11,7 +11,8 @@ Provides:
 """
 
 import logging
-from datetime import date
+import re
+from datetime import date, datetime, timedelta, timezone
 
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +21,18 @@ from daily.briefing.cache import get_briefing
 from daily.profile.service import load_profile
 
 logger = logging.getLogger(__name__)
+
+_EMAIL_RE = re.compile(r"[\w.+\-]+@[\w.\-]+")
+
+
+def _extract_email(header_value: str) -> str:
+    """Extract bare email address from an RFC 2822 From/To header value.
+
+    Handles both "Name <email@example.com>" and bare "email@example.com" forms.
+    Returns the first email address found, or the original string if none matches.
+    """
+    m = _EMAIL_RE.search(header_value)
+    return m.group(0) if m else header_value
 
 # ---------------------------------------------------------------------------
 # Email adapter registry
@@ -101,17 +114,15 @@ async def initialize_session_state(
     adapters = get_email_adapters()
     if adapters:
         try:
-            from datetime import timedelta
-
-            since = d - timedelta(days=7)
+            since = datetime.now(tz=timezone.utc) - timedelta(days=7)
             page = await adapters[0].list_emails(since=since)
             email_context = [
                 {
                     "message_id": e.message_id,
                     "thread_id": e.thread_id,
                     "subject": e.subject,
-                    "sender": e.sender,
-                    "recipient": e.recipient,
+                    "sender": _extract_email(e.sender),
+                    "recipient": _extract_email(e.recipient),
                     "timestamp": e.timestamp.isoformat(),
                 }
                 for e in page.emails

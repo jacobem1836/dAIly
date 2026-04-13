@@ -22,6 +22,7 @@ Signal/action capture:
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 
 from langchain_core.messages import AIMessage
@@ -36,6 +37,18 @@ from daily.orchestrator.state import SessionState
 from daily.profile.signals import SignalType
 
 logger = logging.getLogger(__name__)
+
+_EMAIL_RE = re.compile(r"[\w.+\-]+@[\w.\-]+")
+
+
+def _extract_email(header_value: str) -> str:
+    """Extract bare email address from an RFC 2822 From/To header value.
+
+    Handles both "Name <email@example.com>" and bare "email@example.com" forms.
+    Returns the first email address found, or the original string if none matches.
+    """
+    m = _EMAIL_RE.search(header_value)
+    return m.group(0) if m else header_value
 
 
 def _openai_client() -> AsyncOpenAI:
@@ -432,17 +445,20 @@ async def draft_node(state: SessionState) -> dict:
                         "message_id": e.message_id,
                         "thread_id": e.thread_id,
                         "subject": e.subject,
-                        "sender": e.sender,
-                        "recipient": e.recipient,
+                        "sender": _extract_email(e.sender),
+                        "recipient": _extract_email(e.recipient),
                         "timestamp": e.timestamp.isoformat(),
                     }
                     for e in page.emails
                 ]
+                logger.warning("draft_node: fallback fetched %d emails", len(email_ctx))
             except Exception as exc:
-                logger.debug("draft_node: fallback email fetch failed: %s", exc)
+                logger.warning("draft_node: fallback email fetch failed: %s", exc)
                 email_ctx = []
 
+    logger.warning("draft_node: email_ctx has %d entries", len(email_ctx))
     email_context_str = _format_email_context(email_ctx)
+    logger.warning("draft_node: email_context_str preview: %s", email_context_str[:200])
 
     # Build system prompt
     system_content = DRAFT_SYSTEM_PROMPT.format(
@@ -627,8 +643,8 @@ async def _build_executor_for_type(
             if adapters:
                 since = datetime.now() - timedelta(days=90)
                 page = await adapters[0].list_emails(since=since)
-                known_addresses = {e.sender for e in page.emails if e.sender}
-                known_addresses.update(e.recipient for e in page.emails if e.recipient)
+                known_addresses = {_extract_email(e.sender) for e in page.emails if e.sender}
+                known_addresses.update(_extract_email(e.recipient) for e in page.emails if e.recipient)
         except Exception as exc:
             logger.warning("_build_executor_for_type: could not load known_addresses: %s", exc)
 
