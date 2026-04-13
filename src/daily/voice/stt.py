@@ -76,6 +76,7 @@ class STTPipeline:
         self._on_speech_started = on_speech_started
         self._transcript_parts: list[str] = []
         self.utterance_queue: asyncio.Queue[str] = asyncio.Queue()
+        self.connected: asyncio.Event = asyncio.Event()
 
     # ------------------------------------------------------------------
     # Core message handler — called from asyncio loop via start_listening
@@ -196,11 +197,12 @@ class STTPipeline:
             encoding="linear16",
             sample_rate=_SAMPLE_RATE,
             channels=_CHANNELS,
-            interim_results=True,        # Pitfall 2: REQUIRED for UtteranceEnd to fire
-            utterance_end_ms="1000",     # 1 second of silence triggers UtteranceEnd
-            vad_events=True,             # Enables SpeechStarted for barge-in (D-03)
+            interim_results="true",      # Pitfall 2: REQUIRED for UtteranceEnd to fire
+            utterance_end_ms=1000,       # 1 second of silence triggers UtteranceEnd
+            vad_events="true",           # Enables SpeechStarted for barge-in (D-03)
             endpointing=300,             # 300ms silence finalizes a word
         ) as socket:
+            self.connected.set()
             # Register message handler on the socket's event emitter
             socket.on(EventType.MESSAGE, self._handle_message)
             socket.on(EventType.ERROR, lambda err: logger.warning("Deepgram error: %s", err))

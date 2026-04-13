@@ -13,6 +13,17 @@ from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 import pytest
 
 
+def _make_stt_cls_mock():
+    """Return a mock STTPipeline class whose instances have a real connected Event (pre-set)."""
+    mock_cls = MagicMock()
+    instance = MagicMock()
+    connected = asyncio.Event()
+    connected.set()
+    instance.connected = connected
+    mock_cls.return_value = instance
+    return mock_cls
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -92,7 +103,7 @@ async def test_voice_session_uses_async_postgres_saver():
         patch("daily.voice.loop.async_session") as mock_async_session,
         patch("daily.voice.loop.initialize_session_state", new=AsyncMock(return_value={"briefing_narrative": "", "email_context": []})),
         patch("daily.voice.loop.TTSPipeline"),
-        patch("daily.voice.loop.STTPipeline"),
+        patch("daily.voice.loop.STTPipeline", new=_make_stt_cls_mock()),
         patch("daily.voice.loop.VoiceTurnManager", return_value=turn_manager),
     ):
         mock_saver_cls.from_conn_string.return_value = checkpointer_cm
@@ -148,7 +159,7 @@ async def test_briefing_spoken_on_first_turn():
             new=AsyncMock(return_value={"briefing_narrative": briefing_text, "email_context": []}),
         ),
         patch("daily.voice.loop.TTSPipeline"),
-        patch("daily.voice.loop.STTPipeline"),
+        patch("daily.voice.loop.STTPipeline", new=_make_stt_cls_mock()),
         patch("daily.voice.loop.VoiceTurnManager", return_value=turn_manager),
     ):
         mock_saver_cls.from_conn_string.return_value = checkpointer_cm
@@ -198,7 +209,7 @@ async def test_exit_utterance_ends_session():
             new=AsyncMock(return_value={"briefing_narrative": "", "email_context": []}),
         ),
         patch("daily.voice.loop.TTSPipeline"),
-        patch("daily.voice.loop.STTPipeline"),
+        patch("daily.voice.loop.STTPipeline", new=_make_stt_cls_mock()),
         patch("daily.voice.loop.VoiceTurnManager", return_value=turn_manager),
     ):
         mock_saver_cls.from_conn_string.return_value = checkpointer_cm
@@ -268,7 +279,7 @@ async def test_approval_flow_by_voice():
             new=AsyncMock(return_value={"briefing_narrative": "", "email_context": []}),
         ),
         patch("daily.voice.loop.TTSPipeline"),
-        patch("daily.voice.loop.STTPipeline"),
+        patch("daily.voice.loop.STTPipeline", new=_make_stt_cls_mock()),
         patch("daily.voice.loop.VoiceTurnManager", return_value=turn_manager),
     ):
         mock_saver_cls.from_conn_string.return_value = checkpointer_cm

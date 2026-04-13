@@ -161,6 +161,17 @@ async def run_voice_session(user_id: int = 1) -> None:
             listen_stop = asyncio.Event()
             await turn_manager.start_stt(listen_stop)
 
+            # Wait briefly for STT connection to establish (surface errors early)
+            try:
+                await asyncio.wait_for(stt_pipeline.connected.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                # Check if the STT task already failed
+                if turn_manager._stt_task and turn_manager._stt_task.done():
+                    exc = turn_manager._stt_task.exception()
+                    print(f"Error: STT connection failed — {exc}")
+                    return
+                print("Warning: STT connection taking longer than expected...")
+
             print("dAIly voice session started.")
             if adapters:
                 print(f"  {len(adapters)} email adapter(s) connected.")
@@ -172,8 +183,11 @@ async def run_voice_session(user_id: int = 1) -> None:
             # 6. First turn — speak briefing from cache (VOICE-03: sub-1s from cache)
             briefing_narrative = initial_state.get("briefing_narrative", "")
             if briefing_narrative:
-                print(f"dAIly: [briefing spoken]")
+                print("dAIly: [briefing spoken]")
                 await turn_manager.speak(briefing_narrative)
+            else:
+                print("  No cached briefing. Run 'daily chat' first to generate one.")
+                print()
 
             # 7. Main voice loop
             first_turn = True
