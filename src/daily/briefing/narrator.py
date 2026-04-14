@@ -20,6 +20,7 @@ import logging
 from openai import AsyncOpenAI
 
 from daily.briefing.models import BriefingContext, BriefingOutput
+from daily.profile.models import UserPreferences
 
 logger = logging.getLogger(__name__)
 

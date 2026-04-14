@@ -29,6 +29,7 @@ from daily.briefing.models import BriefingOutput
 from daily.briefing.narrator import generate_narrative
 from daily.briefing.redactor import redact_emails, redact_messages
 from daily.integrations.base import CalendarAdapter, EmailAdapter, MessageAdapter
+from daily.profile.models import UserPreferences
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ async def run_briefing_pipeline(
     top_n: int,
     redis: Redis,
     openai_client: AsyncOpenAI,
+    preferences: UserPreferences | None = None,
 ) -> BriefingOutput:
     """Full pipeline: ingest -> rank -> fetch bodies -> redact -> narrate -> cache.
 
@@ -67,6 +69,8 @@ async def run_briefing_pipeline(
         top_n: Max number of emails to include in the briefing.
         redis: Async Redis connection for caching the output.
         openai_client: Async OpenAI client for redaction and narration.
+        preferences: Optional user preferences for tone/length/order. If None,
+                     narrator uses defaults.
 
     Returns:
         BriefingOutput with narrative, generated_at, and version.
@@ -118,7 +122,7 @@ async def run_briefing_pipeline(
 
     # Step 3: Generate narrative (BRIEF-06)
     # Narrator receives only pre-summarised metadata -- no raw bodies (D-11/SEC-05)
-    output = await generate_narrative(context, openai_client)
+    output = await generate_narrative(context, openai_client, preferences=preferences)
 
     # Step 4: Cache in Redis (BRIEF-01, D-14)
     await cache_briefing(redis, user_id, output)

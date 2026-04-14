@@ -30,6 +30,7 @@ from daily.briefing.pipeline import run_briefing_pipeline
 from daily.config import Settings
 from daily.db.engine import async_session
 from daily.db.models import IntegrationToken, VipSender
+from daily.profile.service import load_profile
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,10 @@ async def _build_pipeline_kwargs(user_id: int, settings: Settings) -> dict:
             slack = SlackAdapter(credentials=decrypted)
             message_adapters.append(slack)
 
+    # Load user preferences for narrator (PERS-01)
+    async with async_session() as session:
+        preferences = await load_profile(user_id, session)
+
     # Create Redis and OpenAI clients
     redis = Redis.from_url(settings.redis_url)
     openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
@@ -114,6 +119,7 @@ async def _build_pipeline_kwargs(user_id: int, settings: Settings) -> dict:
         "top_n": settings.briefing_email_top_n,
         "redis": redis,
         "openai_client": openai_client,
+        "preferences": preferences,
     }
 
 
