@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
-status: idle
+status: defining_requirements
 last_updated: "2026-04-15T00:00:00.000Z"
-last_activity: 2026-04-15 -- v1.0 milestone complete
+last_activity: 2026-04-15 -- Milestone v1.1 started
 progress:
   total_phases: 0
   completed_phases: 0
@@ -20,13 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** The briefing always delivers — every morning, the user gets a prioritised, conversational summary of what matters without touching a single app.
-**Current focus:** Planning v1.1 — Intelligence Layer
+**Current focus:** v1.1 — Intelligence Layer
 
 ## Current Position
 
-Milestone v1.0 shipped 2026-04-14. All 6 phases complete, 22/22 plans, 31/31 requirements satisfied.
-
-Ready to start v1.1 planning via `/gsd-new-milestone`.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-15 — Milestone v1.1 started
 
 ## Accumulated Context
 

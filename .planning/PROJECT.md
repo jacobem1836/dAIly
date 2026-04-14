@@ -10,12 +10,24 @@ v1.0 shipped a complete backend: OAuth integrations (Gmail, GCal, Outlook, Slack
 
 The briefing always delivers: every morning, the user gets a prioritised, conversational summary of what matters — without touching a single app.
 
+## Current Milestone: v1.1 Intelligence Layer
+
+**Goal:** Transform the briefing from a consistent daily output into a personalised, adaptive system that learns the user over time and earns increasing autonomy.
+
+**Target features:**
+- Adaptive prioritisation — learned scoring replaces heuristics
+- Cross-session memory — persistent user profile across days via pgvector
+- Memory transparency — inspect, edit, and delete what the system knows
+- Trusted actions — configurable autonomy levels (suggest / approve / auto)
+- Conversational flow improvements — natural interruption, fluid mode switching, adaptive tone
+- Tech debt fixes — scheduler user_email bug, Slack pagination, thread summarisation stub
+
 ## Milestone Plan
 
 | Milestone | Scope | Status |
 |-----------|-------|--------|
 | **v1.0 — Core Backend** | OAuth integrations, briefing pipeline, orchestrator, action layer, voice interface, preferences | ✅ Shipped 2026-04-14 |
-| **v1.1 — Intelligence Layer** | Adaptive prioritisation, deeper memory system, trusted actions, improved conversation flow | Planned |
+| **v1.1 — Intelligence Layer** | Adaptive prioritisation, deeper memory system, trusted actions, improved conversation flow | 🔄 In Progress |
 | **v2.0 — Ecosystem Expansion** | Travel, finance, health, smart home, document platforms, web dashboard | Planned |
 
 ## Requirements
@@ -58,6 +70,13 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 
 - [ ] **INTEL-01**: Priority ranking learns from M1 signal data to replace heuristic defaults with personalised scoring
 - [ ] **INTEL-02**: Cross-session conversational memory persists context across days (pgvector + structured user profile extraction)
+- [ ] **MEM-01**: User can inspect what the system knows about them ("What do you know about me?")
+- [ ] **MEM-02**: User can edit or delete specific memory entries
+- [ ] **MEM-03**: User can disable learning or reset all memory
+- [ ] **ACT-07**: User can configure autonomy level (suggest-only / approve-per-action / trusted-auto)
+- [ ] **CONV-01**: Briefing supports natural mid-session interruption without breaking conversation state
+- [ ] **CONV-02**: Fluid switching between briefing, discussion, and action modes
+- [ ] **CONV-03**: Adaptive tone — system adjusts formality and verbosity based on context signals
 - [ ] **FIX-01**: `user_email=""` in scheduler — WEIGHT_DIRECT (10pts) path never fires; direct-to-user emails always scored as WEIGHT_CC (2pts)
 - [ ] **FIX-02**: Slack pagination single-page only — implement cursor-based pagination for multi-page workspaces
 - [ ] **FIX-03**: `message_id = last_content` stub in summarise_thread_node — real message ID extraction from briefing metadata
@@ -68,7 +87,7 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 - Web dashboard — deferred to v2.0 (DASH-01, DASH-02, DASH-03)
 - News integration — not in v1 integrations
 - Travel, finance, health, smart home — v2.0+
-- Trusted auto-actions (no approval required) — AUTO-01, v1.1 after trust established
+- Full autonomous actions with no approval path — deferred to v2.0 (ACT-07 adds configurable levels, not full bypass)
 - Apple Mail (IMAP/SMTP) — INTG-06, v2.0+
 - Fully local LLM — GPT-class cloud model required for quality; out of scope indefinitely
 
@@ -90,7 +109,7 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 - **Privacy**: Raw email/message bodies must not be stored long-term — only summaries and metadata
 - **Latency**: Voice responses must feel instant — precompute briefings, stream TTS
 - **Security**: OAuth tokens encrypted at rest (AES-256), stored in secure vault (never frontend)
-- **Autonomy**: All external-facing actions require user approval in v1 — auto-actions are v1.1+
+- **Autonomy**: Trusted-auto level requires explicit user opt-in; high-impact actions (send email, create event) always surface for approval at default level
 
 ## Key Decisions
 
@@ -106,5 +125,22 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 | Cartesia Sonic-3 for TTS | 40–90ms TTFB, WebSocket streaming | ✓ Good — latency target met |
 | Deepgram Nova-3 for STT | Sub-300ms streaming, $0.0077/min | ✓ Good — real-time performance confirmed |
 
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
-*Last updated: 2026-04-15 after v1.0 milestone*
+*Last updated: 2026-04-15 after v1.1 milestone start*
