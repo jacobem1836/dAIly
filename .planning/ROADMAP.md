@@ -101,10 +101,10 @@ Plans:
 **UI hint**: yes
 **Plans:** 4 plans
 Plans:
-- [ ] 05-01-PLAN.md — TTS pipeline (Cartesia WebSocket + sentence splitter + sounddevice playback)
-- [ ] 05-02-PLAN.md — STT pipeline (Deepgram WebSocket + mic capture + transcript handling)
-- [ ] 05-03-PLAN.md — Barge-in (asyncio task coordination, stop_event, VAD interrupt loop)
-- [ ] 05-04-PLAN.md — Full voice loop integration (daily voice command, AsyncPostgresSaver, end-to-end wiring)
+- [x] 05-01-PLAN.md — TTS pipeline (Cartesia WebSocket + sentence splitter + sounddevice playback)
+- [x] 05-02-PLAN.md — STT pipeline (Deepgram WebSocket + mic capture + transcript handling)
+- [x] 05-03-PLAN.md — Barge-in (asyncio task coordination, stop_event, VAD interrupt loop)
+- [x] 05-04-PLAN.md — Full voice loop integration (daily voice command, AsyncPostgresSaver, end-to-end wiring)
 
 ## Progress
 
