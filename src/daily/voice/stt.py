@@ -77,6 +77,7 @@ class STTPipeline:
         self._transcript_parts: list[str] = []
         self.utterance_queue: asyncio.Queue[str] = asyncio.Queue()
         self.connected: asyncio.Event = asyncio.Event()
+        self.muted: bool = False  # Set True during TTS to suppress echo feedback
 
     # ------------------------------------------------------------------
     # Core message handler — called from asyncio loop via start_listening
@@ -222,7 +223,10 @@ class STTPipeline:
                 while not stop_event.is_set():
                     try:
                         chunk = await asyncio.wait_for(audio_queue.get(), timeout=0.1)
-                        await socket.send_media(chunk)
+                        if not self.muted:
+                            await socket.send_media(chunk)
+                        # When muted: drain queue but don't send — prevents
+                        # TTS audio from being transcribed as user speech
                     except asyncio.TimeoutError:
                         # No audio in queue — check stop_event and loop
                         continue

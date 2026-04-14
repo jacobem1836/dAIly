@@ -30,6 +30,7 @@ dependencies = [
     "langchain-openai>=1.1.12",
     "deepgram-sdk>=6.1.1",
     "sounddevice>=0.5.5",
+    "numpy>=1.26.0",
     "cartesia[websockets]>=3.0.2",
 ]
 

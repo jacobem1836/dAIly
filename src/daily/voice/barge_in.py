@@ -84,6 +84,8 @@ class VoiceTurnManager:
         """
         self._stop_event.clear()
         self._tts_active = True
+        self._stt.muted = True  # Mute mic to prevent echo feedback loop
+        self._stt._transcript_parts.clear()  # Discard any in-flight echo fragments
         interrupted = False
         try:
             self._tts_task = asyncio.create_task(
@@ -98,6 +100,8 @@ class VoiceTurnManager:
                 interrupted = True
         finally:
             self._tts_active = False
+            self._stt.muted = False  # Unmute mic after TTS finishes
+            self._stt._transcript_parts.clear()  # Discard any trailing echo
             self._stop_event.clear()
             self._tts_task = None
 

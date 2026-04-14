@@ -52,6 +52,8 @@ class _FakeSTT:
     def __init__(self) -> None:
         self.utterance_queue: asyncio.Queue[str] = asyncio.Queue()
         self._on_speech_started: None = None
+        self._transcript_parts: list[str] = []
+        self.muted: bool = False
 
     async def start_listening(self, stop_event: asyncio.Event) -> None:
         await stop_event.wait()
