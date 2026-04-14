@@ -106,10 +106,17 @@ Plans:
 - [x] 05-03-PLAN.md — Barge-in (asyncio task coordination, stop_event, VAD interrupt loop)
 - [x] 05-04-PLAN.md — Full voice loop integration (daily voice command, AsyncPostgresSaver, end-to-end wiring)
 
+### Phase 6: Wire User Preferences to Scheduled Briefing
+**Goal:** PERS-01 fully satisfied — user-configured tone/length/category_order applied to the precomputed morning briefing, not just the CLI chat session
+**Depends on:** Phase 3 (UserPreferences ORM + load_profile()), Phase 5 (voice briefing loop)
+**Requirements:** PERS-01
+**Gap Closure:** Closes PERS-01 wiring gap from v1.0 audit; fixes Phase 3→2 integration link and "Preferences-applied briefing" E2E flow
+**Plans:** TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -118,3 +125,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 3. Orchestrator | 0/4 | Planning complete | - |
 | 4. Action Layer | 0/3 | Planning complete | - |
 | 5. Voice Interface | 0/4 | Planning complete | - |
+| 6. Wire Preferences to Briefing | 0/1 | Gap closure — Pending | - |
