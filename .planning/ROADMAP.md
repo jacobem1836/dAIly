@@ -111,7 +111,9 @@ Plans:
 **Depends on:** Phase 3 (UserPreferences ORM + load_profile()), Phase 5 (voice briefing loop)
 **Requirements:** PERS-01
 **Gap Closure:** Closes PERS-01 wiring gap from v1.0 audit; fixes Phase 3→2 integration link and "Preferences-applied briefing" E2E flow
-**Plans:** TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 06-01-PLAN.md — Wire load_profile into briefing pipeline and scheduler cron
 
 ## Progress
 
