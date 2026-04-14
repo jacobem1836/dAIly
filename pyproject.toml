@@ -1,0 +1,65 @@
+[project]
+name = "daily"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.135.0",
+    "pydantic>=2.12.0",
+    "pydantic-settings>=2.0.0",
+    "sqlalchemy>=2.0.49",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.0",
+    "python-dotenv>=1.0.0",
+    "typer>=0.24.0",
+    "cryptography>=42.0.0",
+    "google-auth-oauthlib>=1.3.0",
+    "google-api-python-client>=2.100.0",
+    "slack-sdk>=3.41.0",
+    "msal>=1.35.0",
+    "msgraph-sdk>=1.55.0",
+    "greenlet>=3.3.2",
+    "uvicorn>=0.43.0",
+    "apscheduler>=3.10.0,<3.11.0",
+    "redis>=7.0.0",
+    "openai>=2.0.0,<3.0.0",
+    "python-dateutil>=2.9",
+    "langgraph>=1.1.6",
+    "langgraph-checkpoint-postgres>=3.0.5",
+    "psycopg[binary]>=3.3.3",
+    "psycopg-pool>=3.3.0",
+    "langchain-openai>=1.1.12",
+    "deepgram-sdk>=6.1.1",
+    "sounddevice>=0.5.5",
+    "numpy>=1.26.0",
+    "cartesia[websockets]>=3.0.2",
+]
+
+[project.scripts]
+daily = "daily.cli:app"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "httpx>=0.28.1",
+    "fakeredis>=2.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/daily"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[dependency-groups]
+dev = [
+    "fakeredis>=2.34.1",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+]

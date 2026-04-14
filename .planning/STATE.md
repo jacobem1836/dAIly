@@ -1,62 +1,59 @@
+---
+gsd_state_version: 1.0
+milestone: v1.1
+milestone_name: Intelligence Layer
+status: defining_requirements
+last_updated: "2026-04-15T00:00:00.000Z"
+last_activity: 2026-04-15 -- Milestone v1.1 started
+progress:
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+---
+
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-05)
+See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** The briefing always delivers — every morning, the user gets a prioritised, conversational summary of what matters without touching a single app.
-**Current focus:** Phase 1 — Foundation
+**Current focus:** v1.1 — Intelligence Layer
 
 ## Current Position
 
-Phase: 1 of 5 (Foundation)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-04-05 — Roadmap created; 31 v1 requirements mapped across 5 phases
-
-Progress: [░░░░░░░░░░] 0%
-
-## Performance Metrics
-
-**Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| - | - | - | - |
-
-**Recent Trend:**
-- Last 5 plans: -
-- Trend: -
-
-*Updated after each plan completion*
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-15 — Milestone v1.1 started
 
 ## Accumulated Context
 
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- Init: Backend-first for M1 — validates core agent loop before investing in UI
-- Init: LLM is intent-only; orchestrator dispatches all actions — enforced structurally from Phase 3
-- Init: Precomputed briefing cache is architectural default, not an optimisation — baked into Phase 2
 
 ### Pending Todos
 
-None yet.
+- Address tech debt before or during v1.1:
+  - `user_email=""` in scheduler (WEIGHT_DIRECT never fires)
+  - Slack pagination (single-page only)
+  - `message_id = last_content` stub in thread summarisation
 
 ### Blockers/Concerns
 
-- Phase 2: APScheduler 4.x is pre-release — verify stability at Phase 2 start; pin 3.10.x if unstable
-- Phase 5: End-to-end latency benchmarking under real-world noise conditions — Silero VAD tuning may require iteration
+None — v1.0 shipped clean.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260411-vlh | Fix Google credentials reconstruction | 2026-04-11 | dc41c9f | [260411-vlh-fix-google-credentials-reconstruction-bu](./quick/260411-vlh-fix-google-credentials-reconstruction-bu/) |
+| 260412-gak | Fix null recipient in draft_node — pass email metadata to LLM prompt | 2026-04-12 | 60975dd | [260412-gak-fix-null-recipient-in-draft-node-pass-em](./quick/260412-gak-fix-null-recipient-in-draft-node-pass-em/) |
 
 ## Session Continuity
 
-Last session: 2026-04-05
-Stopped at: Roadmap created, ready to plan Phase 1
-Resume file: None
+Last session: 2026-04-15
+Milestone v1.0 complete.
