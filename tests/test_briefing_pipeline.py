@@ -4,6 +4,8 @@ import time
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from daily.profile.models import UserPreferences
+
 import pytest
 from fakeredis import FakeAsyncRedis
 
@@ -276,3 +278,149 @@ async def test_raw_bodies_passed_to_redactor(fake_redis, openai_client):
         "redact_emails was not called with context.raw_bodies — SEC-02 contract violated"
     )
     assert captured_raw_bodies["msg-sec-test"] == "Sensitive email body content here."
+
+
+# ---------------------------------------------------------------------------
+# PERS-01: Preference wiring tests (Phase 6 gap closure)
+# ---------------------------------------------------------------------------
+
+
+def _make_capturing_client():
+    """Return (client, captured_narrator_calls) — client records all create() calls."""
+    calls = []
+
+    async def mock_create(**kwargs):
+        calls.append(kwargs)
+        model = kwargs.get("model", "")
+        if "mini" in model:
+            response = MagicMock()
+            response.choices = [MagicMock()]
+            response.choices[0].message.content = "Redacted summary."
+            return response
+        else:
+            response = MagicMock()
+            response.choices = [MagicMock()]
+            response.choices[0].message.content = '{"narrative": "Good morning."}'
+            return response
+
+    client = MagicMock()
+    client.chat = MagicMock()
+    client.chat.completions = MagicMock()
+    client.chat.completions.create = mock_create
+    return client, calls
+
+
+@pytest.mark.asyncio
+async def test_pipeline_forwards_preferences_to_narrator(
+    fake_redis, email_adapter, calendar_adapter, message_adapter
+):
+    """run_briefing_pipeline with preferences passes tone/length to narrator system prompt."""
+    from daily.briefing.pipeline import run_briefing_pipeline
+
+    client, calls = _make_capturing_client()
+    prefs = UserPreferences(tone="formal", briefing_length="concise")
+
+    await run_briefing_pipeline(
+        user_id=1,
+        email_adapters=[email_adapter],
+        calendar_adapters=[calendar_adapter],
+        message_adapters=[message_adapter],
+        vip_senders=frozenset(),
+        user_email="me@example.com",
+        top_n=5,
+        redis=fake_redis,
+        openai_client=client,
+        preferences=prefs,
+    )
+
+    # Find the narrator call (non-mini model)
+    narrator_calls = [c for c in calls if "mini" not in c.get("model", "")]
+    assert narrator_calls, "No narrator LLM call was made"
+    system_msg = next(
+        (m for m in narrator_calls[0].get("messages", []) if m["role"] == "system"),
+        None,
+    )
+    assert system_msg is not None, "No system message in narrator call"
+    assert "formal" in system_msg["content"], "Tone 'formal' not found in narrator system prompt"
+    assert "concise" in system_msg["content"], "Length 'concise' not found in narrator system prompt"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_no_preferences_backward_compat(
+    fake_redis, email_adapter, calendar_adapter, message_adapter
+):
+    """run_briefing_pipeline with preferences=None still works; no preference preamble in prompt."""
+    from daily.briefing.pipeline import run_briefing_pipeline
+
+    client, calls = _make_capturing_client()
+
+    output = await run_briefing_pipeline(
+        user_id=1,
+        email_adapters=[email_adapter],
+        calendar_adapters=[calendar_adapter],
+        message_adapters=[message_adapter],
+        vip_senders=frozenset(),
+        user_email="me@example.com",
+        top_n=5,
+        redis=fake_redis,
+        openai_client=client,
+        # preferences omitted — should default to None
+    )
+
+    assert isinstance(output, BriefingOutput)
+    assert output.narrative
+
+    # Verify no preference preamble in the narrator system prompt
+    narrator_calls = [c for c in calls if "mini" not in c.get("model", "")]
+    assert narrator_calls, "No narrator LLM call was made"
+    system_msg = next(
+        (m for m in narrator_calls[0].get("messages", []) if m["role"] == "system"),
+        None,
+    )
+    assert system_msg is not None
+    assert not system_msg["content"].startswith("User preferences:"), (
+        "Preference preamble found in system prompt when preferences=None"
+    )
+
+
+@pytest.mark.asyncio
+async def test_build_pipeline_kwargs_includes_preferences():
+    """_build_pipeline_kwargs returns a dict with a 'preferences' key loaded via load_profile."""
+    from daily.briefing.scheduler import _build_pipeline_kwargs
+
+    # Mock session that returns empty DB results
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.fetchall.return_value = []
+    mock_result.scalars.return_value.all.return_value = []
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
+    mock_cm = AsyncMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+    mock_async_session = MagicMock(return_value=mock_cm)
+
+    expected_prefs = UserPreferences(tone="casual")
+
+    mock_settings = MagicMock()
+    mock_settings.redis_url = "redis://localhost"
+    mock_settings.openai_api_key = "test-key"
+    mock_settings.vault_key = None
+    mock_settings.briefing_email_top_n = 5
+
+    import sys
+    fake_adapter_modules = {
+        "daily.integrations.google.adapter": MagicMock(),
+        "daily.integrations.microsoft.adapter": MagicMock(),
+        "daily.integrations.slack.adapter": MagicMock(),
+        "daily.vault.crypto": MagicMock(),
+    }
+    with patch("daily.briefing.scheduler.async_session", mock_async_session), \
+         patch("daily.briefing.scheduler.load_profile", AsyncMock(return_value=expected_prefs)), \
+         patch.dict(sys.modules, fake_adapter_modules):
+        result = await _build_pipeline_kwargs(user_id=1, settings=mock_settings)
+
+    assert "preferences" in result, "Expected 'preferences' key in _build_pipeline_kwargs result"
+    assert result["preferences"].tone == "casual", (
+        f"Expected tone='casual', got '{result['preferences'].tone}'"
+    )
