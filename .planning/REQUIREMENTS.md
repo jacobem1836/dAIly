@@ -71,24 +71,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FIX-01 | — | Pending |
-| FIX-02 | — | Pending |
-| FIX-03 | — | Pending |
-| INTEL-01 | — | Pending |
-| INTEL-02 | — | Pending |
-| MEM-01 | — | Pending |
-| MEM-02 | — | Pending |
-| MEM-03 | — | Pending |
-| ACT-07 | — | Pending |
-| CONV-01 | — | Pending |
-| CONV-02 | — | Pending |
-| CONV-03 | — | Pending |
+| FIX-01 | Phase 7 | Pending |
+| FIX-02 | Phase 7 | Pending |
+| FIX-03 | Phase 7 | Pending |
+| INTEL-01 | Phase 8 | Pending |
+| INTEL-02 | Phase 9 | Pending |
+| MEM-01 | Phase 10 | Pending |
+| MEM-02 | Phase 10 | Pending |
+| MEM-03 | Phase 10 | Pending |
+| ACT-07 | Phase 11 | Pending |
+| CONV-01 | Phase 12 | Pending |
+| CONV-02 | Phase 12 | Pending |
+| CONV-03 | Phase 12 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12 ⚠️
+- Mapped to phases: 12
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-05*
-*Last updated: 2026-04-15 after v1.1 milestone definition*
+*Last updated: 2026-04-15 after v1.1 roadmap creation*
