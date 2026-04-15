@@ -42,7 +42,11 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details.
   1. A scheduled morning briefing correctly scores a direct-to-user email at 10pts (WEIGHT_DIRECT), not 2pts (WEIGHT_CC)
   2. Slack ingestion for a multi-page workspace retrieves messages beyond the first page
   3. Thread summarisation on demand resolves the real message ID from briefing metadata rather than using the last message content as a stub
-**Plans**: TBD
+**Plans**: 4 plans
+  - [ ] 07-01-PLAN.md — Fix FIX-01: normalize RFC 2822 recipient addresses in ranker
+  - [ ] 07-02-PLAN.md — Fix FIX-02: paginate Slack conversations_history within time window
+  - [ ] 07-03-PLAN.md — Fix FIX-03: resolve message_id from email_context in summarise_thread_node
+  - [ ] 07-04-PLAN.md — Backfill validation script + iCloud duplicate cleanup
 
 ### Phase 8: Adaptive Ranker
 **Goal**: Morning briefing email order reflects the user's observed attention patterns, not static keyword weights
