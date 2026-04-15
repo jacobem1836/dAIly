@@ -279,3 +279,177 @@ class TestSlackAdapterListMessages:
 
         # 1 from C01CHANNEL + 1 from C02CHANNEL
         assert len(result.messages) == 2
+
+
+# ---------------------------------------------------------------------------
+# Pagination regression tests (FIX-02)
+# since = 2026-04-15T00:00:00Z → epoch 1744934400.0
+# IN_WINDOW timestamps: >= 1744934400.0
+# OUT_OF_WINDOW timestamps: < 1744934400.0
+# ---------------------------------------------------------------------------
+
+SINCE_TS = datetime(2026, 4, 15, 0, 0, tzinfo=timezone.utc)
+
+# Timestamps for test messages
+IN_1 = "1744934401.000000"  # 1 second after since
+IN_2 = "1744934402.000000"  # 2 seconds after since
+IN_3 = "1744934403.000000"  # 3 seconds after since
+IN_4 = "1744934404.000000"  # 4 seconds after since
+OUT_1 = "1744934399.000000"  # 1 second before since
+
+
+def _make_mock_side_effect(*responses):
+    """Build a side_effect list from dicts for conversations_history mock."""
+    return [_make_mock_response(r) for r in responses]
+
+
+class TestSlackAdapterPagination:
+    @pytest.mark.asyncio
+    async def test_pagination_single_page_no_cursor(self):
+        """Single page with next_cursor='' — adapter makes exactly 1 call, returns all messages."""
+        from daily.integrations.slack.adapter import SlackAdapter
+
+        page1 = {
+            "ok": True,
+            "messages": [
+                {"ts": IN_1, "user": "U1", "text": "hello"},
+                {"ts": IN_2, "user": "U2", "text": "world"},
+            ],
+            "response_metadata": {"next_cursor": ""},
+        }
+
+        client = MagicMock()
+        client.conversations_history.side_effect = _make_mock_side_effect(page1)
+
+        with patch("daily.integrations.slack.adapter.WebClient") as mock_wc:
+            mock_wc.return_value = client
+            adapter = SlackAdapter(bot_token="xoxb-test")
+
+        result = await adapter.list_messages(channels=["C01CHANNEL"], since=SINCE_TS)
+
+        assert client.conversations_history.call_count == 1
+        assert len(result.messages) == 2
+
+    @pytest.mark.asyncio
+    async def test_pagination_follows_cursor_two_pages_all_in_window(self):
+        """Two in-window pages — adapter follows cursor and returns all 4 messages."""
+        from daily.integrations.slack.adapter import SlackAdapter
+
+        page1 = {
+            "ok": True,
+            "messages": [
+                {"ts": IN_2, "user": "U1", "text": "msg A"},
+                {"ts": IN_1, "user": "U2", "text": "msg B"},
+            ],
+            "response_metadata": {"next_cursor": "c1"},
+        }
+        page2 = {
+            "ok": True,
+            "messages": [
+                {"ts": IN_4, "user": "U3", "text": "msg C"},
+                {"ts": IN_3, "user": "U4", "text": "msg D"},
+            ],
+            "response_metadata": {"next_cursor": ""},
+        }
+
+        client = MagicMock()
+        client.conversations_history.side_effect = _make_mock_side_effect(page1, page2)
+
+        with patch("daily.integrations.slack.adapter.WebClient") as mock_wc:
+            mock_wc.return_value = client
+            adapter = SlackAdapter(bot_token="xoxb-test")
+
+        result = await adapter.list_messages(channels=["C01CHANNEL"], since=SINCE_TS)
+
+        assert client.conversations_history.call_count == 2
+        assert len(result.messages) == 4
+
+        # Verify cursor was passed on the second call
+        second_call_kwargs = client.conversations_history.call_args_list[1][1]
+        assert second_call_kwargs.get("cursor") == "c1"
+
+    @pytest.mark.asyncio
+    async def test_pagination_stops_on_time_window(self):
+        """Page 2 messages are all older than since — adapter stops and returns only in-window msgs."""
+        from daily.integrations.slack.adapter import SlackAdapter
+
+        page1 = {
+            "ok": True,
+            "messages": [
+                {"ts": IN_2, "user": "U1", "text": "in-window 1"},
+                {"ts": IN_1, "user": "U2", "text": "in-window 2"},
+            ],
+            "response_metadata": {"next_cursor": "c1"},
+        }
+        page2 = {
+            "ok": True,
+            "messages": [
+                {"ts": OUT_1, "user": "U3", "text": "too old"},
+            ],
+            "response_metadata": {"next_cursor": "c2"},
+        }
+
+        client = MagicMock()
+        client.conversations_history.side_effect = _make_mock_side_effect(page1, page2)
+
+        with patch("daily.integrations.slack.adapter.WebClient") as mock_wc:
+            mock_wc.return_value = client
+            adapter = SlackAdapter(bot_token="xoxb-test")
+
+        result = await adapter.list_messages(channels=["C01CHANNEL"], since=SINCE_TS)
+
+        assert client.conversations_history.call_count == 2
+        assert len(result.messages) == 2
+
+    @pytest.mark.asyncio
+    async def test_pagination_empty_first_page(self):
+        """Empty first page — adapter makes exactly 1 call and returns []."""
+        from daily.integrations.slack.adapter import SlackAdapter
+
+        page1 = {
+            "ok": True,
+            "messages": [],
+            "response_metadata": {"next_cursor": ""},
+        }
+
+        client = MagicMock()
+        client.conversations_history.side_effect = _make_mock_side_effect(page1)
+
+        with patch("daily.integrations.slack.adapter.WebClient") as mock_wc:
+            mock_wc.return_value = client
+            adapter = SlackAdapter(bot_token="xoxb-test")
+
+        result = await adapter.list_messages(channels=["C01CHANNEL"], since=SINCE_TS)
+
+        assert client.conversations_history.call_count == 1
+        assert result.messages == []
+
+    @pytest.mark.asyncio
+    async def test_pagination_mid_page_time_window_cutoff(self):
+        """Single page: msgs[0], msgs[1] in-window; msgs[2] older than since — only first 2 returned."""
+        from daily.integrations.slack.adapter import SlackAdapter
+
+        page1 = {
+            "ok": True,
+            "messages": [
+                {"ts": IN_3, "user": "U1", "text": "newest"},
+                {"ts": IN_1, "user": "U2", "text": "second"},
+                {"ts": OUT_1, "user": "U3", "text": "too old"},
+            ],
+            "response_metadata": {"next_cursor": ""},
+        }
+
+        client = MagicMock()
+        client.conversations_history.side_effect = _make_mock_side_effect(page1)
+
+        with patch("daily.integrations.slack.adapter.WebClient") as mock_wc:
+            mock_wc.return_value = client
+            adapter = SlackAdapter(bot_token="xoxb-test")
+
+        result = await adapter.list_messages(channels=["C01CHANNEL"], since=SINCE_TS)
+
+        assert len(result.messages) == 2
+        ts_values = [m.message_id for m in result.messages]
+        assert IN_3 in ts_values
+        assert IN_1 in ts_values
+        assert OUT_1 not in ts_values
