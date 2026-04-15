@@ -40,7 +40,7 @@ Learned signals produce a per-sender float multiplier (range 0.5–2.0, sigmoid-
 | correction | −0.3 |
 | skip | −0.5 |
 
-Raw net score per sender → sigmoid-normalised to 0.5–2.0 range.
+Raw net score per sender → sigmoid-normalised using `2.0 * sigmoid(raw_score)`, yielding range (0.0, 2.0) with **neutral = 1.0 exactly** (raw score 0 → multiplier 1.0). This was resolved during autonomous planning: 1.0 neutral is preferred over the initial 0.5–2.0 proposal (midpoint 1.25) so that senders with no signal data are truly unaffected.
 
 **Future milestone note:** These weights are strong candidates for per-user personalisation. A power user who expands every email would benefit from higher skip weight; a passive user would benefit from heavier re_request weighting. Could be stored as a `signal_weights` dict in `user_profile.preferences`.
 
