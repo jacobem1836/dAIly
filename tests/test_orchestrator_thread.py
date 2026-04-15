@@ -223,29 +223,54 @@ class TestRespondNode:
 # ---------------------------------------------------------------------------
 
 
+def _make_two_step_llm_responses(target_id: str = "msg-001", summary: str = "Email summary."):
+    """Return (identify_response, summarise_response) for two-step LLM flow."""
+    identify = _make_openai_response("summarise_thread", "", target_id)
+    summarise = _make_openai_response("summarise_thread", summary, target_id)
+    return identify, summarise
+
+
+_DEFAULT_EMAIL_CONTEXT = [
+    {
+        "message_id": "msg-001",
+        "thread_id": "t1",
+        "subject": "Test thread",
+        "sender": "alice@example.com",
+        "recipient": "jacob@example.com",
+        "timestamp": "2026-04-15T08:00:00Z",
+    }
+]
+
+
 class TestSummariseThreadNode:
     @pytest.mark.asyncio
     async def test_summarise_thread_node_fetches_body_via_adapter(self):
         """summarise_thread_node fetches email body via adapter registry."""
         from daily.orchestrator.nodes import summarise_thread_node
-        from daily.orchestrator.session import set_email_adapters
 
         mock_adapter = AsyncMock()
         mock_adapter.get_email_body = AsyncMock(return_value="Raw email body text")
-        set_email_adapters([mock_adapter])
 
-        mock_openai_resp = _make_openai_response("summarise_thread", "Email summary.")
+        identify_resp, summarise_resp = _make_two_step_llm_responses()
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[identify_resp, summarise_resp]
+        )
 
-        with patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_resp)
-            mock_client_class.return_value = mock_client
+        from daily.orchestrator.state import SessionState
+        state = SessionState(
+            messages=[HumanMessage(content="Summarise that email thread")],
+            briefing_narrative="Test briefing",
+            active_user_id=1,
+            preferences={},
+            email_context=_DEFAULT_EMAIL_CONTEXT,
+        )
 
-            with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
-                mock_redact.return_value = "Redacted summary"
-
-                state = _make_state(messages=[HumanMessage(content="Summarise that email thread")])
-                result = await summarise_thread_node(state)
+        with patch("daily.orchestrator.nodes._openai_client", return_value=mock_client):
+            with patch("daily.orchestrator.nodes.get_email_adapters", return_value=[mock_adapter]):
+                with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
+                    mock_redact.return_value = "Redacted summary"
+                    result = await summarise_thread_node(state)
 
         mock_adapter.get_email_body.assert_called_once()
 
@@ -253,81 +278,99 @@ class TestSummariseThreadNode:
     async def test_summarise_thread_node_calls_gpt_4_1(self):
         """summarise_thread_node uses GPT-4.1 (D-02 — full model for reasoning)."""
         from daily.orchestrator.nodes import summarise_thread_node
-        from daily.orchestrator.session import set_email_adapters
 
         mock_adapter = AsyncMock()
         mock_adapter.get_email_body = AsyncMock(return_value="Email content")
-        set_email_adapters([mock_adapter])
 
-        mock_openai_resp = _make_openai_response("summarise_thread", "Summary.")
+        identify_resp, summarise_resp = _make_two_step_llm_responses()
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[identify_resp, summarise_resp]
+        )
 
-        with patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_resp)
-            mock_client_class.return_value = mock_client
+        from daily.orchestrator.state import SessionState
+        state = SessionState(
+            messages=[HumanMessage(content="What emails do I have?")],
+            briefing_narrative="Test briefing",
+            active_user_id=1,
+            preferences={},
+            email_context=_DEFAULT_EMAIL_CONTEXT,
+        )
 
-            with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
-                mock_redact.return_value = "Redacted"
+        with patch("daily.orchestrator.nodes._openai_client", return_value=mock_client):
+            with patch("daily.orchestrator.nodes.get_email_adapters", return_value=[mock_adapter]):
+                with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
+                    mock_redact.return_value = "Redacted"
+                    await summarise_thread_node(state)
 
-                await summarise_thread_node(_make_state())
-
-            # The last call to create should be with gpt-4.1
-            calls = mock_client.chat.completions.create.call_args_list
-            # Find the call with gpt-4.1 (not mini)
-            models_used = [c[1].get("model") for c in calls]
-            assert "gpt-4.1" in models_used
+        # All LLM calls should use gpt-4.1
+        calls = mock_client.chat.completions.create.call_args_list
+        models_used = [c[1].get("model") for c in calls]
+        assert "gpt-4.1" in models_used
 
     @pytest.mark.asyncio
     async def test_summarise_thread_node_calls_summarise_and_redact(self):
         """summarise_thread_node passes raw body through summarise_and_redact (SEC-02)."""
         from daily.orchestrator.nodes import summarise_thread_node
-        from daily.orchestrator.session import set_email_adapters
 
         mock_adapter = AsyncMock()
         mock_adapter.get_email_body = AsyncMock(return_value="Raw email content here")
-        set_email_adapters([mock_adapter])
 
-        mock_openai_resp = _make_openai_response("summarise_thread", "Summary.")
+        identify_resp, summarise_resp = _make_two_step_llm_responses()
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[identify_resp, summarise_resp]
+        )
 
-        with patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_resp)
-            mock_client_class.return_value = mock_client
+        from daily.orchestrator.state import SessionState
+        state = SessionState(
+            messages=[HumanMessage(content="What emails do I have?")],
+            briefing_narrative="Test briefing",
+            active_user_id=1,
+            preferences={},
+            email_context=_DEFAULT_EMAIL_CONTEXT,
+        )
 
-            with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
-                mock_redact.return_value = "Redacted summary"
+        with patch("daily.orchestrator.nodes._openai_client", return_value=mock_client):
+            with patch("daily.orchestrator.nodes.get_email_adapters", return_value=[mock_adapter]):
+                with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
+                    mock_redact.return_value = "Redacted summary"
+                    await summarise_thread_node(state)
 
-                await summarise_thread_node(_make_state())
-
-            mock_redact.assert_called_once()
-            # First arg is the raw body
-            call_args = mock_redact.call_args
-            assert call_args[0][0] == "Raw email content here"
+        mock_redact.assert_called_once()
+        call_args = mock_redact.call_args
+        assert call_args[0][0] == "Raw email content here"
 
     @pytest.mark.asyncio
     async def test_summarise_thread_node_raw_body_not_in_returned_state(self):
         """Raw email body must NOT appear in returned state (SEC-04/T-03-07)."""
         from daily.orchestrator.nodes import summarise_thread_node
-        from daily.orchestrator.session import set_email_adapters
 
         raw_body = "SENSITIVE: password=secret123, account details, private info"
         mock_adapter = AsyncMock()
         mock_adapter.get_email_body = AsyncMock(return_value=raw_body)
-        set_email_adapters([mock_adapter])
 
-        mock_openai_resp = _make_openai_response("summarise_thread", "Clean summary.")
+        identify_resp, summarise_resp = _make_two_step_llm_responses(summary="Clean summary.")
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[identify_resp, summarise_resp]
+        )
 
-        with patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_resp)
-            mock_client_class.return_value = mock_client
+        from daily.orchestrator.state import SessionState
+        state = SessionState(
+            messages=[HumanMessage(content="What emails do I have?")],
+            briefing_narrative="Test briefing",
+            active_user_id=1,
+            preferences={},
+            email_context=_DEFAULT_EMAIL_CONTEXT,
+        )
 
-            with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
-                mock_redact.return_value = "Redacted summary without sensitive info"
+        with patch("daily.orchestrator.nodes._openai_client", return_value=mock_client):
+            with patch("daily.orchestrator.nodes.get_email_adapters", return_value=[mock_adapter]):
+                with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
+                    mock_redact.return_value = "Redacted summary without sensitive info"
+                    result = await summarise_thread_node(state)
 
-                result = await summarise_thread_node(_make_state())
-
-        # Verify raw body is NOT anywhere in the returned state
         result_str = str(result)
         assert "SENSITIVE" not in result_str
         assert "password=secret123" not in result_str
@@ -339,23 +382,32 @@ class TestSummariseThreadNode:
         from langchain_core.messages import AIMessage
 
         from daily.orchestrator.nodes import summarise_thread_node
-        from daily.orchestrator.session import set_email_adapters
 
         mock_adapter = AsyncMock()
         mock_adapter.get_email_body = AsyncMock(return_value="Email body")
-        set_email_adapters([mock_adapter])
 
-        mock_openai_resp = _make_openai_response("summarise_thread", "Here is the summary of the thread.")
+        identify_resp, summarise_resp = _make_two_step_llm_responses(
+            summary="Here is the summary of the thread."
+        )
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[identify_resp, summarise_resp]
+        )
 
-        with patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_resp)
-            mock_client_class.return_value = mock_client
+        from daily.orchestrator.state import SessionState
+        state = SessionState(
+            messages=[HumanMessage(content="What emails do I have?")],
+            briefing_narrative="Test briefing",
+            active_user_id=1,
+            preferences={},
+            email_context=_DEFAULT_EMAIL_CONTEXT,
+        )
 
-            with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
-                mock_redact.return_value = "Redacted"
-
-                result = await summarise_thread_node(_make_state())
+        with patch("daily.orchestrator.nodes._openai_client", return_value=mock_client):
+            with patch("daily.orchestrator.nodes.get_email_adapters", return_value=[mock_adapter]):
+                with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
+                    mock_redact.return_value = "Redacted"
+                    result = await summarise_thread_node(state)
 
         messages = result.get("messages", [])
         assert len(messages) == 1
@@ -366,11 +418,18 @@ class TestSummariseThreadNode:
     async def test_summarise_thread_node_returns_no_adapters_message(self):
         """summarise_thread_node returns helpful message when no adapters registered."""
         from daily.orchestrator.nodes import summarise_thread_node
-        from daily.orchestrator.session import set_email_adapters
 
-        set_email_adapters([])
+        from daily.orchestrator.state import SessionState
+        state = SessionState(
+            messages=[HumanMessage(content="What emails do I have?")],
+            briefing_narrative="Test briefing",
+            active_user_id=1,
+            preferences={},
+            email_context=_DEFAULT_EMAIL_CONTEXT,
+        )
 
-        result = await summarise_thread_node(_make_state())
+        with patch("daily.orchestrator.nodes.get_email_adapters", return_value=[]):
+            result = await summarise_thread_node(state)
 
         messages = result.get("messages", [])
         assert len(messages) == 1
@@ -381,13 +440,15 @@ class TestSummariseThreadNode:
     async def test_summarise_thread_node_captures_expand_signal(self):
         """summarise_thread_node fires expand signal via asyncio.create_task (D-08)."""
         from daily.orchestrator.nodes import summarise_thread_node
-        from daily.orchestrator.session import set_email_adapters
 
         mock_adapter = AsyncMock()
         mock_adapter.get_email_body = AsyncMock(return_value="Body")
-        set_email_adapters([mock_adapter])
 
-        mock_openai_resp = _make_openai_response("summarise_thread", "Summary.")
+        identify_resp, summarise_resp = _make_two_step_llm_responses()
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[identify_resp, summarise_resp]
+        )
 
         captured_tasks = []
 
@@ -397,46 +458,56 @@ class TestSummariseThreadNode:
             future.set_result(None)
             return future
 
-        with patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_resp)
-            mock_client_class.return_value = mock_client
+        from daily.orchestrator.state import SessionState
+        state = SessionState(
+            messages=[HumanMessage(content="What emails do I have?")],
+            briefing_narrative="Test briefing",
+            active_user_id=1,
+            preferences={},
+            email_context=_DEFAULT_EMAIL_CONTEXT,
+        )
 
-            with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
-                mock_redact.return_value = "Redacted"
-
-                with patch("daily.orchestrator.nodes.asyncio.create_task", side_effect=mock_create_task):
-                    await summarise_thread_node(_make_state(active_user_id=1))
+        with patch("daily.orchestrator.nodes._openai_client", return_value=mock_client):
+            with patch("daily.orchestrator.nodes.get_email_adapters", return_value=[mock_adapter]):
+                with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
+                    mock_redact.return_value = "Redacted"
+                    with patch("daily.orchestrator.nodes.asyncio.create_task", side_effect=mock_create_task):
+                        await summarise_thread_node(state)
 
         assert len(captured_tasks) >= 1
 
     @pytest.mark.asyncio
     async def test_summarise_thread_node_does_not_use_tools_parameter(self):
-        """summarise_thread_node must NOT pass tools= to LLM (SEC-05/T-03-06).
-
-        Verifies by checking actual call arguments (docstrings may reference 'tools=').
-        """
+        """summarise_thread_node must NOT pass tools= to LLM (SEC-05/T-03-06)."""
         from daily.orchestrator.nodes import summarise_thread_node
-        from daily.orchestrator.session import set_email_adapters
 
         mock_adapter = AsyncMock()
         mock_adapter.get_email_body = AsyncMock(return_value="Body")
-        set_email_adapters([mock_adapter])
 
-        mock_openai_resp = _make_openai_response("summarise_thread", "Summary.")
+        identify_resp, summarise_resp = _make_two_step_llm_responses()
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[identify_resp, summarise_resp]
+        )
 
-        with patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_resp)
-            mock_client_class.return_value = mock_client
+        from daily.orchestrator.state import SessionState
+        state = SessionState(
+            messages=[HumanMessage(content="What emails do I have?")],
+            briefing_narrative="Test briefing",
+            active_user_id=1,
+            preferences={},
+            email_context=_DEFAULT_EMAIL_CONTEXT,
+        )
 
-            with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
-                mock_redact.return_value = "Redacted"
-                await summarise_thread_node(_make_state())
+        with patch("daily.orchestrator.nodes._openai_client", return_value=mock_client):
+            with patch("daily.orchestrator.nodes.get_email_adapters", return_value=[mock_adapter]):
+                with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
+                    mock_redact.return_value = "Redacted"
+                    await summarise_thread_node(state)
 
-            for call in mock_client.chat.completions.create.call_args_list:
-                call_kwargs = call[1]
-                assert "tools" not in call_kwargs
+        for call in mock_client.chat.completions.create.call_args_list:
+            call_kwargs = call[1]
+            assert "tools" not in call_kwargs
 
     @pytest.mark.asyncio
     async def test_summarise_thread_node_uses_orchestrator_intent_validation(self):
