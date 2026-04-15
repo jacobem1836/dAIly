@@ -447,3 +447,182 @@ class TestSummariseThreadNode:
 
         source = inspect.getsource(nodes.summarise_thread_node)
         assert "model_validate_json" in source or "OrchestratorIntent" in source
+
+
+# ---------------------------------------------------------------------------
+# email_context resolution regression tests (FIX-03)
+# ---------------------------------------------------------------------------
+
+_SAMPLE_EMAIL_CONTEXT = [
+    {
+        "message_id": "msg-001",
+        "thread_id": "t1",
+        "subject": "Q2 report",
+        "sender": "alice@example.com",
+        "recipient": "jacob@example.com",
+        "timestamp": "2026-04-15T08:00:00Z",
+    }
+]
+
+
+def _make_state_with_email_context(messages=None, email_context=None):
+    """Create a SessionState with configurable email_context."""
+    from daily.orchestrator.state import SessionState
+
+    return SessionState(
+        messages=messages or [HumanMessage(content="summarise the Q2 report email")],
+        briefing_narrative="Test briefing",
+        active_user_id=1,
+        preferences={"tone": "conversational", "briefing_length": "standard"},
+        email_context=email_context if email_context is not None else [],
+    )
+
+
+def _make_openai_intent_response(action: str, narrative: str, target_id: str | None):
+    """Return a mock OpenAI response containing OrchestratorIntent JSON."""
+    mock_resp = MagicMock()
+    mock_resp.choices = [MagicMock()]
+    mock_resp.choices[0].message.content = json.dumps({
+        "action": action,
+        "narrative": narrative,
+        "target_id": target_id,
+    })
+    return mock_resp
+
+
+class TestSummariseThreadEmailContext:
+    """Regression tests for FIX-03: email_context-based message_id resolution."""
+
+    @pytest.mark.asyncio
+    async def test_summarise_thread_resolves_message_id_from_email_context(self):
+        """summarise_thread_node must call get_email_body with message_id from email_context.
+
+        The adapter must NOT be called with the raw user utterance.
+        """
+        from daily.orchestrator.nodes import summarise_thread_node
+
+        user_utterance = "summarise the Q2 report email"
+        state = _make_state_with_email_context(
+            messages=[HumanMessage(content=user_utterance)],
+            email_context=_SAMPLE_EMAIL_CONTEXT,
+        )
+
+        # LLM picks msg-001 as the target_id
+        identify_response = _make_openai_intent_response("summarise_thread", "", "msg-001")
+        summarise_response = _make_openai_intent_response(
+            "summarise_thread", "Alice's Q2 report discusses...", "msg-001"
+        )
+
+        mock_adapter = AsyncMock()
+        mock_adapter.get_email_body = AsyncMock(return_value="Q2 report body text")
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[identify_response, summarise_response]
+        )
+
+        with patch("daily.orchestrator.nodes._openai_client", return_value=mock_client):
+            with patch("daily.orchestrator.nodes.get_email_adapters", return_value=[mock_adapter]):
+                with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
+                    mock_redact.return_value = "Redacted Q2 report"
+                    await summarise_thread_node(state)
+
+        # Must have been called with the real message_id, not the user utterance
+        mock_adapter.get_email_body.assert_called_once_with("msg-001")
+
+    @pytest.mark.asyncio
+    async def test_summarise_thread_last_content_never_passed_as_message_id(self):
+        """The raw user utterance must never reach get_email_body as message_id."""
+        from daily.orchestrator.nodes import summarise_thread_node
+
+        user_utterance = "summarise the Q2 report email"
+        state = _make_state_with_email_context(
+            messages=[HumanMessage(content=user_utterance)],
+            email_context=_SAMPLE_EMAIL_CONTEXT,
+        )
+
+        identify_response = _make_openai_intent_response("summarise_thread", "", "msg-001")
+        summarise_response = _make_openai_intent_response(
+            "summarise_thread", "Summary here.", "msg-001"
+        )
+
+        mock_adapter = AsyncMock()
+        mock_adapter.get_email_body = AsyncMock(return_value="body text")
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[identify_response, summarise_response]
+        )
+
+        with patch("daily.orchestrator.nodes._openai_client", return_value=mock_client):
+            with patch("daily.orchestrator.nodes.get_email_adapters", return_value=[mock_adapter]):
+                with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
+                    mock_redact.return_value = "Redacted"
+                    await summarise_thread_node(state)
+
+        # The argument passed to get_email_body must NOT be the user's raw utterance
+        assert mock_adapter.get_email_body.call_args[0][0] != user_utterance
+
+    @pytest.mark.asyncio
+    async def test_summarise_thread_fallback_when_email_context_empty(self):
+        """When email_context is empty, node returns graceful message without calling adapter."""
+        from daily.orchestrator.nodes import summarise_thread_node
+
+        state = _make_state_with_email_context(
+            messages=[HumanMessage(content="summarise that email")],
+            email_context=[],
+        )
+
+        mock_adapter = AsyncMock()
+        mock_adapter.get_email_body = AsyncMock(return_value="should not be called")
+
+        mock_client = AsyncMock()
+
+        with patch("daily.orchestrator.nodes._openai_client", return_value=mock_client):
+            with patch("daily.orchestrator.nodes.get_email_adapters", return_value=[mock_adapter]):
+                result = await summarise_thread_node(state)
+
+        # Adapter must NOT have been called
+        mock_adapter.get_email_body.assert_not_called()
+
+        # Response must contain a user-visible message about not identifying the email
+        content = result["messages"][0].content.lower()
+        assert "couldn't identify" in content or "identify" in content or "which email" in content
+
+    @pytest.mark.asyncio
+    async def test_summarise_thread_prompt_includes_email_context(self):
+        """System prompt sent to LLM must contain the formatted email_context (message_id: msg-001)."""
+        from daily.orchestrator.nodes import summarise_thread_node
+
+        state = _make_state_with_email_context(
+            messages=[HumanMessage(content="summarise the Q2 report email")],
+            email_context=_SAMPLE_EMAIL_CONTEXT,
+        )
+
+        identify_response = _make_openai_intent_response("summarise_thread", "", "msg-001")
+        summarise_response = _make_openai_intent_response(
+            "summarise_thread", "Summary.", "msg-001"
+        )
+
+        mock_adapter = AsyncMock()
+        mock_adapter.get_email_body = AsyncMock(return_value="body")
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[identify_response, summarise_response]
+        )
+
+        with patch("daily.orchestrator.nodes._openai_client", return_value=mock_client):
+            with patch("daily.orchestrator.nodes.get_email_adapters", return_value=[mock_adapter]):
+                with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
+                    mock_redact.return_value = "Redacted"
+                    await summarise_thread_node(state)
+
+        # Inspect all calls — at least one system prompt must include the email context
+        all_calls = mock_client.chat.completions.create.call_args_list
+        system_prompts = [
+            call[1]["messages"][0]["content"]
+            for call in all_calls
+            if call[1].get("messages") and call[1]["messages"][0]["role"] == "system"
+        ]
+        assert any("message_id: msg-001" in prompt for prompt in system_prompts)
