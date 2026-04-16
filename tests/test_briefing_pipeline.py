@@ -383,6 +383,189 @@ async def test_pipeline_no_preferences_backward_compat(
     )
 
 
+# ---------------------------------------------------------------------------
+# 08-04: db_session wiring tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_briefing_pipeline_no_db_session(
+    fake_redis, openai_client, email_adapter, calendar_adapter, message_adapter
+):
+    """run_briefing_pipeline with db_session=None completes and passes None to build_context."""
+    from daily.briefing.pipeline import run_briefing_pipeline
+
+    with patch("daily.briefing.pipeline.build_context") as mock_build_context:
+        mock_build_context.return_value = BriefingContext(
+            user_id=1,
+            generated_at=datetime.now(tz=timezone.utc),
+            emails=[],
+            calendar=CalendarContext(events=[], conflicts=[]),
+            slack=SlackContext(messages=[]),
+            raw_bodies={},
+        )
+        with patch("daily.briefing.pipeline.generate_narrative", return_value=BriefingOutput(
+            narrative="Test briefing.",
+            generated_at=datetime.now(tz=timezone.utc),
+            version=1,
+        )):
+            output = await run_briefing_pipeline(
+                user_id=1,
+                email_adapters=[email_adapter],
+                calendar_adapters=[calendar_adapter],
+                message_adapters=[message_adapter],
+                vip_senders=frozenset(),
+                user_email="me@example.com",
+                top_n=5,
+                redis=fake_redis,
+                openai_client=openai_client,
+                db_session=None,
+            )
+
+    assert isinstance(output, BriefingOutput)
+    mock_build_context.assert_called_once()
+    call_kwargs = mock_build_context.call_args[1]
+    assert call_kwargs.get("db_session") is None
+
+
+@pytest.mark.asyncio
+async def test_run_briefing_pipeline_passes_db_session(
+    fake_redis, openai_client, email_adapter, calendar_adapter, message_adapter
+):
+    """run_briefing_pipeline passes the provided db_session to build_context."""
+    from daily.briefing.pipeline import run_briefing_pipeline
+    from unittest.mock import MagicMock
+
+    mock_session = MagicMock()
+
+    with patch("daily.briefing.pipeline.build_context") as mock_build_context:
+        mock_build_context.return_value = BriefingContext(
+            user_id=1,
+            generated_at=datetime.now(tz=timezone.utc),
+            emails=[],
+            calendar=CalendarContext(events=[], conflicts=[]),
+            slack=SlackContext(messages=[]),
+            raw_bodies={},
+        )
+        with patch("daily.briefing.pipeline.generate_narrative", return_value=BriefingOutput(
+            narrative="Test briefing.",
+            generated_at=datetime.now(tz=timezone.utc),
+            version=1,
+        )):
+            await run_briefing_pipeline(
+                user_id=1,
+                email_adapters=[email_adapter],
+                calendar_adapters=[calendar_adapter],
+                message_adapters=[message_adapter],
+                vip_senders=frozenset(),
+                user_email="me@example.com",
+                top_n=5,
+                redis=fake_redis,
+                openai_client=openai_client,
+                db_session=mock_session,
+            )
+
+    mock_build_context.assert_called_once()
+    call_kwargs = mock_build_context.call_args[1]
+    assert call_kwargs.get("db_session") is mock_session
+
+
+@pytest.mark.asyncio
+async def test_pipeline_end_to_end_with_adaptive_ranker(
+    fake_redis, openai_client
+):
+    """Full wiring: multipliers from get_sender_multipliers reach rank_emails.
+
+    Two emails with otherwise identical heuristic setup — alice has a 1.5 multiplier
+    (simulate > cold-start threshold). We assert that rank_emails is called with the
+    multipliers dict containing alice's entry, confirming the full chain:
+    db_session → get_sender_multipliers → rank_emails(sender_multipliers=...).
+    """
+    from daily.briefing.pipeline import run_briefing_pipeline
+    from daily.briefing.ranker import rank_emails as real_rank_emails
+
+    mock_session = AsyncMock()
+    alice_multipliers = {"alice@example.com": 1.5}
+
+    # Patch get_sender_multipliers to return alice's multiplier
+    with patch(
+        "daily.profile.adaptive_ranker.get_sender_multipliers",
+        AsyncMock(return_value=alice_multipliers),
+    ):
+        # Also patch rank_emails to capture what it's called with
+        captured_calls = []
+        original_rank_emails = real_rank_emails
+
+        def capturing_rank_emails(emails, vip_senders, user_email, top_n=5, sender_multipliers=None):
+            captured_calls.append({"sender_multipliers": sender_multipliers})
+            return original_rank_emails(
+                emails, vip_senders, user_email, top_n=top_n,
+                sender_multipliers=sender_multipliers,
+            )
+
+        # Build email adapters returning two emails — alice and bob
+        alice_meta = EmailMetadata(
+            message_id="msg-alice",
+            thread_id="thread-alice",
+            subject="Hello from Alice",
+            sender="alice@example.com",
+            recipient="me@example.com",
+            timestamp=datetime(2026, 4, 7, 8, 0, 0, tzinfo=timezone.utc),
+            is_unread=True,
+            labels=["INBOX"],
+        )
+        bob_meta = EmailMetadata(
+            message_id="msg-bob",
+            thread_id="thread-bob",
+            subject="Hello from Bob",
+            sender="bob@example.com",
+            recipient="me@example.com",
+            timestamp=datetime(2026, 4, 7, 8, 0, 0, tzinfo=timezone.utc),
+            is_unread=True,
+            labels=["INBOX"],
+        )
+
+        from daily.integrations.models import EmailPage, MessagePage
+        email_adapter_two = AsyncMock()
+        email_adapter_two.list_emails = AsyncMock(
+            return_value=EmailPage(emails=[alice_meta, bob_meta], next_page_token=None)
+        )
+        email_adapter_two.get_email_body = AsyncMock(return_value="email body")
+
+        calendar_adapter = AsyncMock()
+        calendar_adapter.list_events = AsyncMock(return_value=[])
+
+        message_adapter = AsyncMock()
+        message_adapter.list_messages = AsyncMock(
+            return_value=MessagePage(messages=[], next_cursor=None)
+        )
+
+        with patch("daily.briefing.context_builder.rank_emails", side_effect=capturing_rank_emails):
+            await run_briefing_pipeline(
+                user_id=1,
+                email_adapters=[email_adapter_two],
+                calendar_adapters=[calendar_adapter],
+                message_adapters=[message_adapter],
+                vip_senders=frozenset(),
+                user_email="me@example.com",
+                top_n=5,
+                redis=fake_redis,
+                openai_client=openai_client,
+                db_session=mock_session,
+            )
+
+    # rank_emails must have been called at least once with alice's multiplier
+    assert captured_calls, "rank_emails was not called"
+    last_call = captured_calls[-1]
+    assert last_call["sender_multipliers"] is not None, (
+        "rank_emails was called without sender_multipliers — adaptive wiring broken"
+    )
+    assert "alice@example.com" in last_call["sender_multipliers"], (
+        "alice's multiplier was not passed to rank_emails"
+    )
+    assert last_call["sender_multipliers"]["alice@example.com"] == 1.5
+
+
 @pytest.mark.asyncio
 async def test_build_pipeline_kwargs_includes_preferences():
     """_build_pipeline_kwargs returns a dict with a 'preferences' key loaded via load_profile."""

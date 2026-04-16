@@ -127,8 +127,13 @@ async def _scheduled_pipeline_run(user_id: int) -> None:
     """Wrapper called by APScheduler cron job.
 
     Builds all pipeline dependencies via _build_pipeline_kwargs, then
-    calls run_briefing_pipeline. This is the bridge between the scheduler
-    (which only knows user_id) and the pipeline (which needs everything).
+    calls run_briefing_pipeline with a dedicated DB session. This is the
+    bridge between the scheduler (which only knows user_id) and the pipeline
+    (which needs everything).
+
+    A fresh async session is opened per invocation — no session reuse across
+    user boundaries (T-08-13). The async with block guarantees the session is
+    closed (and rolled back on error) even if the pipeline raises (T-08-11).
 
     Redis connection created in _build_pipeline_kwargs is closed in finally
     to avoid connection leaks.
@@ -137,7 +142,12 @@ async def _scheduled_pipeline_run(user_id: int) -> None:
     kwargs: dict = {}
     try:
         kwargs = await _build_pipeline_kwargs(user_id, settings)
-        await run_briefing_pipeline(user_id=user_id, **kwargs)
+        async with async_session() as session:
+            await run_briefing_pipeline(
+                user_id=user_id,
+                db_session=session,
+                **kwargs,
+            )
     except Exception:
         logger.exception("Scheduled briefing pipeline failed for user %d", user_id)
     finally:
