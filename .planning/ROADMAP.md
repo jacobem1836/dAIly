@@ -26,7 +26,7 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details.
 **Milestone Goal:** Transform the briefing from a consistent daily output into a personalised, adaptive system that learns the user over time and earns increasing autonomy.
 
 - [ ] **Phase 7: Tech Debt Fixes** - Correct three broken paths that corrupt signal data and block intelligence features
-- [ ] **Phase 8: Adaptive Ranker** - Replace static email heuristics with signal-learned personal scoring
+- [x] **Phase 8: Adaptive Ranker** - Replace static email heuristics with signal-learned personal scoring
 - [ ] **Phase 9: Cross-Session Memory** - Persist durable user facts across days via pgvector extraction and retrieval
 - [ ] **Phase 10: Memory Transparency** - Voice interface for user to inspect, edit, and reset what the system knows
 - [ ] **Phase 11: Trusted Actions** - User-configurable autonomy levels with explicit opt-in and safety locks
