@@ -3,11 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
 status: executing
-stopped_at: Phase 8 context gathered (discuss mode)
-last_updated: "2026-04-15T12:18:24.842Z"
-last_activity: 2026-04-15 -- Phase 07 execution started
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-04-16T00:03:43.591Z"
+last_activity: 2026-04-16
 progress:
-  percent: 0
+  total_phases: 6
+  completed_phases: 0
+  total_plans: 4
+  completed_plans: 1
+  percent: 25
 ---
 
 # Project State
@@ -22,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-15)
 ## Current Position
 
 Phase: 07 (tech-debt-fixes) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 07
-Last activity: 2026-04-15 -- Phase 07 execution started
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-04-16
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -49,6 +53,7 @@ Recent decisions affecting current work:
 - Phase 9 must complete before Phase 10 — MEM-01/02/03 need a populated user_memories table to query
 - ACT-07 autonomy levels implemented as node-level conditionals in draft_node, not graph topology change (per ARCHITECTURE.md resolution)
 - Memory extraction triggers at session end via asyncio.create_task (fire-and-forget), not nightly briefing pipeline
+- [Phase 08]: Sigmoid formula 2.0*sigmoid(raw) chosen so neutral sender (raw=0) maps to exactly 1.0 multiplier
 
 ### Pending Todos
 
@@ -62,6 +67,6 @@ None — v1.0 shipped clean. Tech debt tracked in Phases 7 requirements (FIX-01/
 
 ## Session Continuity
 
-Last session: 2026-04-15T12:18:24.840Z
-Stopped at: Phase 8 context gathered (discuss mode)
-Resume file: .planning/milestones/v1.1-phases/08-adaptive-ranker/08-CONTEXT.md
+Last session: 2026-04-16T00:03:43.587Z
+Stopped at: Completed 08-01-PLAN.md
+Resume file: None
