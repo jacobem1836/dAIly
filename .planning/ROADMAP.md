@@ -113,7 +113,7 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details.
 | 5. Voice Interface | v1.0 | 4/4 | Complete | 2026-04-13 |
 | 6. Wire Preferences | v1.0 | 1/1 | Complete | 2026-04-14 |
 | 7. Tech Debt Fixes | v1.1 | 0/? | Not started | - |
-| 8. Adaptive Ranker | v1.1 | 1/4 | In Progress|  |
+| 8. Adaptive Ranker | v1.1 | 2/4 | In Progress|  |
 | 9. Cross-Session Memory | v1.1 | 0/? | Not started | - |
 | 10. Memory Transparency | v1.1 | 0/? | Not started | - |
 | 11. Trusted Actions | v1.1 | 0/? | Not started | - |
