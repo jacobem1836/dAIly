@@ -198,3 +198,108 @@ def test_recipient_comparison_no_substring():
     assert not _is_direct_recipient("evil@example.com", "notevil@example.com"), (
         "evil@example.com should not match notevil@example.com"
     )
+
+
+# ─── sender_multipliers tests ──────────────────────────────────────────────────
+
+
+def test_rank_emails_no_multipliers_unchanged():
+    """rank_emails without sender_multipliers and with empty dict produce identical ordering.
+
+    Scores may differ by tiny floating-point amounts due to recency decay being
+    computed from wall-clock time between the two calls. We compare ordering and
+    relative score ratios rather than exact values.
+    """
+    emails = [
+        make_email(message_id="msg-001", sender="alice@example.com", hours_ago=1.0),
+        make_email(message_id="msg-002", sender="bob@example.com", hours_ago=2.0),
+    ]
+    vip_senders: frozenset[str] = frozenset()
+
+    ranked_none = rank_emails(emails, vip_senders, "me@example.com", top_n=2)
+    ranked_empty = rank_emails(emails, vip_senders, "me@example.com", top_n=2, sender_multipliers={})
+
+    # Ordering must be identical
+    assert [r.metadata.message_id for r in ranked_none] == [r.metadata.message_id for r in ranked_empty]
+    # Scores should be very close (within 0.1 to account for wall-clock recency drift)
+    for r_none, r_empty in zip(ranked_none, ranked_empty):
+        assert abs(r_none.score - r_empty.score) < 0.1
+
+
+def test_rank_emails_unknown_sender_defaults_to_one():
+    """Sender not in multipliers dict receives a multiplier of 1.0 (score within tolerance)."""
+    email = make_email(message_id="msg-001", sender="alice@example.com", hours_ago=1.0)
+    vip_senders: frozenset[str] = frozenset()
+
+    ranked_no_mults = rank_emails([email], vip_senders, "me@example.com", top_n=1)
+    ranked_with_mults = rank_emails(
+        [email], vip_senders, "me@example.com", top_n=1,
+        sender_multipliers={"other@example.com": 2.0},
+    )
+
+    # Scores may differ slightly due to recency drift between calls; alice gets no multiplier
+    assert abs(ranked_no_mults[0].score - ranked_with_mults[0].score) < 0.1
+
+
+def test_rank_emails_multiplier_scales_score():
+    """Sender multiplier 2.0 doubles the heuristic score."""
+    now = datetime.now(tz=timezone.utc)
+    email = make_email(message_id="msg-001", sender="alice@example.com", hours_ago=1.0)
+    vip_senders: frozenset[str] = frozenset()
+    thread_counts: dict[str, int] = {}
+
+    heuristic_score = score_email(email, vip_senders, "me@example.com", now, thread_counts)
+
+    ranked = rank_emails(
+        [email], vip_senders, "me@example.com", top_n=1,
+        sender_multipliers={"alice@example.com": 2.0},
+    )
+
+    assert abs(ranked[0].score - heuristic_score * 2.0) < 0.01
+
+
+def test_rank_emails_multiplier_reorders():
+    """Higher multiplier on a lower-scoring sender causes it to rank above equal-scored sender."""
+    # Both emails are from same hours_ago so recency is equal; same subject (no keywords);
+    # same recipient field (CC) so sender weight is equal — heuristic scores are equal.
+    email_alice = make_email(
+        message_id="msg-alice",
+        sender="alice@example.com",
+        recipient="team@example.com",
+        hours_ago=2.0,
+    )
+    email_bob = make_email(
+        message_id="msg-bob",
+        sender="bob@example.com",
+        recipient="team@example.com",
+        hours_ago=2.0,
+    )
+    vip_senders: frozenset[str] = frozenset()
+
+    ranked = rank_emails(
+        [email_alice, email_bob], vip_senders, "me@example.com", top_n=2,
+        sender_multipliers={"bob@example.com": 3.0, "alice@example.com": 1.0},
+    )
+
+    assert ranked[0].metadata.message_id == "msg-bob", (
+        f"bob (multiplier 3.0) should rank first, got: {ranked[0].metadata.message_id}"
+    )
+
+
+def test_rank_emails_sender_normalisation():
+    """Sender key lookup normalises email: 'Alice@Example.com ' matches 'alice@example.com'."""
+    email = make_email(
+        message_id="msg-001",
+        sender="Alice@Example.com ",  # mixed case with trailing space
+        hours_ago=1.0,
+    )
+    vip_senders: frozenset[str] = frozenset()
+
+    ranked_no_mults = rank_emails([email], vip_senders, "me@example.com", top_n=1)
+    ranked_with_mults = rank_emails(
+        [email], vip_senders, "me@example.com", top_n=1,
+        sender_multipliers={"alice@example.com": 2.0},
+    )
+
+    # Multiplier 2.0 should be applied — score should be doubled
+    assert abs(ranked_with_mults[0].score - ranked_no_mults[0].score * 2.0) < 0.01

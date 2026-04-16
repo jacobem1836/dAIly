@@ -124,22 +124,33 @@ def rank_emails(
     vip_senders: frozenset[str],
     user_email: str,
     top_n: int = 5,
+    sender_multipliers: dict[str, float] | None = None,
 ) -> list[RankedEmail]:
     """Rank all emails by heuristic score and return the top-N.
 
     Per D-02/D-05: ranks all emails in the batch, returns top-N sorted
     by score descending as RankedEmail objects.
 
+    When sender_multipliers is provided, each email's heuristic score is
+    multiplied by the sender's multiplier before ranking. Senders not present
+    in the dict default to a multiplier of 1.0 (no-op). Sender keys are
+    compared after .lower().strip() normalisation to match the format produced
+    by adaptive_ranker.get_sender_multipliers().
+
     Args:
         emails: All email metadata from the current fetch window.
         vip_senders: Set of VIP sender email addresses for override scoring.
         user_email: The user's email address for recipient comparison.
         top_n: Number of top-ranked emails to return (default 5).
+        sender_multipliers: Optional per-sender float multipliers from adaptive
+            ranker. When None or empty, all scores are unchanged (backward
+            compatible). Default None.
 
     Returns:
         List of RankedEmail objects, sorted by score descending, length <= top_n.
     """
     now = datetime.now(tz=timezone.utc)
+    multipliers = sender_multipliers or {}
 
     # Compute thread counts for thread activity weighting
     thread_counts: dict[str, int] = {}
@@ -150,7 +161,8 @@ def rank_emails(
     scored: list[tuple[float, EmailMetadata]] = []
     for email in emails:
         score = score_email(email, vip_senders, user_email, now, thread_counts)
-        scored.append((score, email))
+        multiplier = multipliers.get(email.sender.lower().strip(), 1.0)
+        scored.append((score * multiplier, email))
 
     # Sort by score descending
     scored.sort(key=lambda x: x[0], reverse=True)
