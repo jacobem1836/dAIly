@@ -326,9 +326,19 @@ async def summarise_thread_node(state: SessionState) -> dict:
         narrative = "I had trouble fetching that thread. Please try again."
 
     # Fire-and-forget expand signal (D-08)
+    # Look up sender from email_context by message_id (T-08-05: server-side only — never user-controlled)
     if state.active_user_id:
+        sender = next(
+            (e.get("sender") for e in state.email_context if e.get("message_id") == message_id),
+            None,
+        )
         asyncio.create_task(
-            _capture_signal(state.active_user_id, SignalType.expand, target_id=message_id)
+            _capture_signal(
+                state.active_user_id,
+                SignalType.expand,
+                target_id=message_id,
+                sender=sender,
+            )
         )
 
     return {"messages": [AIMessage(content=narrative)]}
@@ -338,6 +348,7 @@ async def _capture_signal(
     user_id: int,
     signal_type: SignalType,
     target_id: str | None = None,
+    sender: str | None = None,
 ) -> None:
     """Fire-and-forget signal capture. Creates its own DB session.
 
@@ -348,10 +359,18 @@ async def _capture_signal(
         user_id: User to record the signal for.
         signal_type: The interaction signal to record.
         target_id: Optional reference to an email or message.
+        sender: Optional sender email address. When provided, normalised to
+                lowercase and stripped, then stored in metadata_json as
+                {"sender": normalised}. When None, metadata is omitted
+                (preserves existing behaviour for follow_up signals).
     """
     try:
         from daily.db.engine import async_session
         from daily.profile.signals import append_signal
+
+        metadata = None
+        if sender:
+            metadata = {"sender": sender.lower().strip()}
 
         async with async_session() as session:
             await append_signal(
@@ -359,6 +378,7 @@ async def _capture_signal(
                 signal_type=signal_type,
                 session=session,
                 target_id=target_id,
+                metadata=metadata,
             )
     except Exception as exc:
         # Signal capture failure must never propagate to the graph
