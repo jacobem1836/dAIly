@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
-status: executing
-stopped_at: Completed 08-03-PLAN.md
-last_updated: "2026-04-16T00:14:33.862Z"
+status: verifying
+stopped_at: Completed 08-04-PLAN.md
+last_updated: "2026-04-16T00:19:38.636Z"
 last_activity: 2026-04-16
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-04-15)
 
 Phase: 07 (tech-debt-fixes) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-04-16
 
 Progress: [░░░░░░░░░░] 0%
@@ -56,6 +56,8 @@ Recent decisions affecting current work:
 - [Phase 08]: Sigmoid formula 2.0*sigmoid(raw) chosen so neutral sender (raw=0) maps to exactly 1.0 multiplier
 - [Phase 08]: _capture_signal sender param optional with None default — follow_up callsite unchanged, fully backward-compatible
 - [Phase 08]: TYPE_CHECKING guard used for AsyncSession import to avoid runtime SQLAlchemy dep in briefing layer
+- [Phase 08]: db_session added at end of run_briefing_pipeline signature with None default — zero breaking changes
+- [Phase 08]: Session opened in _scheduled_pipeline_run scoped via async with — lifetime visible at call site
 
 ### Pending Todos
 
@@ -69,6 +71,6 @@ None — v1.0 shipped clean. Tech debt tracked in Phases 7 requirements (FIX-01/
 
 ## Session Continuity
 
-Last session: 2026-04-16T00:14:33.860Z
-Stopped at: Completed 08-03-PLAN.md
+Last session: 2026-04-16T00:19:38.632Z
+Stopped at: Completed 08-04-PLAN.md
 Resume file: None
