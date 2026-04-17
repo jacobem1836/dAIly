@@ -271,3 +271,80 @@ class TestEmailAdapterRegistry:
         adapters = get_email_adapters()
         assert len(adapters) == 1
         assert adapters[0] is adapter2
+
+
+# ---------------------------------------------------------------------------
+# Phase 10: Memory transparency routing (MEM-01, MEM-02, MEM-03)
+# ---------------------------------------------------------------------------
+
+
+class TestRouteIntentMemory:
+    """Tests for route_intent memory keyword routing (Phase 10)."""
+
+    def test_route_intent_memory_query(self):
+        """'what do you know about me' routes to 'memory'."""
+        from daily.orchestrator.graph import route_intent
+        from daily.orchestrator.state import SessionState
+
+        state = SessionState(messages=[HumanMessage(content="what do you know about me")])
+        assert route_intent(state) == "memory"
+
+    def test_route_intent_memory_delete(self):
+        """'forget that fact about my travel' routes to 'memory'."""
+        from daily.orchestrator.graph import route_intent
+        from daily.orchestrator.state import SessionState
+
+        state = SessionState(messages=[HumanMessage(content="forget that fact about my travel")])
+        assert route_intent(state) == "memory"
+
+    def test_route_intent_memory_clear(self):
+        """'forget everything' routes to 'memory'."""
+        from daily.orchestrator.graph import route_intent
+        from daily.orchestrator.state import SessionState
+
+        state = SessionState(messages=[HumanMessage(content="forget everything")])
+        assert route_intent(state) == "memory"
+
+    def test_route_intent_memory_disable(self):
+        """'disable memory' routes to 'memory'."""
+        from daily.orchestrator.graph import route_intent
+        from daily.orchestrator.state import SessionState
+
+        state = SessionState(messages=[HumanMessage(content="disable memory")])
+        assert route_intent(state) == "memory"
+
+    def test_route_intent_memory_priority_over_summarise(self):
+        """Memory keywords take priority over summarise keywords."""
+        from daily.orchestrator.graph import route_intent
+        from daily.orchestrator.state import SessionState
+
+        # "what do you know" is a memory keyword; message also contains no summarise keyword
+        state = SessionState(messages=[HumanMessage(content="what do you know about that topic")])
+        assert route_intent(state) == "memory"
+
+    def test_route_intent_memory_what_do_you_remember(self):
+        """'what do you remember' routes to 'memory'."""
+        from daily.orchestrator.graph import route_intent
+        from daily.orchestrator.state import SessionState
+
+        state = SessionState(messages=[HumanMessage(content="what do you remember about me")])
+        assert route_intent(state) == "memory"
+
+    def test_route_intent_memory_clear_my_memory(self):
+        """'clear my memory' routes to 'memory'."""
+        from daily.orchestrator.graph import route_intent
+        from daily.orchestrator.state import SessionState
+
+        state = SessionState(messages=[HumanMessage(content="clear my memory please")])
+        assert route_intent(state) == "memory"
+
+
+class TestBuildGraphPhase10:
+    """Tests for Phase 10 graph topology."""
+
+    def test_build_graph_has_memory_node(self):
+        """Compiled graph has 'memory' node registered."""
+        from daily.orchestrator.graph import build_graph
+
+        graph = build_graph()
+        assert "memory" in graph.get_graph().nodes
