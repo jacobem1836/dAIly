@@ -81,28 +81,22 @@ def test_score_formula():
 
 
 def test_vip_override():
-    """VIP sender with boring subject scores higher than non-VIP with urgent keywords.
-
-    Both emails are the same age to isolate the sender weight effect.
-    VIP sender weight (WEIGHT_VIP=40) must exceed WEIGHT_DIRECT + keyword weight
-    for any typical keyword count. This validates D-03: VIP sender weight dominates.
-    """
+    """VIP sender with boring subject scores higher than non-VIP with urgent keywords."""
     now = datetime.now(tz=timezone.utc)
     vip_senders = frozenset({"vip@example.com"})
     thread_counts: dict[str, int] = {}
 
-    # Both emails are same age — isolates sender weight vs keyword weight
     vip_email = make_email(
         subject="Hi there",
         sender="vip@example.com",
         recipient="me@example.com",
-        hours_ago=1.0,
+        hours_ago=12.0,
     )
     keyword_email = make_email(
         subject="Urgent action required deadline",
         sender="notvip@example.com",
         recipient="me@example.com",
-        hours_ago=1.0,
+        hours_ago=0.5,
     )
 
     vip_score = score_email(vip_email, vip_senders, "me@example.com", now, thread_counts)

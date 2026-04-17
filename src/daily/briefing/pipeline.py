@@ -19,7 +19,6 @@ when called from the cron job, or passed directly for on-demand generation.
 
 import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
 
 from openai import AsyncOpenAI
 from redis.asyncio import Redis
@@ -31,9 +30,6 @@ from daily.briefing.narrator import generate_narrative
 from daily.briefing.redactor import redact_emails, redact_messages
 from daily.integrations.base import CalendarAdapter, EmailAdapter, MessageAdapter
 from daily.profile.models import UserPreferences
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +45,6 @@ async def run_briefing_pipeline(
     redis: Redis,
     openai_client: AsyncOpenAI,
     preferences: UserPreferences | None = None,
-    db_session: "AsyncSession | None" = None,
 ) -> BriefingOutput:
     """Full pipeline: ingest -> rank -> fetch bodies -> redact -> narrate -> cache.
 
@@ -76,11 +71,6 @@ async def run_briefing_pipeline(
         openai_client: Async OpenAI client for redaction and narration.
         preferences: Optional user preferences for tone/length/order. If None,
                      narrator uses defaults.
-        db_session: Optional AsyncSession for adaptive ranking. When provided,
-                    per-sender multipliers are fetched and applied to email
-                    ranking. When None, adaptive ranking is skipped and pure
-                    heuristics are used — the briefing always delivers regardless
-                    (graceful-degradation contract).
 
     Returns:
         BriefingOutput with narrative, generated_at, and version.
@@ -97,7 +87,6 @@ async def run_briefing_pipeline(
         vip_senders=vip_senders,
         user_email=user_email,
         top_n=top_n,
-        db_session=db_session,
     )
 
     # Step 2: Redact -- summarise + credential strip per-item (SEC-02)

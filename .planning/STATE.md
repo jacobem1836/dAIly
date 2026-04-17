@@ -2,16 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
-status: verifying
-stopped_at: Phase 9 context gathered (assumptions mode)
-last_updated: "2026-04-16T01:21:54.473Z"
-last_activity: 2026-04-16
+status: defining_requirements
+last_updated: "2026-04-15T00:00:00.000Z"
+last_activity: 2026-04-15 -- Milestone v1.1 started
 progress:
-  total_phases: 6
-  completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,56 +20,40 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** The briefing always delivers — every morning, the user gets a prioritised, conversational summary of what matters without touching a single app.
-**Current focus:** Phase 07 — tech-debt-fixes
+**Current focus:** v1.1 — Intelligence Layer
 
 ## Current Position
 
-Phase: 07 (tech-debt-fixes) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-04-16
-
-Progress: [░░░░░░░░░░] 0%
-
-## Performance Metrics
-
-**Velocity (v1.0 reference):**
-
-- Total plans completed: 22
-- Average duration: ~30 min/plan
-- Total execution time: ~11 hours over 10 days
-
-*v1.1 metrics will accumulate as plans complete.*
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-15 — Milestone v1.1 started
 
 ## Accumulated Context
 
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- Phase 7 must complete before Phase 8 starts — FIX-01 (user_email bug) corrupts signal data that INTEL-01 trains on
-- Phase 9 must complete before Phase 10 — MEM-01/02/03 need a populated user_memories table to query
-- ACT-07 autonomy levels implemented as node-level conditionals in draft_node, not graph topology change (per ARCHITECTURE.md resolution)
-- Memory extraction triggers at session end via asyncio.create_task (fire-and-forget), not nightly briefing pipeline
-- [Phase 08]: Sigmoid formula 2.0*sigmoid(raw) chosen so neutral sender (raw=0) maps to exactly 1.0 multiplier
-- [Phase 08]: _capture_signal sender param optional with None default — follow_up callsite unchanged, fully backward-compatible
-- [Phase 08]: TYPE_CHECKING guard used for AsyncSession import to avoid runtime SQLAlchemy dep in briefing layer
-- [Phase 08]: db_session added at end of run_briefing_pipeline signature with None default — zero breaking changes
-- [Phase 08]: Session opened in _scheduled_pipeline_run scoped via async with — lifetime visible at call site
 
 ### Pending Todos
 
-- Verify langmem 0.0.30 compatibility with langgraph 1.1.6 before Phase 9 lockfile commit
-- Confirm alpha blend ratio for INTEL-01 cold-start (suggested: 0.2 learned / 0.8 heuristic until 30+ signals)
-- Confirm auto-tier whitelist for ACT-07 (suggested: create_draft, add_personal_reminder only)
+- Address tech debt before or during v1.1:
+  - `user_email=""` in scheduler (WEIGHT_DIRECT never fires)
+  - Slack pagination (single-page only)
+  - `message_id = last_content` stub in thread summarisation
 
 ### Blockers/Concerns
 
-None — v1.0 shipped clean. Tech debt tracked in Phases 7 requirements (FIX-01/02/03).
+None — v1.0 shipped clean.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260411-vlh | Fix Google credentials reconstruction | 2026-04-11 | dc41c9f | [260411-vlh-fix-google-credentials-reconstruction-bu](./quick/260411-vlh-fix-google-credentials-reconstruction-bu/) |
+| 260412-gak | Fix null recipient in draft_node — pass email metadata to LLM prompt | 2026-04-12 | 60975dd | [260412-gak-fix-null-recipient-in-draft-node-pass-em](./quick/260412-gak-fix-null-recipient-in-draft-node-pass-em/) |
 
 ## Session Continuity
 
-Last session: 2026-04-16T01:21:54.471Z
-Stopped at: Phase 9 context gathered (assumptions mode)
-Resume file: .planning/phases/09-cross-session-memory/09-CONTEXT.md
+Last session: 2026-04-15
+Milestone v1.0 complete.
