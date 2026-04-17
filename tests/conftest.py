@@ -169,3 +169,36 @@ def sample_messages() -> list[MessageMetadata]:
 def vip_senders() -> frozenset[str]:
     """Returns a set of VIP sender emails for priority scoring tests."""
     return frozenset({"vip@example.com"})
+
+
+# ---------------------------------------------------------------------------
+# Phase 9: async DB session fixture for memory-module tests
+# ---------------------------------------------------------------------------
+
+import pytest_asyncio  # noqa: E402
+from sqlalchemy.ext.asyncio import (  # noqa: E402
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+
+
+@pytest_asyncio.fixture
+async def async_db_session() -> AsyncSession:
+    """In-memory-style async session over a disposable Postgres URL.
+
+    Uses the project's DATABASE_URL when set; otherwise skips. Phase 9
+    memory tests that need DB access consume this fixture — Wave 1 tests
+    unskip and populate real assertions.
+    """
+    import os
+
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        pytest.skip("DATABASE_URL not set — skipping DB-backed memory test")
+
+    engine = create_async_engine(url, future=True)
+    maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    async with maker() as session:
+        yield session
+    await engine.dispose()
