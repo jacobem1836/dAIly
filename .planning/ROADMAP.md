@@ -28,7 +28,7 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details.
 - [ ] **Phase 7: Tech Debt Fixes** - Correct three broken paths that corrupt signal data and block intelligence features
 - [x] **Phase 8: Adaptive Ranker** - Replace static email heuristics with signal-learned personal scoring — completed 2026-04-16
 - [x] **Phase 9: Cross-Session Memory** - Persist durable user facts across days via pgvector extraction and retrieval — completed 2026-04-17
-- [ ] **Phase 10: Memory Transparency** - Voice interface for user to inspect, edit, and reset what the system knows
+- [x] **Phase 10: Memory Transparency** - Voice interface for user to inspect, edit, and reset what the system knows (completed 2026-04-17)
 - [ ] **Phase 11: Trusted Actions** - User-configurable autonomy levels with explicit opt-in and safety locks
 - [ ] **Phase 12: Conversational Flow** - Natural interruption, fluid mode switching, and adaptive tone
 
@@ -89,8 +89,8 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details.
   4. User can disable memory learning; no new facts are extracted after disabling
 **Plans**: 2 plans
 Plans:
-  - [ ] 10-01-PLAN.md — Memory helpers + intent routing + memory_node implementation
-  - [ ] 10-02-PLAN.md — Tests for memory transparency (helpers + routing + node)
+  - [x] 10-01-PLAN.md — Memory helpers + intent routing + memory_node implementation
+  - [x] 10-02-PLAN.md — Tests for memory transparency (helpers + routing + node)
 
 
 
@@ -129,6 +129,6 @@ Plans:
 | 7. Tech Debt Fixes | v1.1 | 0/3 | Not started | — |
 | 8. Adaptive Ranker | v1.1 | 4/4 | Complete | 2026-04-16 |
 | 9. Cross-Session Memory | v1.1 | 4/4 | Complete | 2026-04-17 |
-| 10. Memory Transparency | v1.1 | 0/2 | Not started | — |
+| 10. Memory Transparency | v1.1 | 2/2 | Complete   | 2026-04-17 |
 | 11. Trusted Actions | v1.1 | 0/? | Not started | — |
 | 12. Conversational Flow | v1.1 | 0/? | Not started | — |
