@@ -314,3 +314,26 @@ def test_voice_command_registered():
     assert "voice" in command_names, (
         f"'voice' command not found in CLI. Registered commands: {command_names}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 9 Plan 04: regression guards for memory-extraction wiring
+# ---------------------------------------------------------------------------
+
+
+def test_memory_extraction_symbol_importable_from_loop():
+    """Regression: ensure the import path used by voice/loop.py is valid.
+
+    Plan 04 wires `from daily.profile.memory import extract_and_store_memories`
+    inside run_voice_session's finally block. If the symbol is renamed or
+    moved, this test fails at import time.
+    """
+    from daily.profile.memory import extract_and_store_memories
+    assert callable(extract_and_store_memories)
+
+
+def test_voice_loop_imports_cleanly():
+    """Smoke: voice/loop.py must import without side effects after Plan 04."""
+    import importlib
+    mod = importlib.import_module("daily.voice.loop")
+    assert hasattr(mod, "run_voice_session")

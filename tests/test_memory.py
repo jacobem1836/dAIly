@@ -416,6 +416,105 @@ async def test_session_state_includes_memories(async_db_session, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="pending Plan 04 implementation")
-async def test_no_hallucination_loop():
-    raise NotImplementedError
+async def test_no_hallucination_loop(async_db_session, monkeypatch):
+    """Dedup prevents re-insertion of facts the system itself recalled and injected.
+
+    T-09-16 mitigation: session_history only contains user+assistant turns from the
+    conversation, never the injected state.user_memories. This test verifies that
+    even if the LLM hallucinates and returns a fact matching an already-stored one,
+    the cosine-distance dedup guard (Plan 02) blocks the duplicate insert.
+
+    Scenario 1: LLM returns no new facts (clean session) — row count unchanged.
+    Scenario 2: LLM hallucinates and returns the pre-seeded fact — dedup fires,
+                row count still 1.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sqlalchemy import func, select
+
+    from daily.db.models import MemoryFact
+    from daily.profile import memory as memory_mod
+    from daily.profile.service import _ensure_default_user
+
+    # Use a dedicated user_id to avoid cross-test contamination
+    USER_ID = 20
+    SEEDED_EMBEDDING = [0.7] * 1536
+    SEEDED_FACT = "User travels frequently"
+
+    # Seed one MemoryFact row
+    await _ensure_default_user(USER_ID, async_db_session)
+    await async_db_session.commit()
+    seeded = MemoryFact(
+        user_id=USER_ID,
+        fact_text=SEEDED_FACT,
+        embedding=SEEDED_EMBEDDING,
+        source_session_id="seed-hallucination",
+    )
+    async_db_session.add(seeded)
+    await async_db_session.commit()
+
+    # Helper: count MemoryFact rows for USER_ID
+    async def _count_rows() -> int:
+        result = await async_db_session.execute(
+            select(func.count()).select_from(MemoryFact).where(MemoryFact.user_id == USER_ID)
+        )
+        return result.scalar_one()
+
+    assert await _count_rows() == 1
+
+    # --- Scenario 1: LLM returns no new facts (no hallucination) ---
+    mock_client_1 = MagicMock()
+    mock_client_1.chat.completions.create = AsyncMock(
+        return_value=MagicMock(
+            choices=[MagicMock(message=MagicMock(content='{"facts": []}'))]
+        )
+    )
+    mock_client_1.embeddings.create = AsyncMock(
+        return_value=MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
+    )
+    monkeypatch.setattr(memory_mod, "_get_openai_client", lambda: mock_client_1)
+
+    session_history = [
+        {"role": "user", "content": "Just confirming the meeting time"},
+        {"role": "assistant", "content": "Meeting is at 10am"},
+    ]
+    await memory_mod.extract_and_store_memories(
+        user_id=USER_ID,
+        session_history=session_history,
+        session_id="s-hallucination-1",
+        db_session=async_db_session,
+    )
+
+    assert await _count_rows() == 1, "Scenario 1: row count must remain 1 when LLM returns no facts"
+
+    # --- Scenario 2: LLM hallucinates and returns the already-stored fact ---
+    mock_client_2 = MagicMock()
+    mock_client_2.chat.completions.create = AsyncMock(
+        return_value=MagicMock(
+            choices=[
+                MagicMock(
+                    message=MagicMock(
+                        content=f'{{"facts": ["{SEEDED_FACT}"]}}'
+                    )
+                )
+            ]
+        )
+    )
+    # _embed returns the same vector as the seeded row — cosine distance = 0
+    mock_client_2.embeddings.create = AsyncMock(
+        return_value=MagicMock(data=[MagicMock(embedding=SEEDED_EMBEDDING)])
+    )
+    monkeypatch.setattr(memory_mod, "_get_openai_client", lambda: mock_client_2)
+
+    await memory_mod.extract_and_store_memories(
+        user_id=USER_ID,
+        session_history=session_history,
+        session_id="s-hallucination-2",
+        db_session=async_db_session,
+    )
+
+    # Dedup must block the re-insertion — row count still 1
+    assert await _count_rows() == 1, (
+        "Scenario 2: dedup must prevent re-insertion of hallucinated fact "
+        f"'{SEEDED_FACT}' that matches the seeded embedding"
+    )

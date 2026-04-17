@@ -290,7 +290,7 @@ async def run_voice_session(user_id: int = 1) -> None:
                     from daily.db.engine import async_session as _async_session  # noqa: PLC0415
                     from daily.profile.memory import extract_and_store_memories  # noqa: PLC0415
 
-                    thread_id = config["configurable"]["thread_id"]
+                    thread_id = config.get("configurable", {}).get("thread_id", f"user-{user_id}")
 
                     async def _run_memory_extraction() -> None:
                         try:
