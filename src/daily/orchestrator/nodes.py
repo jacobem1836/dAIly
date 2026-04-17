@@ -34,6 +34,8 @@ from daily.briefing.redactor import summarise_and_redact
 from daily.orchestrator.models import OrchestratorIntent
 from daily.orchestrator.session import get_email_adapters
 from daily.orchestrator.state import SessionState
+from daily.profile.memory import clear_all_memories, delete_memory_fact, list_all_memories
+from daily.profile.service import upsert_preference
 from daily.profile.signals import SignalType
 
 logger = logging.getLogger(__name__)
@@ -879,6 +881,90 @@ async def execute_node(state: SessionState) -> dict:
             "pending_action": None,
             "approval_decision": None,
         }
+
+
+async def memory_node(state: SessionState) -> dict:
+    """Handle memory transparency commands: query, delete, clear, disable.
+
+    Sub-intent dispatch via keyword matching on last user message.
+    Priority: clear > delete > query > disable (per Research Pitfall 1 — "forget
+    everything" must not route to single-fact delete).
+    All operations bypass the memory_enabled gate — transparency always works (D-02/D-06).
+    No approval gate — D-06: direct DB execution with verbal confirmation.
+
+    Creates its own DB session (established node pattern via async_session()).
+
+    Args:
+        state: Current SessionState with messages and active_user_id.
+
+    Returns:
+        State update dict with AIMessage containing verbal confirmation.
+    """
+    from daily.db.engine import async_session  # noqa: PLC0415
+
+    user_id = state.active_user_id
+    last_msg = state.messages[-1].content.lower() if state.messages else ""
+
+    try:
+        # Sub-intent keyword sets (must match graph.py D-01 keywords)
+        memory_query_keywords = ["what do you know", "what do you remember",
+                                 "tell me what you know", "what have you learned"]
+        memory_clear_keywords = ["forget everything", "clear my memory", "reset my memory"]
+        memory_delete_keywords = ["forget that", "delete that", "remove that fact"]
+        memory_disable_keywords = ["disable memory", "stop learning",
+                                   "turn off memory", "don't remember"]
+
+        async with async_session() as db_session:
+            # CRITICAL: check clear BEFORE delete — "forget everything" must not route
+            # to single-fact delete (Research Pitfall 1)
+            if any(kw in last_msg for kw in memory_clear_keywords):
+                count = await clear_all_memories(user_id, db_session)
+                if count == 0:
+                    narrative = "I don't have any memories stored about you."
+                else:
+                    narrative = f"Done, I've cleared all {count} things I knew about you."
+
+            elif any(kw in last_msg for kw in memory_delete_keywords):
+                # Extract the description from the message — strip the keyword prefix
+                # to get the user's fact description for cosine matching
+                raw_description = last_msg
+                for kw in memory_delete_keywords:
+                    raw_description = raw_description.replace(kw, "").strip()
+                if not raw_description:
+                    raw_description = last_msg  # fall back to full message if stripping empties it
+
+                deleted_fact = await delete_memory_fact(user_id, raw_description, db_session)
+                if deleted_fact is None:
+                    narrative = "I couldn't find a matching memory to delete."
+                else:
+                    narrative = "Done, I've forgotten that."
+
+            elif any(kw in last_msg for kw in memory_query_keywords):
+                facts = await list_all_memories(user_id, db_session, limit=10)
+                if not facts:
+                    narrative = "I don't know anything about you yet."
+                else:
+                    items = " ".join(f"{i + 1}. {fact}." for i, fact in enumerate(facts))
+                    narrative = f"Here's what I know about you. {items}"
+
+            elif any(kw in last_msg for kw in memory_disable_keywords):
+                await upsert_preference(user_id, "memory_enabled", "false", db_session)
+                narrative = (
+                    "Memory learning disabled. I'll stop extracting new facts. "
+                    "Your existing memories are preserved until you delete them."
+                )
+
+            else:
+                narrative = (
+                    "I'm not sure what memory operation you meant. "
+                    "Try asking 'what do you know about me?'"
+                )
+
+    except Exception as exc:
+        logger.warning("memory_node: unexpected failure: %s", exc)
+        narrative = "I couldn't complete that right now."
+
+    return {"messages": [AIMessage(content=narrative)]}
 
 
 async def _log_action(
