@@ -23,7 +23,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from openai import AsyncOpenAI
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 
 from daily.config import Settings
 from daily.db.models import MemoryFact
@@ -292,3 +292,143 @@ async def retrieve_relevant_memories(
             exc,
         )
         return []
+
+
+# ---------------------------------------------------------------------------
+# Memory transparency helpers (Phase 10 — MEM-01, MEM-02, MEM-03)
+# These functions do NOT check memory_enabled — transparency always works.
+# ---------------------------------------------------------------------------
+
+
+async def list_all_memories(
+    user_id: int,
+    db_session: "AsyncSession",
+    limit: int = 10,
+) -> list[str]:
+    """Return the most recent stored fact texts for a user (up to ``limit``).
+
+    Does NOT check memory_enabled — transparency always works (D-02, Research Pitfall 3).
+    Ordered by created_at descending so newest facts appear first.
+    Returns [] on any failure (fail-silent — specifics #5).
+
+    Security (T-10-01): WHERE user_id = :user_id scoped to authenticated user.
+
+    Args:
+        user_id: Authenticated user identifier.
+        db_session: AsyncSession provided by memory_node.
+        limit: Maximum number of facts to return (default 10).
+
+    Returns:
+        List of fact_text strings, or [] on failure or when no facts exist.
+    """
+    try:
+        stmt = (
+            select(MemoryFact.fact_text)
+            .where(MemoryFact.user_id == user_id)
+            .order_by(MemoryFact.created_at.desc())
+            .limit(limit)
+        )
+        rows = (await db_session.execute(stmt)).scalars().all()
+        return list(rows)
+    except Exception as exc:
+        logger.warning(
+            "list_all_memories: failed for user=%d: %s",
+            user_id,
+            exc,
+        )
+        return []
+
+
+async def delete_memory_fact(
+    user_id: int,
+    description: str,
+    db_session: "AsyncSession",
+    threshold: float = 0.2,
+) -> str | None:
+    """Delete the memory fact closest in meaning to ``description``.
+
+    Does NOT check memory_enabled — transparency always works (D-03).
+    Uses cosine similarity with a 0.2 threshold (slightly looser than 0.1 dedup
+    threshold — users paraphrase when deleting per D-03).
+    Returns the deleted fact text on success, or None if no match found or on failure.
+
+    Security (T-10-02): WHERE user_id = :user_id — no cross-user deletion possible.
+
+    Args:
+        user_id: Authenticated user identifier.
+        description: Spoken description of the fact to forget — embedded for similarity.
+        db_session: AsyncSession provided by memory_node.
+        threshold: Cosine distance threshold (default 0.2, looser than 0.1 dedup).
+
+    Returns:
+        The deleted fact_text string, or None if no match or on failure.
+    """
+    try:
+        client = _get_openai_client()
+        query_embedding = await _embed(description, client)
+
+        stmt = (
+            select(MemoryFact)
+            .where(MemoryFact.user_id == user_id)
+            .where(MemoryFact.embedding.cosine_distance(query_embedding) < threshold)
+            .order_by(MemoryFact.embedding.cosine_distance(query_embedding))
+            .limit(1)
+        )
+        row = (await db_session.execute(stmt)).scalars().first()
+
+        if row is None:
+            return None
+
+        await db_session.delete(row)
+        await db_session.commit()
+        return row.fact_text
+
+    except Exception as exc:
+        logger.warning(
+            "delete_memory_fact: failed for user=%d: %s",
+            user_id,
+            exc,
+        )
+        return None
+
+
+async def clear_all_memories(
+    user_id: int,
+    db_session: "AsyncSession",
+) -> int:
+    """Delete all stored memory facts for a user and return the count removed.
+
+    Does NOT check memory_enabled — transparency always works (D-04).
+    Returns 0 on any failure (fail-silent — specifics #5).
+
+    Security (T-10-03): WHERE user_id = :user_id — bulk delete scoped to authenticated user.
+
+    Args:
+        user_id: Authenticated user identifier.
+        db_session: AsyncSession provided by memory_node.
+
+    Returns:
+        Number of facts deleted, or 0 on failure.
+    """
+    try:
+        count_stmt = (
+            select(func.count())
+            .select_from(MemoryFact)
+            .where(MemoryFact.user_id == user_id)
+        )
+        count_result = await db_session.execute(count_stmt)
+        count = count_result.scalar_one()
+
+        delete_stmt = delete(MemoryFact).where(MemoryFact.user_id == user_id)
+        await db_session.execute(delete_stmt)
+        await db_session.commit()
+
+        return count
+
+    except Exception as exc:
+        logger.warning(
+            "clear_all_memories: failed for user=%d: %s",
+            user_id,
+            exc,
+        )
+        return 0
