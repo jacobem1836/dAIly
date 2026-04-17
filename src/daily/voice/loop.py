@@ -190,6 +190,8 @@ async def run_voice_session(user_id: int = 1) -> None:
                 print()
 
             # 7. Main voice loop
+            # Phase 9 INTEL-02: accumulate per-turn messages for end-of-session extraction.
+            session_history: list[dict] = []
             first_turn = True
             try:
                 while True:
@@ -197,6 +199,7 @@ async def run_voice_session(user_id: int = 1) -> None:
                     user_input = await turn_manager.wait_for_utterance()
 
                     if user_input.lower().strip() in ("exit", "quit"):
+                        session_history.append({"role": "user", "content": user_input})
                         print("Session ended.")
                         break
 
@@ -222,6 +225,9 @@ async def run_voice_session(user_id: int = 1) -> None:
                     graph_state = await graph.aget_state(config)
                     if graph_state.next:
                         # Voice approval flow: unlimited edit rounds (D-01)
+                        # turn_recorded guards against double-appending user_input for
+                        # the same outer turn across multiple approval sub-loop iterations.
+                        turn_recorded = False
                         while True:
                             approval_result = await _handle_voice_approval(
                                 turn_manager=turn_manager,
@@ -239,6 +245,10 @@ async def run_voice_session(user_id: int = 1) -> None:
                                     content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
                                     print(f"dAIly: {content}")
                                     await turn_manager.speak(content)
+                                    if not turn_recorded:
+                                        session_history.append({"role": "user", "content": user_input})
+                                        turn_recorded = True
+                                    session_history.append({"role": "assistant", "content": content})
                                 break
 
                             # Edit decision: check if graph interrupted again at approval
@@ -251,6 +261,10 @@ async def run_voice_session(user_id: int = 1) -> None:
                                     content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
                                     print(f"dAIly: {content}")
                                     await turn_manager.speak(content)
+                                    if not turn_recorded:
+                                        session_history.append({"role": "user", "content": user_input})
+                                        turn_recorded = True
+                                    session_history.append({"role": "assistant", "content": content})
                                 break
                     else:
                         # Normal (non-interrupted) response — speak it
@@ -260,11 +274,41 @@ async def run_voice_session(user_id: int = 1) -> None:
                             content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
                             print(f"dAIly: {content}")
                             await turn_manager.speak(content)
+                            session_history.append({"role": "user", "content": user_input})
+                            session_history.append({"role": "assistant", "content": content})
 
             finally:
                 # 8. Clean shutdown
                 listen_stop.set()
                 await turn_manager.stop()
+
+                # Phase 9 INTEL-02: fire-and-forget memory extraction (D-03).
+                # Must NOT block voice shutdown — asyncio.create_task, no await.
+                # Each task opens its own DB session (Pitfall 4: never share the
+                # voice loop's session across the create_task boundary).
+                if session_history:
+                    from daily.db.engine import async_session as _async_session  # noqa: PLC0415
+                    from daily.profile.memory import extract_and_store_memories  # noqa: PLC0415
+
+                    thread_id = config["configurable"]["thread_id"]
+
+                    async def _run_memory_extraction() -> None:
+                        try:
+                            async with _async_session() as mem_session:
+                                await extract_and_store_memories(
+                                    user_id=user_id,
+                                    session_history=session_history,
+                                    session_id=thread_id,
+                                    db_session=mem_session,
+                                )
+                        except Exception as exc:
+                            logger.warning(
+                                "memory extraction task failed for user=%d: %s",
+                                user_id, exc,
+                            )
+
+                    asyncio.create_task(_run_memory_extraction())
+
                 print("Voice session ended.")
 
     except Exception as exc:
