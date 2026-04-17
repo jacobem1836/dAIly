@@ -469,22 +469,19 @@ EXTRACTION_SYSTEM_PROMPT = (
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Alembic chain: where is the live migration chain?**
+1. **Alembic chain: where is the live migration chain?** — RESOLVED
    - What we know: Worktree files show revisions 001 → 56a7489e → 003 → 004. The main branch `src/daily/alembic/` directory does not exist at the standard path.
-   - What's unclear: Whether the project uses a non-standard alembic path or the migrations live in the repo root's `alembic/` (common layout).
-   - Recommendation: Wave 0 task should confirm the active alembic directory and migration head before writing migration 005. Run `alembic current` in the project root.
+   - **Resolution:** Migrations live in the repo root `alembic/` directory (confirmed by 001–004 files found there). Plan 01 Task 2 gates on confirming the current head via `uv run alembic heads` at runtime before writing migration 005. Standard path `alembic/versions/005_*.py`.
 
-2. **`run_voice_session()` session_history accumulation**
+2. **`run_voice_session()` session_history accumulation** — RESOLVED
    - What we know: The voice loop runs a while loop processing turns; messages are passed to the orchestrator via `run_session()`.
-   - What's unclear: Whether the session history (all turns) is accessible as a Python list at the `finally` block, or whether it must be retrieved from the LangGraph checkpointer.
-   - Recommendation: Build `session_history` as a local list in the while loop, appending `(user_input, response_content)` tuples per turn. This is the simplest approach and does not require reading from the checkpointer.
+   - **Resolution:** Plan 04 Task 1 builds `session_history` as a local list in the while loop, appending `{"role": "user"|"assistant", "content": "..."}` dicts per turn. The `config` dict is in scope at the inner `try/finally` block. No LangGraph checkpointer access required.
 
-3. **`retrieve_relevant_memories()` query embedding**
+3. **`retrieve_relevant_memories()` query embedding** — RESOLVED
    - What we know: D-06 specifies "query embedding of the current date/briefing topic."
-   - What's unclear: Exact query string for the briefing injection point — the date alone ("2026-04-17") likely produces poor semantic retrieval.
-   - Recommendation (Claude's discretion): Use `"today's daily briefing"` as the query string for the briefing injection call. For session injection, use the briefing narrative first 100 characters. Both are simple to adjust post-implementation.
+   - **Resolution (Claude's discretion):** Use `"today's daily briefing"` as the query string for briefing injection (narrator). For live-session injection, use `"today's briefing context"`. Both strings are stable across days and produce better semantic recall than raw date strings.
 
 ---
 
