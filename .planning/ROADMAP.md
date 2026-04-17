@@ -87,8 +87,13 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details.
   2. User can delete a specific stored fact by stating it; subsequent briefings no longer reflect that fact
   3. User can say "forget everything" and all stored memories are cleared
   4. User can disable memory learning; no new facts are extracted after disabling
-**Plans**: TBD
-**UI hint**: yes
+**Plans**: 2 plans
+Plans:
+  - [ ] 10-01-PLAN.md — Memory helpers + intent routing + memory_node implementation
+  - [ ] 10-02-PLAN.md — Tests for memory transparency (helpers + routing + node)
+
+
+
 
 ### Phase 11: Trusted Actions
 **Goal**: User can configure specific action types to execute without per-action approval; high-impact actions remain locked to approve
@@ -124,6 +129,6 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details.
 | 7. Tech Debt Fixes | v1.1 | 0/3 | Not started | — |
 | 8. Adaptive Ranker | v1.1 | 4/4 | Complete | 2026-04-16 |
 | 9. Cross-Session Memory | v1.1 | 4/4 | Complete | 2026-04-17 |
-| 10. Memory Transparency | v1.1 | 0/? | Not started | — |
+| 10. Memory Transparency | v1.1 | 0/2 | Not started | — |
 | 11. Trusted Actions | v1.1 | 0/? | Not started | — |
 | 12. Conversational Flow | v1.1 | 0/? | Not started | — |
