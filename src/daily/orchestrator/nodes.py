@@ -200,6 +200,38 @@ async def respond_node(state: SessionState) -> dict:
     return {"messages": [AIMessage(content=narrative)]}
 
 
+def _resolve_message_id(user_query: str, email_context: list[dict]) -> str | None:
+    """Match user's natural language query against email_context metadata.
+
+    Searches subject and sender fields (case-insensitive substring match).
+    Returns the message_id of the first matching email, or None if no match.
+
+    Args:
+        user_query: The user's message text describing which email to summarise.
+        email_context: List of email metadata dicts with message_id, subject, sender keys.
+
+    Returns:
+        The message_id string of the best match, or None if no email matches.
+    """
+    query_lower = user_query.lower()
+    for email in email_context:
+        subject = email.get("subject", "").lower()
+        sender = email.get("sender", "").lower()
+        if subject and subject in query_lower:
+            return email["message_id"]
+        if sender and sender in query_lower:
+            return email["message_id"]
+    # Second pass: check if any word from the query appears in subject/sender
+    query_words = [w for w in query_lower.split() if len(w) > 3]
+    for email in email_context:
+        subject = email.get("subject", "").lower()
+        sender = email.get("sender", "").lower()
+        for word in query_words:
+            if word in subject or word in sender:
+                return email["message_id"]
+    return None
+
+
 async def summarise_thread_node(state: SessionState) -> dict:
     """Summarise an email thread using GPT-4.1 (D-02, BRIEF-07).
 
@@ -231,11 +263,22 @@ async def summarise_thread_node(state: SessionState) -> dict:
             ]
         }
 
-    # Extract target reference from last user message
+    # Resolve message_id from email_context (D-07, D-09)
     last_content = state.messages[-1].content if state.messages else ""
-    # Use a placeholder message_id — real extraction depends on briefing context
-    # In Phase 3 this is a best-effort lookup; Phase 5 will wire full context
-    message_id = last_content  # pass through so adapter can match by subject/id
+    message_id = _resolve_message_id(last_content, state.email_context)
+
+    if message_id is None:
+        # D-08: No match found — return clear user-facing error
+        return {
+            "messages": [
+                AIMessage(
+                    content=(
+                        "I can't find that email \u2014 try asking during or right "
+                        "after your briefing when I have context loaded."
+                    )
+                )
+            ]
+        }
 
     client = _openai_client()
 

@@ -238,6 +238,8 @@ class TestSummariseThreadNode:
 
         mock_openai_resp = _make_openai_response("summarise_thread", "Email summary.")
 
+        email_ctx = [{"message_id": "msg_abc", "subject": "standup", "sender": "team@example.com"}]
+
         with patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_resp)
@@ -246,7 +248,10 @@ class TestSummariseThreadNode:
             with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
                 mock_redact.return_value = "Redacted summary"
 
-                state = _make_state(messages=[HumanMessage(content="Summarise that email thread")])
+                state = _make_state(
+                    messages=[HumanMessage(content="Summarise the standup email thread")],
+                    email_context=email_ctx,
+                )
                 result = await summarise_thread_node(state)
 
         mock_adapter.get_email_body.assert_called_once()
@@ -262,6 +267,7 @@ class TestSummariseThreadNode:
         set_email_adapters([mock_adapter])
 
         mock_openai_resp = _make_openai_response("summarise_thread", "Summary.")
+        email_ctx = [{"message_id": "msg_x", "subject": "quarterly report", "sender": "finance@example.com"}]
 
         with patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_client_class:
             mock_client = AsyncMock()
@@ -271,7 +277,10 @@ class TestSummariseThreadNode:
             with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
                 mock_redact.return_value = "Redacted"
 
-                await summarise_thread_node(_make_state())
+                await summarise_thread_node(_make_state(
+                    messages=[HumanMessage(content="Tell me about the quarterly report")],
+                    email_context=email_ctx,
+                ))
 
             # The last call to create should be with gpt-4.1
             calls = mock_client.chat.completions.create.call_args_list
@@ -290,6 +299,7 @@ class TestSummariseThreadNode:
         set_email_adapters([mock_adapter])
 
         mock_openai_resp = _make_openai_response("summarise_thread", "Summary.")
+        email_ctx = [{"message_id": "msg_y", "subject": "meeting notes", "sender": "boss@example.com"}]
 
         with patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_client_class:
             mock_client = AsyncMock()
@@ -299,7 +309,10 @@ class TestSummariseThreadNode:
             with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
                 mock_redact.return_value = "Redacted summary"
 
-                await summarise_thread_node(_make_state())
+                await summarise_thread_node(_make_state(
+                    messages=[HumanMessage(content="Tell me about the meeting notes")],
+                    email_context=email_ctx,
+                ))
 
             mock_redact.assert_called_once()
             # First arg is the raw body
@@ -318,6 +331,7 @@ class TestSummariseThreadNode:
         set_email_adapters([mock_adapter])
 
         mock_openai_resp = _make_openai_response("summarise_thread", "Clean summary.")
+        email_ctx = [{"message_id": "msg_z", "subject": "security report", "sender": "sec@example.com"}]
 
         with patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_client_class:
             mock_client = AsyncMock()
@@ -327,7 +341,10 @@ class TestSummariseThreadNode:
             with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
                 mock_redact.return_value = "Redacted summary without sensitive info"
 
-                result = await summarise_thread_node(_make_state())
+                result = await summarise_thread_node(_make_state(
+                    messages=[HumanMessage(content="Tell me about the security report")],
+                    email_context=email_ctx,
+                ))
 
         # Verify raw body is NOT anywhere in the returned state
         result_str = str(result)
@@ -348,6 +365,7 @@ class TestSummariseThreadNode:
         set_email_adapters([mock_adapter])
 
         mock_openai_resp = _make_openai_response("summarise_thread", "Here is the summary of the thread.")
+        email_ctx = [{"message_id": "msg_w", "subject": "project update", "sender": "pm@example.com"}]
 
         with patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_client_class:
             mock_client = AsyncMock()
@@ -357,7 +375,10 @@ class TestSummariseThreadNode:
             with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
                 mock_redact.return_value = "Redacted"
 
-                result = await summarise_thread_node(_make_state())
+                result = await summarise_thread_node(_make_state(
+                    messages=[HumanMessage(content="Tell me about the project update")],
+                    email_context=email_ctx,
+                ))
 
         messages = result.get("messages", [])
         assert len(messages) == 1
@@ -390,6 +411,7 @@ class TestSummariseThreadNode:
         set_email_adapters([mock_adapter])
 
         mock_openai_resp = _make_openai_response("summarise_thread", "Summary.")
+        email_ctx = [{"message_id": "msg_v", "subject": "weekly digest", "sender": "news@example.com"}]
 
         captured_tasks = []
 
@@ -408,7 +430,11 @@ class TestSummariseThreadNode:
                 mock_redact.return_value = "Redacted"
 
                 with patch("daily.orchestrator.nodes.asyncio.create_task", side_effect=mock_create_task):
-                    await summarise_thread_node(_make_state(active_user_id=1))
+                    await summarise_thread_node(_make_state(
+                        active_user_id=1,
+                        messages=[HumanMessage(content="Tell me about the weekly digest")],
+                        email_context=email_ctx,
+                    ))
 
         assert len(captured_tasks) >= 1
 
@@ -426,6 +452,7 @@ class TestSummariseThreadNode:
         set_email_adapters([mock_adapter])
 
         mock_openai_resp = _make_openai_response("summarise_thread", "Summary.")
+        email_ctx = [{"message_id": "msg_u", "subject": "invoice details", "sender": "billing@example.com"}]
 
         with patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_client_class:
             mock_client = AsyncMock()
@@ -434,7 +461,10 @@ class TestSummariseThreadNode:
 
             with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
                 mock_redact.return_value = "Redacted"
-                await summarise_thread_node(_make_state())
+                await summarise_thread_node(_make_state(
+                    messages=[HumanMessage(content="Tell me about the invoice details")],
+                    email_context=email_ctx,
+                ))
 
             for call in mock_client.chat.completions.create.call_args_list:
                 call_kwargs = call[1]
