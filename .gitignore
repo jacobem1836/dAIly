@@ -8,19 +8,3 @@ alembic/versions/__pycache__/
 dist/
 build/
 .DS_Store
-
-# iCloud sync duplicates
-* 2.py
-* 3.py
-* 4.py
-* 2.md
-* 2.yml
-* 2.yaml
-* 2.json
-* 2.ini
-* 2.toml
-* 2.mako
-* 2.example
-* 2.lock
-* 3.lock
-* 4.lock

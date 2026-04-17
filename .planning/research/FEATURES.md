@@ -1,261 +1,221 @@
-# Feature Landscape: dAIly v1.1 Intelligence Layer
+# Feature Research
 
-**Domain:** Voice-first AI daily briefing assistant — intelligence, memory, and autonomy features
-**Researched:** 2026-04-15
-**Confidence:** MEDIUM-HIGH (industry patterns verified; small-dataset learning specifics rely on inference from recommendation systems literature)
+**Domain:** Voice-first AI personal assistant (proactive briefing + action layer)
+**Researched:** 2026-04-05
+**Confidence:** HIGH (verified against ChatGPT Pulse, Google CC, Alfred_, Lindy, competitor landscape)
 
 ---
 
-## Category 1: Adaptive Prioritisation (INTEL-01)
+## Feature Landscape
 
-**What it is:** Replace static heuristic weights (WEIGHT_DIRECT=10, WEIGHT_CC=2, etc.) with a scoring system that shifts based on stored interaction signals (PERS-02 data: skips, re-requests, corrections).
+### Table Stakes (Users Expect These)
 
-### Table Stakes
+Features users assume exist. Missing these = product feels incomplete or broken.
 
-| Feature | Why Expected | Complexity | v1.0 Dependency |
-|---------|--------------|------------|-----------------|
-| Signal-weighted score adjustment | Any "smart" inbox does this (Gmail, Outlook both do it); absence means the heuristics never improve no matter how much the user interacts | Medium | PERS-02 signal store, FIX-01 (user_email bug must be fixed first — WEIGHT_DIRECT path is dead without it) |
-| Graceful cold-start fallback | System has weeks of data at best; must not regress from heuristics when signal count is low | Low | PERS-03 heuristic defaults |
-| Recency weighting on signals | A skip from 3 weeks ago is less meaningful than one from yesterday | Low | SignalLog timestamps |
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Daily briefing delivery | The core promise: synthesise overnight, deliver proactively on wake | MEDIUM | Precomputed briefing cache is required — real-time generation feels slow |
+| Email ingestion + triage | Users expect every communication assistant to handle email | MEDIUM | Gmail + Outlook OAuth. Classify: urgent / needs-reply / FYI / noise |
+| Calendar ingestion | Expected alongside email in every EA/briefing product | LOW | Today + next 24–48h. Conflict detection, meeting prep context |
+| Voice output (TTS) | Voice-first means the briefing is spoken, not read | MEDIUM | ElevenLabs or similar — sub-150ms synthesis latency is now standard |
+| Voice input (STT) | Users want to ask follow-ups by voice, not type | MEDIUM | Whisper or Deepgram. Streaming STT with interim results to cut LLM wait |
+| Low-latency response loop | Humans expect 300–800ms conversational responses — anything above 1.5s breaks immersion | HIGH | WebRTC > PSTN. Pipeline: STT interim → LLM → TTS streaming. Sub-1s is achievable |
+| Action drafting (email/message reply) | Briefing products without draft output feel read-only and passive | MEDIUM | Draft, don't send. Human-in-the-loop approval gates all sends in M1 |
+| Approval flow for all external actions | Non-negotiable trust contract with users — no unsanctioned sends | LOW | Simple confirm/reject. Action log maintained. Critical for user trust baseline |
+| Interruption handling | Voice-only interaction demands the ability to interrupt and redirect | MEDIUM | Barge-in detection (VAD). Redirect briefing mid-sentence is expected |
+| Follow-up questions during briefing | Users will ask "tell me more about that email" — this is expected | MEDIUM | Conversational context window maintained across briefing session |
+| OAuth integration (Google + Microsoft) | Standard auth for email/calendar integrations | MEDIUM | Gmail, Google Calendar, Outlook, Exchange. Tokens encrypted at rest |
+| Action log | Transparency on what the assistant has done or attempted | LOW | Timestamped, type-tagged, approval-status per entry |
 
-### Differentiators
+### Differentiators (Competitive Advantage)
+
+Features that set dAIly apart. Not universally expected, but high leverage for the target market.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Sender-level learned weight | Learns that replies from "boss@company.com" are always acted on, so they get boosted beyond the direct-recipient heuristic | Medium | Requires per-sender score store, not just global weight adjustments |
-| Keyword drift detection | Adapts when a new project introduces new deadline-adjacent terms the heuristic doesn't know | High | Probably out of scope v1.1; flag for v2.0 |
+| Proactive, precomputed briefing (not on-demand) | "Your life briefs you" — no prompt needed. ChatGPT Pulse and Google CC both moved here in late 2025, validating demand | HIGH | Fetch + summarise before user wakes. Cache for instant voice delivery. Key differentiator vs reactive assistants |
+| Priority ranking engine | Not "here are 20 emails" — "here are the 3 that matter" | HIGH | Learned from skip/re-request signals. Requires a scoring model tuned to user behaviour over time |
+| Messaging integration (Slack) | Most briefing tools cover email + calendar but skip async messaging | HIGH | Mentions, DMs, priority channels. High signal density for target market (professionals) |
+| Conversational memory across sessions | Single-session assistants feel dumb after first use. Persistent memory = compounding value | HIGH | Not just "preferences" — contextual memory (e.g. "Jacob mentioned a deadline last Tuesday"). ChromaDB or pgvector |
+| Signal capture from interaction behaviour | Skips, corrections, re-requests as implicit feedback loop | MEDIUM | Drives priority ranking improvement without explicit user effort |
+| Multi-turn follow-up with action dispatch | "Reply to that Slack message" mid-briefing — briefing becomes a command interface | HIGH | Requires tight integration between briefing context and action engine |
+| Staged autonomy model (approve → trust → auto) | Users want to grant more authority over time without a cliff edge | MEDIUM | M1: approve all. M2: trusted actions (auto-send to flagged contacts). Explicit trust levels per action type |
+| Thread summarisation on demand | "Summarise that email chain" as a natural follow-up | LOW | Single retrieval + LLM summarise. High perceived intelligence, low complexity |
+| Structured action log with audit trail | Professional users want to know exactly what was done | LOW | Differentiator vs consumer assistants that hide actions. Audit-first design |
 
-### Anti-Features
+### Anti-Features (Commonly Requested, Often Problematic)
 
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| Full ML model (BPR, matrix factorisation, neural ranking) | Requires hundreds of positive/negative pairs minimum; weeks of data yields ~20-50 training examples — model will overfit or be worse than heuristics | Weighted score adjustment: multiply existing heuristic weights by a learned multiplier per signal type, updated via simple EWM (exponentially weighted mean) or Bayesian update on the existing score fields |
-| Separate recommender service | Infrastructure overhead with no benefit at single-user, ~100 items/day scale | Extend `ranker.py` with a `learned_multipliers` dict loaded from DB at pipeline start |
-| A/B testing framework | Single user — meaningless | N/A |
-| Cold-start ML model with no fallback | No fallback path if signal count is below threshold | Always blend: `final_score = alpha * heuristic_score + (1 - alpha) * learned_score` where alpha starts at 1.0 and decreases as signal count grows |
+Features that seem obviously good but create meaningful problems in MVP.
 
-### Complexity Assessment
-
-**Low-to-Medium.** The right approach is a score-multiplier table per signal type, stored in Postgres, updated incrementally as signals arrive. This is a week of work, not a research project. The main dependency is FIX-01 — WEIGHT_DIRECT scoring is currently broken because `user_email=""` in the scheduler, making the "direct email" signal never fire. Fix that first or the learned weights will train on biased data.
-
-**Recommended approach:** Extend `ranker.py`. Add a `signal_weights` table: `(signal_type, sender_domain, adjustment_factor)`. On each signal event, do a small update (e.g., EWM with alpha=0.1). At briefing time, load the table and apply multipliers to the heuristic weights. Blended score ensures heuristics dominate at cold start.
-
----
-
-## Category 2: Cross-Session Memory (INTEL-02)
-
-**What it is:** Persist a user profile — preferences, facts, patterns — across days. The existing `AsyncPostgresSaver` handles single-session context only; it does not extract durable facts.
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | v1.0 Dependency |
-|---------|--------------|------------|-----------------|
-| Durable fact extraction | Users expect the assistant to remember "I have a board meeting every Monday at 9am" without being told again | Medium | pgvector already in stack; profile service exists |
-| Session-to-session preference continuity | If the user said "be more concise" two days ago, it should still apply | Low | UserPreferences model in profile/models.py |
-| Explicit memory saves ("remember that...") | Industry table stakes since ChatGPT memory launched (2024); users expect to be able to explicitly teach the system | Low | LangGraph intent routing |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Proactive fact extraction | System notices recurring patterns (same person cc'd on all important emails) and surfaces them without being asked | High | Requires extraction prompt run over conversation history; adds LLM cost per session |
-| Temporal relevance decay | Facts about "Q1 project" become less relevant after Q2 starts | Medium | Timestamp + relevance score on memory entries |
-
-### Anti-Features
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| mem0 library as drop-in | mem0 is excellent for multi-user SaaS; for a single-user personal assistant with tight control requirements, it adds an abstraction layer over a pgvector schema you already own, and its extraction prompts are not tuned for a briefing domain | Store facts as structured rows in a `user_memory` table: `(id, user_id, fact_text, embedding vector(1536), source, created_at, last_recalled_at, confidence)`. Run extraction via a post-session LLM call with a targeted prompt. |
-| Vector-only memory (semantic search as sole retrieval) | Short fact lists (<200 items for weeks of data) don't need approximate nearest-neighbour search. Direct SQL `LIKE` or exact match is faster and more reliable at this scale | Add pgvector embedding for future scalability, but use SQL exact/prefix match as primary retrieval for now |
-| Full episodic transcript storage | Violates SEC-04 (raw content not stored long-term) | Store summaries and extracted facts only |
-
-### Complexity Assessment
-
-**Medium.** The pgvector extension is already deployed. The main work is: (1) a `user_memory` table schema, (2) a post-session extraction prompt (run once after each voice session ends), (3) a pre-session retrieval that injects top-N relevant memories into the briefing context. The LangGraph session already has a clear entry/exit point in `graph.py` — hook in at session end.
-
-**Recommended approach:** Add a `memory_service.py` in a new `src/daily/memory/` module. Post-session: run extraction LLM call, upsert facts into `user_memory`. Pre-briefing: retrieve top-10 semantically relevant facts and inject into `context_builder.py`'s prompt context. Keep extraction call cheap — use GPT-4.1 mini, not GPT-4.1.
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Auto-send without approval | "More efficient, I trust it" | One wrong send to the wrong person destroys trust immediately. Trust has to be earned incrementally. | Staged autonomy — require approval in M1, gate auto-send behind explicit trust grants in M2 |
+| Always-on ambient listening | Feels like a true voice-first experience | Privacy land mines, battery drain, accidental trigger edge cases. WAF/legal exposure. "Helpful until it interjects uninvited" | Wake-word + push-to-talk hybrid. On-device wake word detection (Picovoice/Porcupine) to maintain privacy |
+| News / web content in M1 briefing | "Complete morning briefing" expectation | Unlimited scope. News curation is a separate hard problem. Dilutes the core signal (YOUR data, not the world's) | Explicitly out of scope in M1. Add in M3 as a channel, not core |
+| Web dashboard / UI in M1 | Users want to see things visually | Frontend development burns time. Core value is voice-first. A bad UI shipped early creates design debt | Backend-first. CLI or minimal API surface for M1. Dashboard is M2+ |
+| Real-time inbox sync (push webhooks) | Feels more responsive | Complexity spike — webhook management, failure handling, exactly-once delivery. No user benefit in a briefing product that batch-processes overnight | Scheduled pull (cron-style). Simpler, more reliable, sufficient for briefing use case |
+| Smart home / IoT integration | "Alexa replacement" vision | Completely different domain. Different device layer, different latency model, different user context. Scope dilution | Out of scope permanently unless product pivots. Not this product's job |
+| Fully local LLM | Privacy appeal | GPT-class reasoning quality is necessary for coherent briefing narratives. Local models produce noticeably worse summaries at current capability levels | Cloud LLM (GPT-4o class) with pre-filter/redaction layer. Raw data never leaves backend |
+| Voice biometrics / speaker ID | Security appeal | High implementation complexity. Edge cases (illness, noise) cause false rejections. Not warranted at MVP scale | OAuth session auth is sufficient for M1. Add biometrics as optional enhancement in M3+ |
+| Proactive interruptions / push notifications during day | "Assistant should alert me" | Without strong signal quality, proactive interruptions become noise. Users will disable them | Deliver one high-quality briefing per day. Let users pull additional queries. Earn proactive trust first |
+| Social media integration | "Full digital life" | Low signal-to-noise. Content volume vastly exceeds actionable items. Personalization quality degrades | Not in M1–M3. If added, treat as opt-in low-priority channel only |
 
 ---
 
-## Category 3: Memory Transparency (MEM-01, MEM-02, MEM-03)
-
-**What it is:** User can ask "what do you know about me?", edit or delete specific entries, and disable or reset learning entirely.
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | v1.0 Dependency |
-|---------|--------------|------------|-----------------|
-| "What do you know about me?" query | ChatGPT memory launched this as the reference pattern in 2024; any memory-having assistant without it feels opaque and untrustworthy (CMU CyLab research: transparency improves trust by 40%) | Low | INTEL-02 memory table must exist first |
-| Delete specific memory entry | GDPR Article 17 (right to erasure) is legally required in EU; even outside EU it's a basic trust feature | Low | MEM-01 must exist |
-| Disable learning / reset all | Users need an escape hatch; without it, a bad extraction snowballs | Low | MEM-01, MEM-02 |
-| Verbal memory management ("forget that I said...") | Voice-first interface means keyboard memory management menus are out; must be voice-accessible | Medium | LangGraph intent routing + new intent class |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Memory confidence display ("I'm fairly sure you prefer...") | Distinguishes between a fact told explicitly vs inferred — helps user evaluate what to correct | Low | Add `confidence` enum (explicit / inferred) to memory table |
-| Memory audit trail (how was this learned?) | Shows source session, date, and trigger for each fact | Low-Medium | Store `source_session_id` and `created_at` in memory table; expose on query |
-
-### Anti-Features
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| GUI/web dashboard for memory management | No UI in v1.x scope; PROJECT.md explicitly defers dashboard to v2.0 | All memory management via voice commands and CLI `daily memory` subcommand |
-| Granular per-field edit (edit just the date in a fact) | Extremely complex NLP; high error rate. The ChatGPT team explicitly doesn't support this — users must delete and re-state | Delete-and-re-say pattern: "Forget that I have a 9am Monday meeting. I actually have it at 10am." |
-| Automatic memory export to third-party services | Scope creep; not in v1.1 target | N/A |
-
-### Complexity Assessment
-
-**Low, given INTEL-02 is implemented first.** Memory transparency is almost entirely UI/intent work on top of the memory table. The hard part is INTEL-02 (building the memory store). MEM-01/02/03 are retrieval + delete operations plus new LangGraph intent routing. The only non-trivial part is building the voice UX so "what do you know?" produces a scannable verbal response (not a 20-item list read aloud).
-
-**Recommended approach:** Limit "what do you know?" to top-10 most recently recalled or highest-confidence facts, grouped by category (preferences, recurring patterns, people). Voice response: "I remember 8 things about you. Want me to go through them?" — then step through with user confirmation to keep, edit, or delete each one.
-
----
-
-## Category 4: Trusted Actions (ACT-07)
-
-**What it is:** User configures autonomy levels: suggest-only (no action taken), approve-per-action (existing v1.0 behaviour), or trusted-auto (auto-execute for pre-approved action types).
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | v1.0 Dependency |
-|---------|--------------|------------|-----------------|
-| Three-tier model (suggest / approve / auto) | Industry standard for agentic AI (Anthropic, CSA, and five-level frameworks all converge on graduated autonomy; 85% of enterprise AI is semi-autonomous as of early 2025) | Low-Medium | LangGraph `interrupt()` already in place in `graph.py`; need to make it conditional |
-| Per-action-type configuration | User may trust "create calendar event" but not "send email" for auto | Low | ActionLog already has `action_type`; add `autonomy_level` per type to user preferences |
-| Explicit opt-in required for auto | PROJECT.md constraint: "Trusted-auto level requires explicit user opt-in; high-impact actions always surface for approval at default level" | Low | Logic change in `route_after_approval` node |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Auto-approval summary in morning briefing ("I automatically did 3 things overnight...") | Keeps user informed without requiring approval; builds trust in the auto tier | Low | Aggregate auto-actioned items into briefing preamble |
-| Velocity limit on auto tier (max N auto-actions per day) | Safety rail that prevents runaway auto-execution if the system misclassifies intent | Low | Counter in Redis with daily TTL |
-
-### Anti-Features
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| Full bypass path for high-impact actions (send email to new recipient, delete calendar event) | PROJECT.md explicitly out of scope for v1.1; also a trust-destroying failure mode if the system misclassifies | Keep high-impact actions in approve tier always; only low-impact (create draft, add personal reminder) eligible for auto |
-| Trust transfer between action types | If user trusts "add calendar event," do not infer they trust "send calendar invite to external contacts" | Each action type is independently configured |
-| ML-driven auto-tier promotion (automatically promoting based on approval patterns) | Can silently expand permissions; must be explicit | Only manual opt-in; patterns can surface a suggestion ("You've approved all calendar creates this week — want to auto them?") but never promote silently |
-
-### Complexity Assessment
-
-**Low-Medium.** The LangGraph interrupt mechanism is already in `graph.py`. The change is: before calling `interrupt()`, check the user's `autonomy_level` for this action type. If `auto`, skip the interrupt and execute. Add `autonomy_settings` JSONB column to `user_preferences` table. The main design question is the UX for configuring it — voice command or `daily config` CLI.
-
-**Recommended approach:** Extend `UserPreferences` model with `autonomy_settings: dict[str, str]` (action_type -> 'suggest'|'approve'|'auto'). Default all to 'approve' (v1.0 behaviour preserved with no regression). Modify `route_after_approval` to check this before raising the interrupt. Add `daily config autonomy set calendar_event auto` CLI command.
-
----
-
-## Category 5: Conversational Flow (CONV-01, CONV-02, CONV-03)
-
-**What it is:** Natural interruption mid-briefing, fluid switching between briefing / discussion / action modes, and adaptive tone/verbosity.
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | v1.0 Dependency |
-|---------|--------------|------------|-----------------|
-| Graceful mid-briefing interruption with resume | v1.0 has barge-in via VAD stop_event (VOICE-04), but the state machine doesn't handle "resume briefing from where I left off" — users expect this from any modern voice assistant | Medium | VOICE-04 barge-in, LangGraph session state (need to store briefing position) |
-| Mode switching without re-triggering briefing | User asks a follow-up question mid-briefing and then says "ok, continue" — system should resume without replaying already-heard content | Medium | Briefing position tracking (cursor into precomputed sections) |
-| Context handoff between modes | If user interrupts to say "reply to that email from Sarah" — system should know which email was being read at the time of interruption | Medium | Briefing position + section metadata in session state |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Adaptive verbosity on re-listen (compress second time) | If user asks to re-hear a section, deliver a shorter version the second time | Medium | Requires re-render with compression instruction; adds one LLM call |
-| Proactive action offer ("Want to reply to that?") | After reading a high-priority email, system offers the action rather than waiting | Low | Post-section check against action type whitelist; gated on user preference |
-| Time-of-day tone adaptation | More structured early morning; more casual during follow-ups later in the day | Low | Time-aware modifier on system prompt |
-
-### Anti-Features (CONV-03 — Adaptive Tone)
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| Real-time sentiment analysis of user's voice | Adds latency and complexity; high error rate; invasive at personal assistant scale | Use explicit signals: user sets preferred tone in `daily config`; system detects implicit signals from session length and interruption frequency |
-| Full NLP formality classifier on user speech | Overkill; takes weeks to train well on one user's data | Heuristic: if user's questions are short and direct, match with brief responses; if elaborate, match with more detail. GPT-4.1 mini handles this well with a simple system prompt instruction ("match the user's verbosity level") |
-| Emotion detection | Out of scope, invasive, unreliable | N/A |
-| Re-synthesising the full briefing TTS from scratch on resume | Huge latency spike (full Cartesia render) on every resume | Track section cursor; only re-render from the interrupted section forward |
-
-### Complexity Assessment
-
-**Medium overall, with variance by sub-feature:**
-
-- **CONV-01 (mid-session interruption resume):** Medium. Need to add a `briefing_cursor` field to session state tracking which section was being delivered when interrupted. The section list is already computed in the cached briefing — just need to track the index. The tricky part is the audio cursor (which sentence within a section). Simplification: track at section level, not sentence level.
-
-- **CONV-02 (fluid mode switching):** Medium. LangGraph's `route_intent` already handles switching. The gap is that after an action-mode interaction, there's no "resume briefing" intent. Add it to the intent classifier and restore from `briefing_cursor`.
-
-- **CONV-03 (adaptive tone):** Low. Already partially implemented via the existing `tone` preference field. Extension: add a dynamic modifier in the briefing narrator that adjusts based on session context signals (number of interruptions this session = user in a hurry = compress output).
-
----
-
-## Feature Dependencies (Build Order)
+## Feature Dependencies
 
 ```
-FIX-01 (user_email bug in scheduler)
-  └── INTEL-01 (adaptive prioritisation — heuristic inputs must be correct first)
+Voice Interface (STT)
+    └──requires──> Low-Latency Pipeline (WebRTC, streaming)
+                       └──requires──> TTS Streaming
 
-INTEL-02 (cross-session memory — memory table + extraction pipeline)
-  ├── MEM-01 (inspect memory — reads from memory table)
-  ├── MEM-02 (edit/delete memory — writes to memory table)
-  └── MEM-03 (disable/reset — clears memory table)
+Proactive Briefing
+    └──requires──> Email Ingestion
+    └──requires──> Calendar Ingestion
+    └──requires──> LLM Summarisation
+    └──requires──> Briefing Cache (precompute)
 
-LangGraph graph.py (route_intent, route_after_approval already exist in v1.0)
-  ├── ACT-07 (trusted actions — conditional interrupt based on autonomy_settings)
-  └── CONV-02 (mode switching — new 'resume_briefing' intent + cursor restore)
+Action Layer (Draft/Schedule)
+    └──requires──> Approval Flow
+    └──requires──> Action Log
+    └──requires──> OAuth Integrations
 
-CONV-01 (briefing cursor tracking in session state)
-  └── CONV-02 (mode switching resumes from cursor — depends on cursor existing)
+Personalisation Engine
+    └──requires──> Signal Capture (skip/correction events)
+    └──requires──> User Profile Store
+    └──enhances──> Priority Ranking Engine
 
-CONV-03 (adaptive tone) — independent, lowest dependency
+Conversational Memory
+    └──requires──> Session Context Store
+    └──enhances──> Multi-Turn Follow-Up
+    └──enhances──> Personalisation Engine
+
+Priority Ranking Engine
+    └──requires──> Signal Capture
+    └──enhances──> Proactive Briefing (what leads vs what buries)
+
+Staged Autonomy (M2)
+    └──requires──> Action Log (evidence base for trust)
+    └──requires──> Approval Flow (trust scoring input)
+    └──enhances──> Action Layer
 ```
 
----
+### Dependency Notes
 
-## MVP Recommendation for v1.1
-
-**Ship in this order:**
-
-1. **FIX-01, FIX-02, FIX-03** — Tech debt. FIX-01 is a blocker for INTEL-01 correctness (the entire WEIGHT_DIRECT signal path is dead without it). FIX-02 and FIX-03 are data quality fixes that improve signal reliability for all downstream features.
-
-2. **INTEL-01 (adaptive prioritisation)** — Highest visible daily impact. User sees briefing improve each morning. Low risk (blended score falls back to heuristics). Does not require the memory system — they are orthogonal.
-
-3. **INTEL-02 + MEM-01/02/03 (memory system + transparency)** — Build together as one phase since MEM-01/02/03 are nearly trivial given INTEL-02, and MEM-01/02/03 are needed to make INTEL-02 trustworthy from a user perspective.
-
-4. **ACT-07 (trusted actions)** — Small code delta on existing approval flow. High trust-building value. Can ship before conversational flow work.
-
-5. **CONV-01/02/03 (conversational flow)** — Polish layer. Table-stakes for voice-first but the most fiddly to get right; better after memory and autonomy are stable.
-
-**Defer:**
-- Proactive fact extraction (INTEL-02 differentiator) — adds per-session LLM cost; defer to v1.2 after baseline memory is validated
-- Adaptive verbosity on re-listen (CONV differentiator) — extra LLM call per re-request; defer to v1.2
-- Velocity limits on auto tier — add in v1.2 once auto-tier usage patterns are observable
-- Keyword drift detection (INTEL-01 differentiator) — High complexity, Low ROI at weeks-of-data scale
+- **Proactive briefing requires all three data sources (email, calendar, messaging):** A briefing without messaging is incomplete for the target market (professionals on Slack). But messaging can be added after email/calendar without breaking anything — phase accordingly.
+- **Approval flow must exist before action drafting ships:** Drafting without approval gates = unsanctioned send risk. Build the gate first, draft second.
+- **Conversational memory enhances almost everything but blocks nothing:** Can be shipped incrementally. Session memory (in-session context) is low complexity and ships in M1. Cross-session memory is M2.
+- **Priority ranking requires signal data:** Cold start problem — ranking can't be personalised without prior interactions. Use heuristic defaults (sender importance, keywords, deadlines) until signal data accumulates.
+- **Staged autonomy conflicts with M1 all-approval:** These are not in conflict — M1 approval flow IS the foundation for M2 trust scoring. Don't shortcut it.
 
 ---
 
-## Phase-Specific Complexity Flags
+## MVP Definition
 
-| Phase Topic | Complexity Note | Key Risk |
-|-------------|----------------|----------|
-| Adaptive prioritisation | Low-Medium once FIX-01 done | Risk of over-tuning on <30 signal samples; blend ratio (alpha) should start at 0.8 heuristic weight — be conservative |
-| Memory extraction | Medium | GPT-4.1 mini extraction prompts need careful design — risk of extracting incorrect or overly broad facts that then pollute future sessions |
-| Memory transparency voice UX | Low-Medium | Presenting a list of facts verbally is hard to make non-annoying; cap to 10 items, paginate with user confirmation |
-| Trusted auto-tier | Low | Risk is scope creep into full-bypass; keep high-impact actions (send email, create external calendar invite) always in 'approve' regardless of tier setting |
-| Briefing cursor / mode switching | Medium | Audio cursor granularity (section vs sentence); recommend section-level only for v1.1 |
-| Adaptive tone | Low | Already partially working via tone preference field; incremental extension via system prompt modifier |
+### Launch With (v1 — M1)
+
+Minimum to validate the core value proposition: "Your life briefs you every morning."
+
+- [ ] Daily proactive briefing — precomputed from email + calendar, delivered via TTS on request
+- [ ] Email ingestion + triage (Gmail, Outlook OAuth) — last 24h, ranked by heuristic priority
+- [ ] Calendar ingestion — today + 48h, conflict detection, meeting prep context
+- [ ] Slack messaging ingestion — mentions, DMs, priority channels
+- [ ] Voice output (TTS streaming) — ElevenLabs or equivalent, sub-150ms synthesis
+- [ ] Voice input (STT streaming) — Whisper/Deepgram, interim results to cut perceived latency
+- [ ] Interruption + follow-up question handling — barge-in, mid-briefing redirect
+- [ ] Action drafting (email reply, Slack reply, calendar event) — draft only, never auto-send
+- [ ] Approval flow — confirm/reject gate on all external-facing actions
+- [ ] Action log — timestamped record of all actions and approval status
+- [ ] Basic user profile + preference store — tone, briefing structure preferences
+- [ ] Signal capture — skips, corrections, re-requests logged for future use
+
+### Add After Validation (v1.x — M2)
+
+Features to add once core briefing loop is working and users are returning.
+
+- [ ] Priority ranking engine — move from heuristic to learned prioritisation using M1 signal data
+- [ ] Cross-session conversational memory — persist context across days, not just sessions
+- [ ] Staged autonomy — trusted auto-actions for flagged contacts/patterns after explicit user grant
+- [ ] Web dashboard — visual companion to the voice interface, action log review, preference management
+
+### Future Consideration (v2+ — M3/M4)
+
+Defer until product-market fit is established and user base is active.
+
+- [ ] Travel integration (flights, hotels, itineraries) — high complexity, niche signal
+- [ ] Finance integration (bank feeds, expense tracking) — regulatory exposure, separate trust domain
+- [ ] Health integration (calendar-aware energy/focus) — requires health data access, privacy-sensitive
+- [ ] News/content briefing layer — separate curation problem, risks diluting personal signal quality
+- [ ] On-device LLM (fallback or privacy mode) — model quality insufficient in 2026, revisit 2027+
+- [ ] Multi-user / team briefings — different product category; requires separate personas research
+
+---
+
+## Feature Prioritization Matrix
+
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| Proactive daily briefing (precomputed) | HIGH | HIGH | P1 |
+| Email ingestion + triage | HIGH | MEDIUM | P1 |
+| Calendar ingestion | HIGH | LOW | P1 |
+| Voice output (TTS streaming) | HIGH | MEDIUM | P1 |
+| Voice input (STT + interruption) | HIGH | MEDIUM | P1 |
+| Approval flow + action log | HIGH | LOW | P1 |
+| Action drafting (email/message/calendar) | HIGH | MEDIUM | P1 |
+| Slack messaging ingestion | HIGH | MEDIUM | P1 |
+| Follow-up question handling | HIGH | MEDIUM | P1 |
+| Basic user profile | MEDIUM | LOW | P1 |
+| Signal capture (implicit feedback) | MEDIUM | LOW | P1 |
+| Priority ranking engine (learned) | HIGH | HIGH | P2 |
+| Cross-session memory | HIGH | HIGH | P2 |
+| Staged autonomy / trusted actions | MEDIUM | HIGH | P2 |
+| Web dashboard | MEDIUM | HIGH | P2 |
+| Thread summarisation on demand | MEDIUM | LOW | P2 |
+| Travel/finance integrations | MEDIUM | HIGH | P3 |
+| News briefing layer | LOW | HIGH | P3 |
+| Voice biometrics / speaker ID | LOW | HIGH | P3 |
+| Always-on ambient listening | LOW | HIGH | NEVER (M1) |
+
+**Priority key:**
+- P1: Must have for M1 launch
+- P2: Should have, add in M2 after validation
+- P3: Nice to have, future milestone
+- NEVER (M1): Explicitly excluded from M1 for stated reasons
+
+---
+
+## Competitor Feature Analysis
+
+| Feature | ChatGPT Pulse (OpenAI) | Alfred_ | Google CC | dAIly Approach |
+|---------|------------------------|---------|-----------|----------------|
+| Proactive morning briefing | Yes — card-based, overnight | Yes — email to inbox | Yes — "Your Day Ahead" email | Voice-first delivery, not inbox/card |
+| Email integration | Gmail, Outlook (Connectors) | Gmail, Outlook | Gmail | Same |
+| Calendar integration | Google Calendar | Google Calendar | Google Calendar | Same + Exchange/Outlook |
+| Messaging integration | Not documented | Not documented | Not documented | Slack in M1 — differentiated |
+| Voice delivery | No — text/card only | No — email/notification | No — email only | Yes — core differentiator |
+| Conversational follow-up | Limited (ChatGPT chat) | No | No | Yes — barge-in, multi-turn |
+| Action layer (send/schedule) | Draft in ChatGPT | Yes — drafts | Not documented | Yes — approval-gated |
+| Personalisation / memory | ChatGPT Memory feature | Learns implicitly | Not documented | Explicit signal capture + user profile |
+| Approval flow | Not explicit | Not explicit | Not applicable | Explicit — audit log per action |
+| Availability | Pro tier ($200/mo) | $24.99/mo | Free (Google users) | TBD — targeting prosumer/professional |
+
+**Key insight:** No competitor delivers the briefing via voice with conversational follow-up. ChatGPT Pulse, Alfred_, and Google CC all deliver to inbox or app card. dAIly's voice-first delivery with interruption handling is a genuine gap in the market.
 
 ---
 
 ## Sources
 
-- OpenAI Memory FAQ: https://help.openai.com/en/articles/8590148-memory-faq — HIGH confidence (production reference for memory transparency UX patterns, ChatGPT's "What do you know about me?" interface)
-- LangGraph human-in-the-loop docs: https://docs.langchain.com/oss/python/langchain/human-in-the-loop — HIGH confidence (official; interrupt() pattern is the v1.0 mechanism)
-- CSA Agentic Trust Framework (autonomy levels): https://cloudsecurityalliance.org/blog/2026/01/28/levels-of-autonomy — MEDIUM confidence (industry framework, not implementation guide)
-- Anthropic agent autonomy measurement: https://www.anthropic.com/research/measuring-agent-autonomy — MEDIUM confidence (research framing for graduated autonomy tiers)
-- DigitalOcean LangGraph + Mem0 integration: https://www.digitalocean.com/community/tutorials/langgraph-mem0-integration-long-term-ai-memory — MEDIUM confidence (tutorial pattern for post-session memory extraction)
-- Mem0 pgvector backend docs: https://docs.mem0.ai/components/vectordbs/dbs/pgvector — HIGH confidence (official docs confirming pgvector is supported backend)
-- Barge-in handling guide: https://sparkco.ai/blog/optimizing-voice-agent-barge-in-detection-for-2025 — MEDIUM confidence (production patterns for VAD + state machine coordination)
-- BPR from implicit feedback: https://arxiv.org/pdf/1205.2618 — HIGH confidence (foundational paper; approach is overkill for dAIly scale, which informs the EWM multiplier recommendation instead)
-- Gmail AI prioritisation signals: https://www.getmailbird.com/gmail-ai-inbox-categorization-guide/ — LOW confidence (third-party summary of Gmail behaviour)
-- GDPR AI agent compliance architecture: https://tianpan.co/blog/2026-04-10-gdpr-ai-agents-compliance-architecture — MEDIUM confidence (recent post, detailed on multi-layer deletion requirements)
+- [OpenAI ChatGPT Pulse launch — TechCrunch](https://techcrunch.com/2025/09/25/openai-launches-chatgpt-pulse-to-proactively-write-you-morning-briefs/)
+- [What Is an AI Daily Briefing — Alfred_](https://get-alfred.ai/blog/what-is-ai-daily-briefing)
+- [AI Executive Assistants in 2026 — Sliq](https://www.trysliq.com/blog/ai-executive-assistant)
+- [Voice AI Pipeline: STT, LLM, TTS and the 300ms Budget — Chanl](https://www.channel.tel/blog/voice-ai-pipeline-stt-tts-latency-budget)
+- [Best AI Voice Assistants 2026 — Lindy](https://www.lindy.ai/blog/best-ai-voice-assistants)
+- [Why Action-Level Approvals Matter — Hoop.dev](https://hoop.dev/blog/why-action-level-approvals-matter-for-ai-agent-security-ai-trust-and-safety)
+- [Proactive AI in 2026: Moving Beyond the Prompt — AlphaSense](https://www.alpha-sense.com/resources/research-articles/proactive-ai/)
+- [Solving Voice AI Latency — Medium](https://medium.com/@reveorai/solving-voice-ai-latency-from-5-seconds-to-sub-1-second-responses-d0065e520799)
+- [Why Skipping the Wake Word is a Mistake — Sensory](https://sensory.com/skipping-wake-words-conversational-ai/)
+- [Agentic AI Trends 2026 — EMA](https://www.ema.co/additional-blogs/addition-blogs/agentic-ai-trends-predictions-2025)
+
+---
+*Feature research for: voice-first AI personal assistant (dAIly)*
+*Researched: 2026-04-05*

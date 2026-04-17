@@ -39,9 +39,16 @@ class UserPreferences(BaseModel):
         rejection_behaviour: Controls what happens after a user rejects an action draft.
             'ask_why' — prompt the user for a reason and allow edit (default per D-03).
             'discard' — silently discard the draft without prompting.
+
+    Phase 9 additions:
+        memory_enabled: Gates both extraction and injection of cross-session memory facts.
+            True (default) — facts extracted at session end; relevant facts injected
+              into briefing narrator and live session context.
+            False — no extraction, no injection. Hard gate (no partial opt-out). Per D-05.
     """
 
     tone: Literal["formal", "casual", "conversational"] = "conversational"
     briefing_length: Literal["concise", "standard", "detailed"] = "standard"
     category_order: list[str] = ["emails", "calendar", "slack"]
     rejection_behaviour: Literal["ask_why", "discard"] = "ask_why"
+    memory_enabled: bool = True

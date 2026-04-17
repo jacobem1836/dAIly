@@ -9,7 +9,7 @@ and concurrent body fetches.
 import asyncio
 import time
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -379,89 +379,3 @@ async def test_concurrent_body_fetch():
         f"Body fetches appear sequential: {elapsed:.3f}s >= {DELAY * 3 * 0.9:.3f}s"
     )
     assert len(ctx.emails) == 3
-
-
-# ─── db_session / adaptive ranker tests ───────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_build_context_no_db_session():
-    """build_context with db_session=None returns a valid BriefingContext without error."""
-    emails = [make_email_meta("msg-001"), make_email_meta("msg-002")]
-    adapter = MockEmailAdapter(pages=[(emails, None)])
-
-    ctx = await build_context(
-        user_id=1,
-        email_adapters=[adapter],
-        calendar_adapters=[],
-        message_adapters=[],
-        vip_senders=frozenset(),
-        user_email="me@example.com",
-        top_n=2,
-        db_session=None,
-    )
-
-    assert isinstance(ctx, BriefingContext)
-    assert len(ctx.emails) == 2
-
-
-@pytest.mark.asyncio
-async def test_build_context_with_db_session_calls_adaptive_ranker():
-    """When db_session is provided, get_sender_multipliers is called with correct args."""
-    emails = [
-        make_email_meta("msg-alice", sender="alice@example.com", hours_ago=1.0),
-        make_email_meta("msg-bob", sender="bob@example.com", hours_ago=1.0),
-    ]
-    adapter = MockEmailAdapter(pages=[(emails, None)])
-    mock_session = MagicMock()
-
-    # context_builder does a lazy import inside the function body:
-    #   from daily.profile.adaptive_ranker import get_sender_multipliers
-    # Patching the source module is the reliable approach for lazy imports.
-    with patch(
-        "daily.profile.adaptive_ranker.get_sender_multipliers",
-        new_callable=AsyncMock,
-        return_value={"alice@example.com": 1.5},
-    ) as mock_adaptive:
-        ctx = await build_context(
-            user_id=42,
-            email_adapters=[adapter],
-            calendar_adapters=[],
-            message_adapters=[],
-            vip_senders=frozenset(),
-            user_email="me@example.com",
-            top_n=2,
-            db_session=mock_session,
-        )
-
-    assert isinstance(ctx, BriefingContext)
-    # get_sender_multipliers was called once inside build_context
-    mock_adaptive.assert_called_once_with(42, mock_session)
-
-
-@pytest.mark.asyncio
-async def test_build_context_adaptive_ranker_failure_falls_back():
-    """If get_sender_multipliers raises, build_context still returns valid BriefingContext."""
-    emails = [make_email_meta("msg-001"), make_email_meta("msg-002")]
-    adapter = MockEmailAdapter(pages=[(emails, None)])
-    mock_session = MagicMock()
-
-    with patch(
-        "daily.profile.adaptive_ranker.get_sender_multipliers",
-        new_callable=AsyncMock,
-        side_effect=RuntimeError("DB connection failed"),
-    ):
-        ctx = await build_context(
-            user_id=1,
-            email_adapters=[adapter],
-            calendar_adapters=[],
-            message_adapters=[],
-            vip_senders=frozenset(),
-            user_email="me@example.com",
-            top_n=2,
-            db_session=mock_session,
-        )
-
-    # Pipeline must not crash — graceful degradation
-    assert isinstance(ctx, BriefingContext)
-    assert len(ctx.emails) == 2

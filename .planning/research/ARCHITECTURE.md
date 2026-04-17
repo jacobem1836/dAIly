@@ -1,399 +1,487 @@
-# Architecture: v1.1 Intelligence Layer Integration
+# Architecture Research
 
-**Domain:** Voice-first AI personal assistant — intelligence layer additions to existing backend
-**Researched:** 2026-04-15
-**Overall confidence:** HIGH (based on direct codebase inspection)
+**Domain:** Voice-first AI personal assistant (backend-first)
+**Researched:** 2026-04-05
+**Confidence:** HIGH (multiple authoritative sources, 2025-2026 literature, production systems)
 
----
+## Standard Architecture
 
-## Existing Architecture — Baseline
+### System Overview
 
 ```
-[Voice/CLI] → [Orchestrator (LangGraph)] → [Context Builder] → [LLM] → [Action Engine] → [Integrations]
+┌─────────────────────────────────────────────────────────────────┐
+│                        VOICE INTERFACE LAYER                     │
+│  ┌──────────────┐              ┌──────────────────────────────┐  │
+│  │  STT Engine  │              │       TTS Engine             │  │
+│  │  (Whisper /  │              │  (ElevenLabs / neural TTS)   │  │
+│  │  Deepgram)   │              │  Streaming + phrase cache    │  │
+│  └──────┬───────┘              └──────────────┬───────────────┘  │
+│         │  transcript text                    │ audio chunks     │
+└─────────┼───────────────────────────────────  ┼ ────────────────┘
+          │                                     ↑
+┌─────────┼─────────────────────────────────────┼────────────────┐
+│                        ORCHESTRATOR LAYER                        │
+│         ↓                                     │                  │
+│  ┌─────────────────────────────────────────┐  │                  │
+│  │           Session Manager               │  │                  │
+│  │  • Turn-taking / endpointing            │  │                  │
+│  │  • Interruption detection               │  │                  │
+│  │  • Conversation thread state            │  │                  │
+│  └──────────────────┬──────────────────────┘  │                  │
+│                     ↓                         │                  │
+│  ┌─────────────────────────────────────────┐  │                  │
+│  │           Agent Orchestrator            │──┘                  │
+│  │  • Determines intent (briefing / Q&A /  │                      │
+│  │    action request)                      │                      │
+│  │  • Selects context window contents      │                      │
+│  │  • Routes to LLM with tool schema       │                      │
+│  │  • Receives tool-call intent from LLM   │                      │
+│  │  • Dispatches to Action Executor        │                      │
+│  │  • Enforces approval gate               │                      │
+│  └──────┬──────────────┬───────────────────┘                      │
+│         │              │                                          │
+└─────────┼──────────────┼──────────────────────────────────────────┘
+          │              │
+          ↓              ↓
+┌──────────────┐  ┌─────────────────────────────────────────────┐
+│  CONTEXT     │  │              ACTION LAYER                   │
+│  BUILDER     │  │  ┌────────────────┐  ┌──────────────────┐  │
+│              │  │  │ Approval Gate  │  │ Action Executor  │  │
+│ • Fetches    │  │  │ (HITL queue)   │→ │ (email draft /   │  │
+│   email      │  │  │ • Stores       │  │  cal reschedule / │  │
+│ • Fetches    │  │  │   pending ops  │  │  Slack DM)       │  │
+│   calendar   │  │  │ • User confirm │  └──────┬───────────┘  │
+│ • Fetches    │  │  │ • Idempotency  │         │              │
+│   Slack      │  │  └────────────────┘         ↓              │
+│ • Ranks /    │  │                      ┌──────────────┐      │
+│   filters    │  │                      │ Action Log   │      │
+│ • Summarises │  │                      └──────────────┘      │
+│ • Builds     │  └─────────────────────────────────────────────┘
+│   briefing   │                │
+│   state      │                ↓
+└──────┬───────┘  ┌─────────────────────────────────────────────┐
+       │          │           INTEGRATION LAYER                  │
+       └─────────→│  ┌──────────┐ ┌─────────┐ ┌─────────────┐  │
+                  │  │  Gmail   │ │  GCal   │ │    Slack    │  │
+                  │  │  Reader  │ │  Reader │ │    Reader   │  │
+                  │  └──────────┘ └─────────┘ └─────────────┘  │
+                  │       ↑            ↑             ↑          │
+                  │  ┌────────────────────────────────────────┐ │
+                  │  │        OAuth Token Vault               │ │
+                  │  │  (encrypted at rest, AES-256)          │ │
+                  │  └────────────────────────────────────────┘ │
+                  └─────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                         MEMORY LAYER                             │
+│  ┌─────────────────────────┐  ┌────────────────────────────┐    │
+│  │   Short-Term Memory     │  │   Long-Term Memory         │    │
+│  │   (per-session)         │  │   (persistent)             │    │
+│  │  • Conversation thread  │  │  • User profile            │    │
+│  │  • Tool call results    │  │  • Preference signals      │    │
+│  │  • Current briefing ctx │  │  • Briefing personalisation│    │
+│  │  • In-progress actions  │  │  • Historical summaries    │    │
+│  │  [Redis / in-process]   │  │  [PostgreSQL + pgvector]   │    │
+│  └─────────────────────────┘  └────────────────────────────┘    │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │                Briefing Cache                            │    │
+│  │  • Pre-generated briefing narrative (nightly cron)       │    │
+│  │  • Structured JSON: ranked items, narrative text, TTL    │    │
+│  │  • Invalidated on significant new events                 │    │
+│  │  [Redis with TTL]                                        │    │
+│  └──────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                         LLM GATEWAY                              │
+│  • Large model (GPT-4-class) for briefing generation & planning │
+│  • Fast model (GPT-4o-mini / Haiku) for conversational Q&A      │
+│  • LLM never holds credentials, never calls APIs directly       │
+│  • Receives tool schemas → returns tool-call intents only       │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-**Pipeline (briefing):**
+### Component Responsibilities
+
+| Component | Responsibility | Typical Implementation |
+|-----------|----------------|------------------------|
+| STT Engine | Audio → transcript, VAD endpointing | Whisper (self-hosted) or Deepgram streaming API |
+| TTS Engine | Text → audio stream, phrase cache | ElevenLabs streaming, or Coqui TTS |
+| Session Manager | Turn-taking, interruption detection, conversation thread | Custom state machine, VAD model |
+| Agent Orchestrator | Intent routing, context assembly, tool dispatch, approval enforcement | LangGraph / custom Python async |
+| Context Builder | Pull + rank + summarise email/cal/slack into briefing state | Async ingestion pipeline (cron + incremental) |
+| LLM Gateway | Reasoning, planning, narrative generation | OpenAI / Anthropic API, model-selected by task |
+| Approval Gate | Durable pending-action store, user confirm/reject, idempotency | PostgreSQL queue or Redis + notification hook |
+| Action Executor | Execute approved actions against external APIs | Service classes per integration |
+| Action Log | Immutable record of every action (type, timestamp, approval, result) | PostgreSQL append-only table |
+| OAuth Token Vault | Encrypted storage and rotation of user OAuth tokens | Encrypted PostgreSQL column (AES-256) |
+| Integration Adapters | Per-service read/write operations | Gmail API, GCal API, Slack API clients |
+| Short-Term Memory | In-session conversation state, tool call results | Redis hash or in-process dict |
+| Long-Term Memory | User profile, preferences, historical summaries | PostgreSQL + pgvector for semantic recall |
+| Briefing Cache | Pre-generated briefing for instant voice delivery | Redis with TTL (~8h), rebuilt nightly |
+
+## Recommended Project Structure
+
 ```
-APScheduler cron
-  → _build_pipeline_kwargs (resolves adapters from DB)
-    → build_context (fetch + rank_emails heuristic)
-      → redact_emails / redact_messages
-        → generate_narrative (GPT-4.1)
-          → cache_briefing (Redis, 24h TTL)
-```
-
-**Orchestrator (session):**
-```
-LangGraph StateGraph (SessionState)
-  START → route_intent → [respond_node | summarise_thread_node | draft_node]
-  draft_node → approval_node (interrupt()) → route_after_approval → [execute_node | draft_node]
-```
-
-**Storage layout:**
-```
-PostgreSQL tables: users, integration_tokens, briefing_config, vip_senders, user_profile, signal_log
-  user_profile.preferences — JSONB blob (UserPreferences Pydantic model)
-  signal_log — append-only interaction signals (skip, correction, re_request, follow_up, expand)
-pgvector extension: present in stack but no vector tables exist yet
-Redis: briefing cache (key: briefing:{user_id}:{YYYY-MM-DD}, TTL 24h)
-```
-
----
-
-## Feature Integration Map
-
-### INTEL-01: Adaptive Prioritisation
-
-**What it does:** Replace `rank_emails()` heuristic with a learned scoring layer that uses
-accumulated `signal_log` data to personalise email priority over time.
-
-**New component:** `src/daily/briefing/adaptive_ranker.py`
-- Queries `signal_log` for the user (recent re_request, expand, skip signals against target_id)
-- Derives per-sender and per-keyword weight adjustments from signal history
-- Wraps (does not replace) the existing `rank_emails()` heuristic: heuristic score + learned delta
-- Returns same `list[RankedEmail]` interface so `context_builder.py` needs zero changes at the
-  return boundary
-
-**Modified component:** `src/daily/briefing/context_builder.py`
-- Single change: replace `from daily.briefing.ranker import rank_emails` callsite with
-  `adaptive_ranker.rank_emails_adaptive(emails, vip_senders, user_email, user_id, session, top_n)`
-- `build_context()` must acquire a DB session to pass to the adaptive ranker
-- `user_id` is already a parameter of `build_context()`, no signature change needed there
-
-**DB schema:** No new tables needed. Reads from existing `signal_log`. Consider adding a
-`learned_weights` table (JSONB per user) as a materialised cache of derived weights if cold-path
-signal aggregation is too slow. Not required for MVP.
-
-**Integration point in pipeline:** `build_context` call site in `pipeline.py` is unchanged.
-The adaptive ranker is a drop-in at the `rank_emails` callsite inside `context_builder.py`.
-
----
-
-### INTEL-02: Cross-Session Memory
-
-**What it does:** Extract durable facts about the user from conversations, store as pgvector
-embeddings, and inject the most relevant memories at briefing generation time.
-
-**New component:** `src/daily/memory/extractor.py`
-- Called at end of each voice session (fire-and-forget via `asyncio.create_task`)
-- Reads last N conversation messages from `SessionState.messages`
-- Calls GPT-4.1 mini with extraction prompt → list of fact strings
-- Embeds each fact via OpenAI `text-embedding-3-small` → `list[float]` (1536 dims)
-- Upserts into new `user_memories` table (see schema below)
-
-**New component:** `src/daily/memory/retriever.py`
-- Called during `_build_pipeline_kwargs` in `scheduler.py` before narrator
-- Takes briefing context summary as query, embeds it, runs pgvector cosine search
-- Returns top-K memory facts as a formatted string
-
-**New DB table:** `user_memories`
-```sql
-id          SERIAL PRIMARY KEY
-user_id     INTEGER REFERENCES users(id)
-content     TEXT
-embedding   VECTOR(1536)
-source      VARCHAR(50)   -- 'conversation' | 'briefing_feedback'
-created_at  TIMESTAMPTZ DEFAULT now()
-updated_at  TIMESTAMPTZ DEFAULT now()
-is_active   BOOLEAN DEFAULT true  -- soft-delete flag for MEM-02/MEM-03
-```
-Index: `CREATE INDEX ON user_memories USING ivfflat (embedding vector_cosine_ops)`
-
-**Modified component:** `src/daily/briefing/narrator.py`
-- `generate_narrative()` gains optional `memory_context: str | None = None` parameter
-- When provided, appended to system prompt before NARRATOR_SYSTEM_PROMPT as "USER MEMORY:\n{memory}"
-- Backward compatible: default `None` means existing behaviour unchanged
-
-**Modified component:** `src/daily/briefing/scheduler.py`
-- `_build_pipeline_kwargs()` calls `memory_retriever.retrieve(user_id, context_summary)`
-- Passes `memory_context` into `run_briefing_pipeline` which forwards to `generate_narrative`
-- `pipeline.py` function signature gains optional `memory_context: str | None = None`
-
-**Integration point in pipeline:**
-```
-build_context() → [NEW: retrieve_memories(user_id, context)] → generate_narrative(context, memory_context=...)
+src/
+├── orchestrator/           # Agent orchestrator + session manager
+│   ├── agent.py            # Main orchestration loop
+│   ├── session.py          # Conversation state, turn-taking
+│   ├── intent_router.py    # Classify: briefing / Q&A / action
+│   └── tool_registry.py    # Tool schema definitions for LLM
+├── context/                # Context builder + briefing pipeline
+│   ├── builder.py          # Aggregate sources → briefing state
+│   ├── ranker.py           # Priority scoring for items
+│   ├── summariser.py       # LLM-powered per-source summaries
+│   └── cache.py            # Briefing cache read/write
+├── integrations/           # External data sources
+│   ├── base.py             # Adapter interface
+│   ├── gmail.py            # Gmail ingestion
+│   ├── gcal.py             # Google Calendar ingestion
+│   ├── slack.py            # Slack ingestion
+│   └── oauth/              # Token vault, refresh orchestration
+│       ├── vault.py        # Encrypted token storage
+│       └── flows.py        # OAuth 2.0 consent flows
+├── actions/                # Action execution layer
+│   ├── executor.py         # Dispatches approved actions
+│   ├── approval.py         # Approval gate queue + HITL interface
+│   ├── log.py              # Append-only action log
+│   └── handlers/           # Per-action implementations
+│       ├── email.py
+│       ├── calendar.py
+│       └── slack.py
+├── memory/                 # Memory systems
+│   ├── short_term.py       # Session state (Redis)
+│   ├── long_term.py        # User profile + history (PostgreSQL/pgvector)
+│   └── briefing_cache.py   # Pre-generated briefing store
+├── llm/                    # LLM gateway
+│   ├── gateway.py          # Model selection + request routing
+│   ├── prompts/            # Prompt templates per task type
+│   └── tools.py            # Tool schema builder
+├── voice/                  # STT + TTS pipeline
+│   ├── stt.py              # Speech-to-text adapter
+│   ├── tts.py              # Text-to-speech streaming adapter
+│   └── vad.py              # Voice activity detection
+└── api/                    # Internal API surface
+    ├── voice_endpoint.py   # WebSocket for voice I/O
+    └── approval_endpoint.py # Approval queue interface
 ```
 
----
+### Structure Rationale
 
-### MEM-01 / MEM-02 / MEM-03: Memory Transparency API
+- **orchestrator/**: All coordination logic in one place; prevents business logic leaking into integrations or LLM layer
+- **context/**: Decoupled from orchestrator so briefing pipeline can run as a background cron job independently
+- **integrations/**: Adapter pattern — each source behind a common interface so adding M3 sources (travel, finance) is isolated
+- **actions/**: Separating approval gate from executor makes HITL enforceable at the boundary, not by convention
+- **memory/**: Short-term and long-term separated by implementation type; briefing cache is a distinct concern
+- **llm/**: All LLM calls go through one gateway — enables model swapping, cost tracking, and latency monitoring
 
-**What it does:** REST endpoints for the user to inspect, edit, delete, and reset memory entries.
+## Architectural Patterns
 
-**New component:** `src/daily/memory/router.py` (FastAPI router)
+### Pattern 1: Plan-then-Execute with Trust Boundary
+
+**What:** The LLM produces a structured plan (tool names + parameters). A non-LLM orchestrator validates and executes each step. The LLM never invokes an API call directly.
+
+**When to use:** Any time agent actions have real-world side effects (email, calendar, messages). Mandatory for this project per PROJECT.md constraint.
+
+**Trade-offs:** Adds a hop between LLM response and execution. Gain: LLM prompt injections cannot hijack API calls; security is structural not prompt-based.
+
+**Flow:**
 ```
-GET    /memory           → list all active user_memories for user
-PATCH  /memory/{id}      → update content field of a specific memory
-DELETE /memory/{id}      → soft-delete (set is_active=False)
-DELETE /memory           → reset all (bulk soft-delete per user)
-POST   /memory/disable   → set memory_enabled=False on user preferences
-```
-
-**New component:** `src/daily/memory/models.py`
-- SQLAlchemy ORM model for `user_memories` table (schema defined above under INTEL-02)
-- Pydantic schemas for request/response: `MemoryEntry`, `MemoryUpdateRequest`
-
-**Modified component:** `src/daily/main.py`
-- Register the new router via `app.include_router(memory_router, prefix="/memory")`
-
-**Modified component:** `src/daily/profile/models.py`
-- `UserPreferences` gains `memory_enabled: bool = True` field
-- Checked in `extractor.py` before any extraction runs — if `False`, skip entirely
-
-**Dependency constraint:** The `user_memories` table (INTEL-02 schema) must exist before the
-transparency API can query it. The Alembic migration must run before either INTEL-02 or
-MEM-01/02/03 code is active.
-
----
-
-### ACT-07: Trusted Actions
-
-**What it does:** User-configurable autonomy level. Three levels:
-- `suggest` — LLM drafts but presents as suggestion only; no interrupt, no execution
-- `approve` — current behaviour: always interrupts for explicit user approval
-- `auto` — for pre-approved action types, bypasses interrupt and executes directly
-
-**Modified component:** `src/daily/profile/models.py`
-- `UserPreferences` gains:
-  - `autonomy_level: Literal["suggest", "approve", "auto"] = "approve"`
-  - `trusted_action_types: list[str] = []` (scopes `auto` to specific action types)
-
-**Modified component:** `src/daily/orchestrator/nodes.py`
-- `draft_node()`: read `state.preferences.get("autonomy_level", "approve")`
-  - If `"suggest"`: return draft content as narrative text only; do not set `pending_action`;
-    graph reaches `END` via respond path — no interrupt fires
-  - If `"auto"` AND `action_type.value` in `trusted_action_types`: call `execute_node`
-    logic inline (build executor, validate, execute, log) without triggering interrupt
-  - If `"approve"` (default): current behaviour unchanged, `pending_action` set, approval fires
-
-**Modified component:** `src/daily/orchestrator/graph.py`
-- No graph topology changes required. The suggest/auto logic is entirely inside `draft_node`.
-  Keeping it inside the node avoids adding conditional edges and keeps the topology debuggable.
-
-**Security constraint:** The `auto` path must only fire when:
-1. `autonomy_level == "auto"` is stored in user preferences (explicit opt-in required)
-2. The specific `action_type` appears in `trusted_action_types`
-Both conditions must be true. Never fall through to auto-execute by default.
-
----
-
-### CONV-01 / CONV-02 / CONV-03: Conversational Flow
-
-**What it does:**
-- CONV-01: Mid-session interruption without breaking conversation state
-- CONV-02: Fluid switching between briefing, discussion, and action modes
-- CONV-03: Adaptive tone adjustment from context signals
-
-**Modified component:** `src/daily/orchestrator/state.py`
-- `SessionState` gains `mode: Literal["briefing", "chat", "action"] = "chat"`
-- Nodes return `{"mode": "..."}` in state update dicts to signal mode transitions
-
-**Modified component:** `src/daily/orchestrator/graph.py`
-- Extend `route_intent()` to check `state.mode` in addition to message content
-- Add `briefing_keywords` check ("play briefing", "start briefing", "back to briefing") that
-  returns `"deliver_briefing"` route
-- Add `"deliver_briefing"` node to graph
-
-**Modified component:** `src/daily/orchestrator/nodes.py`
-- Add `deliver_briefing_node`: reads `state.briefing_narrative`, streams it to TTS,
-  sets `mode = "briefing"` in state update
-- `respond_node()`: detect topic shift and transition `mode` to `"chat"` if previously `"briefing"`
-
-**Modified component:** `src/daily/briefing/narrator.py`
-- `generate_narrative()` gains `tone_signals: dict | None = None` parameter
-- Tone signals derived from recent `signal_log`: skip count → speed up / shorten;
-  re_request count → slow down / expand; correction → adjust formality
-- Injected as additional preamble line in system prompt
-
-**Modified component:** `src/daily/voice/loop.py`
-- CONV-01 (barge-in) is already implemented via `barge_in.py` + `stop_event`
-- Verify `stop_event` is checked during briefing TTS streaming (not just follow-up responses)
-- Ensure barge-in mid-briefing transitions cleanly to STT listen mode without orphaned tasks
-
----
-
-## Summary: New vs Modified Components
-
-### New Files
-
-| File | Purpose | Required By |
-|------|---------|-------------|
-| `src/daily/memory/__init__.py` | Package init | INTEL-02, MEM-01/02/03 |
-| `src/daily/memory/models.py` | ORM + Pydantic for `user_memories` | INTEL-02, MEM-01/02/03 |
-| `src/daily/memory/extractor.py` | Post-session memory extraction | INTEL-02 |
-| `src/daily/memory/retriever.py` | Semantic memory retrieval at briefing time | INTEL-02 |
-| `src/daily/memory/router.py` | FastAPI REST endpoints for memory transparency | MEM-01/02/03 |
-| `src/daily/briefing/adaptive_ranker.py` | Signal-informed email scoring | INTEL-01 |
-
-### Modified Files
-
-| File | Change | Required By |
-|------|--------|-------------|
-| `src/daily/briefing/context_builder.py` | Swap `rank_emails` for `rank_emails_adaptive` | INTEL-01 |
-| `src/daily/briefing/narrator.py` | Add `memory_context` + `tone_signals` optional params | INTEL-02, CONV-03 |
-| `src/daily/briefing/pipeline.py` | Thread `memory_context` through to narrator | INTEL-02 |
-| `src/daily/briefing/scheduler.py` | Call memory retriever; fix `user_email=""` bug | INTEL-02, FIX-01 |
-| `src/daily/profile/models.py` | Add `autonomy_level`, `trusted_action_types`, `memory_enabled` | ACT-07, MEM-03 |
-| `src/daily/orchestrator/state.py` | Add `mode` field | CONV-02 |
-| `src/daily/orchestrator/graph.py` | Extend `route_intent`, add `deliver_briefing` node | CONV-01/02 |
-| `src/daily/orchestrator/nodes.py` | Autonomy check in `draft_node`; add `deliver_briefing_node` | ACT-07, CONV-01/02 |
-| `src/daily/main.py` | Register memory router | MEM-01/02/03 |
-| `src/daily/integrations/slack/adapter.py` | Cursor-based pagination | FIX-02 |
-
-### New DB Migrations
-
-| Migration | Content | Dependency |
-|-----------|---------|------------|
-| `add_user_memories` | Create `user_memories` table with `VECTOR(1536)` column + ivfflat index | Must run before any memory code executes |
-
----
-
-## Recommended Build Order
-
-### Phase 1 — Tech Debt Fixes (unblock later phases)
-
-Build FIX-01, FIX-02, FIX-03 first. These are self-contained and fix broken paths that would
-corrupt signal data used by INTEL-01 and INTEL-02.
-
-- **FIX-01** (`scheduler.py`): Fix `user_email=""` — ensures WEIGHT_DIRECT path fires correctly
-  for scheduled runs. Signals captured after this fix will be accurate for INTEL-01.
-- **FIX-02** (`slack/adapter.py`): Cursor-based pagination — memory extraction and signal capture
-  see complete Slack history.
-- **FIX-03** (`nodes.py`): Real message_id extraction in `summarise_thread_node` — expand signals
-  reference correct target_ids.
-
-Rationale: INTEL-01 scoring depends on signal accuracy. Running it on corrupt signals produces
-garbage weights. Fix signals first, then build the scorer.
-
-### Phase 2 — Memory Schema + INTEL-01 (can run in parallel)
-
-These two share no code dependency and can proceed concurrently after Phase 1.
-
-- **Memory schema migration** (`add_user_memories`): Alembic migration only. No code logic.
-  Must complete before Phases 3 and 4 touch the `user_memories` table.
-
-- **INTEL-01** (`adaptive_ranker.py` + one-line change in `context_builder.py`):
-  Pure logic layer reading existing `signal_log`. No new schema required.
-  Start here — it's the simplest intelligence feature and validates the signal pipeline end-to-end.
-
-### Phase 3 — Cross-Session Memory (INTEL-02)
-
-Depends on the `user_memories` table from Phase 2.
-
-Build `extractor.py` → `retriever.py` → wire into `scheduler.py` and voice loop.
-This is the highest-complexity phase: embedding pipeline, pgvector queries, prompt injection.
-
-- `memory/extractor.py`: post-session extraction, embedding call, DB write
-- `memory/retriever.py`: cosine similarity query, top-K fetch, format as string
-- Modify `scheduler.py`: call retriever, pass `memory_context` to pipeline
-- Modify `pipeline.py`: accept and forward `memory_context` param
-- Modify `narrator.py`: inject `memory_context` into system prompt (backward compatible default=None)
-- Modify `voice/loop.py`: trigger extraction via `asyncio.create_task` at session end
-
-### Phase 4 — Memory Transparency API (MEM-01/02/03)
-
-Depends on Phase 3 having populated `user_memories` with real data to inspect and edit.
-Straightforward FastAPI CRUD over existing table.
-
-- `memory/models.py` (Pydantic schemas — ORM model defined with migration in Phase 2)
-- `memory/router.py` (CRUD endpoints)
-- Add `memory_enabled` to `UserPreferences` and check it in `extractor.py`
-- Register router in `main.py`
-
-### Phase 5 — Trusted Actions (ACT-07)
-
-No dependency on the memory phases. Can be sequenced after Phase 1 if separate capacity exists.
-
-- Add `autonomy_level` + `trusted_action_types` to `UserPreferences`
-- Modify `draft_node` to check preference before triggering interrupt
-- Add CLI config commands for new preference fields
-- Security test: verify `auto` path cannot fire without explicit user opt-in to both
-  `autonomy_level="auto"` AND populating `trusted_action_types`
-
-### Phase 6 — Conversational Flow (CONV-01/02/03)
-
-Depends on ACT-07 (the `mode` concept interacts with action approval routing). Tone signals
-(CONV-03) are richer with memory data from Phase 3 but can be implemented with `signal_log`
-data alone — Phase 3 is a soft dependency.
-
-- Add `mode` to `SessionState`
-- Extend `route_intent` and add `deliver_briefing_node` in `graph.py`
-- Verify barge-in during briefing TTS streaming in `voice/loop.py`
-- Add `tone_signals` injection to `narrator.py`
-
----
-
-## Data Flow Changes: v1.0 → v1.1
-
-**Current (v1.0):**
-```
-signal_log ← append-only writes; never read by pipeline
-user_profile.preferences → narrator prompt preamble only
-rank_emails() → pure heuristic; no DB access
+LLM returns:
+  { "tool": "draft_email", "to": "alice@...", "subject": "...", "body": "..." }
+                  ↓
+Orchestrator validates: tool exists, parameters schema-valid, user scope allows
+                  ↓
+Approval Gate: store pending action → notify user → await confirm/reject
+                  ↓
+Action Executor: execute with idempotency key, log result
 ```
 
-**After v1.1:**
+### Pattern 2: Precomputed Briefing Cache
+
+**What:** A background job runs nightly (e.g. 5am) that pulls all integrations, generates the full briefing narrative, and stores it in Redis with a TTL. At voice delivery time, the cache is served instantly — no LLM call at delivery.
+
+**When to use:** Whenever latency at briefing start must feel instant (voice use case). Confirmed practice used by production voice systems (Sierra, Calculus VC 2026 stack article).
+
+**Trade-offs:** Briefing is slightly stale (minutes to hours). Mitigation: run an incremental update pass if cache was built >2h ago and significant new items arrived.
+
+**Flow:**
 ```
-signal_log ← writes (unchanged)
-           → adaptive_ranker reads recent signals per user (INTEL-01)
-           → narrator tone_signals aggregation (CONV-03)
-           → memory extractor trigger (INTEL-02)
+Nightly cron (5am):
+  Context Builder → pulls email/cal/slack → ranks → summarises → LLM narrative
+                  ↓
+  Redis: SET briefing:{user_id} {json} EX 28800  (8h TTL)
 
-user_memories ← extractor writes after each session end
-              → retriever reads at briefing time (cosine search)
-              → narrator memory_context injection
-              → REST API read/write (transparency endpoints)
-
-user_profile.preferences → autonomy_level → draft_node bypass logic (ACT-07)
-                         → memory_enabled → extractor gate (MEM-03)
-                         → tone/length/order → narrator preamble (unchanged)
+Voice delivery (7am):
+  Session Manager → GET briefing:{user_id}  (~1ms)
+                  ↓
+  TTS: stream pre-generated narrative immediately
 ```
 
----
+### Pattern 3: Streaming STT/TTS Pipeline
 
-## Integration Points with Existing Pipeline
+**What:** STT streams transcript chunks as speech is detected. LLM begins generating before full transcript is complete (if confidence is high). TTS begins streaming audio before LLM response is finished. Each stage overlaps rather than waiting for the prior to finish.
 
-| Existing hook | v1.1 integration | Notes |
-|---------------|-----------------|-------|
-| `context_builder.build_context()` → `rank_emails()` | adaptive_ranker replaces callsite | Same `list[RankedEmail]` return type; zero change to caller |
-| `narrator.generate_narrative()` in `pipeline.py` | Add `memory_context=`, `tone_signals=` kwargs | Both default to `None`; fully backward compatible |
-| `_build_pipeline_kwargs()` in `scheduler.py` | Add async memory retrieval call | Adds ~100-200ms before LLM call; acceptable at precompute time |
-| `SessionState` fields | Add `mode` field | LangGraph state merge is additive; existing checkpoints unaffected |
-| `draft_node()` | Autonomy level short-circuit before interrupt | Approval gate path unchanged for `"approve"` (default) |
-| `voice/loop.py` session cleanup | Trigger `extractor.py` via `asyncio.create_task` | Same fire-and-forget pattern as `append_signal`; never blocks voice path |
-| `main.py` FastAPI app | Register `memory_router` | No conflict with existing routes |
+**When to use:** All voice interaction paths for natural conversation feel. Target: sub-800ms perceived latency.
 
----
+**Trade-offs:** Requires careful interrupt handling (user starts speaking mid-response). Need VAD to detect interruption and cancel in-flight TTS.
 
-## Architectural Constraints to Preserve
+**Latency budget (target):**
+```
+STT streaming:          ~200ms to first useful transcript chunk
+LLM time-to-first-token: ~200-300ms
+TTS first audio chunk:  ~100-200ms
+─────────────────────────────────────
+Total perceived:         ~500-700ms  (overlapped stages)
+```
 
-1. **SEC-05 (LLM = intent only):** Memory retriever returns a pre-formatted string injected into
-   the prompt. It does not give the LLM direct DB access. The backend fetches memory before the LLM call.
+### Pattern 4: Dual-Model LLM Strategy
 
-2. **SEC-04 (no raw bodies in DB):** Memory extraction operates on `SessionState.messages`, which
-   only contains redacted/summarised content. The raw body path in `summarise_thread_node` already
-   clears `raw_body` before any state write. No new raw body storage introduced.
+**What:** Route LLM requests to different models by task complexity. Large model (GPT-4-class) for briefing generation and multi-step planning. Fast model (GPT-4o-mini or Claude Haiku) for conversational follow-up questions where speed matters more than depth.
 
-3. **T-04-02 (approval gate not bypassable):** The `auto` autonomy path only fires when
-   `autonomy_level == "auto"` AND the specific `action_type` is in `trusted_action_types`.
-   Both must be explicitly configured. Default level is `"approve"`. Graph topology's
-   `draft → approval` edge remains the default path.
+**When to use:** When latency and cost matter. Briefing generation is offline/cached so large model cost is acceptable. Voice Q&A needs fast model.
 
-4. **D-01 (briefing always delivers):** Memory retrieval failure must be caught and treated as
-   `memory_context=None`. Pipeline continues without memory context rather than aborting.
-   Same resilience contract as the existing per-source try/except isolation in `build_context`.
+**Trade-offs:** Two model integrations to maintain. Mitigation: single LLM gateway that selects model based on task type enum.
 
-5. **D-08 (fire-and-forget for non-critical writes):** Memory extraction follows the
-   `asyncio.create_task()` pattern from `append_signal`. Never blocks the voice response path.
+### Pattern 5: Dual-Layer Memory
 
----
+**What:** Short-term memory (Redis, in-session) stores conversation thread and tool call results. Long-term memory (PostgreSQL + pgvector) stores user profile, preferences, and historical summaries. Memory extraction runs end-of-session to consolidate relevant signals into long-term.
+
+**When to use:** All stateful agent interactions. Separation prevents short-term session state from polluting long-term profile and keeps latency profile distinct per use.
+
+**Flow:**
+```
+Session start:
+  Load user profile from long-term → inject into system prompt
+
+During session:
+  All turns + tool results → short-term (Redis, keyed by session_id)
+
+Session end:
+  Extraction pipeline: identify preference signals, corrections, skips
+  → write summaries to long-term PostgreSQL
+```
+
+## Data Flow
+
+### Morning Briefing Flow (primary)
+
+```
+[Nightly Cron: 5am]
+  Integration Layer (Gmail + GCal + Slack)
+      ↓ raw items
+  Context Builder
+      ↓ ranked + summarised briefing state
+  LLM Gateway (large model)
+      ↓ briefing narrative (JSON + text)
+  Briefing Cache (Redis, 8h TTL)
+
+[User wakes: 7am voice request]
+  STT Engine
+      ↓ "play my briefing" transcript
+  Session Manager
+      ↓ intent: BRIEFING
+  Agent Orchestrator
+      ↓ cache hit? YES
+  Briefing Cache
+      ↓ pre-generated narrative (~1ms)
+  TTS Engine
+      ↓ streaming audio
+  [User hears briefing instantly]
+```
+
+### Conversational Follow-Up Flow
+
+```
+[User interrupts or asks follow-up]
+  STT Engine
+      ↓ transcript
+  Session Manager (interruption detected → cancel active TTS)
+      ↓ conversation turn
+  Agent Orchestrator
+      ↓ loads short-term memory (session context)
+  LLM Gateway (fast model + tool schema)
+      ↓ response OR tool-call intent
+      ↓ if tool-call →
+  Approval Gate (if external-facing)
+      ↓ user confirms
+  Action Executor
+      ↓ executes, logs
+  Orchestrator assembles response
+      ↓
+  TTS Engine → streaming audio
+```
+
+### Integration Ingestion Flow
+
+```
+[Cron or incremental trigger]
+  OAuth Token Vault
+      ↓ decrypts + provides token
+  Integration Adapter (Gmail / GCal / Slack)
+      ↓ raw items (emails, events, messages)
+  Context Builder → filter → rank → per-item summaries
+      ↓
+  Long-Term Memory (summaries stored; raw bodies NOT stored)
+      ↓
+  Briefing Cache (invalidated if significant new items)
+```
+
+### Action Execution Flow
+
+```
+[LLM returns tool-call intent]
+  Orchestrator validates: tool in registry, params schema-valid
+      ↓
+  Approval Gate
+      ↓ stores pending action (PostgreSQL)
+      ↓ notifies user (voice prompt: "Want me to send that reply?")
+  [User: "yes"]
+      ↓
+  Action Executor
+      ↓ calls Integration Adapter (e.g. Gmail send)
+      ↓ idempotency key checked
+  Action Log (immutable append)
+      ↓
+  Orchestrator → confirmation response to user
+```
+
+## Scaling Considerations
+
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| 1 user (MVP) | Single Python process, SQLite or single Postgres, Redis local. Briefing cron is a simple script. |
+| 10-100 users | Postgres on managed host, Redis hosted (Upstash), async task queue (Celery/ARQ) for cron jobs. Separate briefing worker process. |
+| 1k+ users | Per-user briefing workers with scheduled offsets, connection pooling, rate limit management per OAuth app, consider queue-based ingestion (Kafka/SQS). |
+
+### Scaling Priorities
+
+1. **First bottleneck:** OAuth rate limits — Gmail API has per-user per-day quotas. At 100 users all running briefings at 5am, fan-out hits quota. Fix: stagger cron offsets per user (5:00, 5:03, 5:06...).
+2. **Second bottleneck:** LLM cost + latency for briefing generation. Fix: batch summarisation sub-calls, cache summaries separately so only the final narrative needs regeneration on incremental updates.
+
+## Anti-Patterns
+
+### Anti-Pattern 1: LLM with Direct API Access
+
+**What people do:** Give the LLM an OAuth token and let it call Gmail/GCal APIs directly via tool calls.
+
+**Why it's wrong:** Prompt injection in an email body can hijack the agent to exfiltrate data, send rogue emails, or delete calendar events. The LLM becomes the trust boundary — which fails in production.
+
+**Do this instead:** All tool calls return to the orchestrator as structured intents. The backend validates and executes with a separate approval gate. LLM never sees credentials.
+
+### Anti-Pattern 2: Storing Raw Email Bodies
+
+**What people do:** Ingest full email bodies into the database for LLM context.
+
+**Why it's wrong:** GDPR/privacy risk. Long-term storage of sensitive content. LLM context window bloat. Per PROJECT.md constraint: raw bodies must not be stored long-term.
+
+**Do this instead:** Extract summaries and metadata at ingestion time. Pass only summaries to LLM. Discard raw bodies after summarisation pass.
+
+### Anti-Pattern 3: Synchronous Briefing Generation at Delivery Time
+
+**What people do:** When user asks for briefing, trigger the full pipeline: fetch → summarise → generate → speak.
+
+**Why it's wrong:** End-to-end latency is 30-60 seconds. Voice interaction feels broken. User is left waiting in silence.
+
+**Do this instead:** Precompute and cache. Briefing pipeline runs nightly. At delivery, serve from cache in milliseconds.
+
+### Anti-Pattern 4: Single-Model for All LLM Tasks
+
+**What people do:** Route all LLM requests to GPT-4 for quality uniformity.
+
+**Why it's wrong:** Simple conversational Q&A during a briefing does not need a frontier model. Latency is 2-5x higher and cost is 10-20x higher than necessary for fast-response tasks.
+
+**Do this instead:** Dual-model strategy. Large model for offline briefing generation (cost/latency acceptable). Fast model for voice turn-around where sub-300ms TTFT is required.
+
+### Anti-Pattern 5: Blocking Approval on Voice-Only Channel
+
+**What people do:** Approval gate delivered only via voice ("Say yes to confirm").
+
+**Why it's wrong:** Voice-only approval fails when the user is in a meeting, driving, or hands-free. Approval for irreversible actions needs a durable async channel.
+
+**Do this instead:** Approval gate uses a push notification or accessible UI (later milestones). For M1 backend-only, approve via CLI/API hook; voice confirmation is an enhancement not a hard dependency.
+
+## Integration Points
+
+### External Services
+
+| Service | Integration Pattern | Notes |
+|---------|---------------------|-------|
+| Gmail | OAuth 2.0 + Gmail API (users.messages.list, users.messages.get, users.messages.send) | 25K quota units/user/day; batch read requests |
+| Google Calendar | OAuth 2.0 + GCal API (events.list) | Shared OAuth consent with Gmail if using same Google app |
+| Slack | OAuth 2.0 + Slack Web API (conversations.history, chat.postMessage) | Bot token scoped to specific channels |
+| OpenAI / Anthropic | API key (server-side only) | Never expose to frontend or LLM context |
+| STT provider | Streaming WebSocket (Deepgram) or local Whisper | Deepgram for low-latency streaming; Whisper for privacy/offline |
+| TTS provider | Streaming HTTP (ElevenLabs) or local neural TTS | ElevenLabs for quality; local Coqui for cost/privacy |
+
+### Internal Boundaries
+
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| Orchestrator ↔ LLM Gateway | Async function call, returns tool-call intents | Gateway handles model selection, retries |
+| Orchestrator ↔ Context Builder | Read from cache / trigger rebuild | Cache is the contract; builder is fire-and-forget |
+| Orchestrator ↔ Approval Gate | Write pending action, poll or await callback | Durable queue — survives process restart |
+| Orchestrator ↔ Short-Term Memory | Direct read/write (Redis in-session) | Keyed by session_id, cleared on session end |
+| Context Builder ↔ Integration Adapters | Async pull, returns structured item list | Adapter interface: `fetch(since: datetime) → List[Item]` |
+| Action Executor ↔ Integration Adapters | Write operations (send, create, update) | Same adapter, write path — uses same OAuth token |
+| Context Builder ↔ Long-Term Memory | Write summaries + metadata | Raw bodies never written |
+
+## Suggested Build Order
+
+Dependencies determine build order. Each layer depends on the layer below it.
+
+```
+1. OAuth Token Vault + Integration Adapters (read-only)
+   → Nothing works without authenticated data access
+
+2. Context Builder (fetch → rank → summarise)
+   → Depends on: adapters
+   → Produces: briefing state / cache
+
+3. Briefing Cache + Long-Term Memory (PostgreSQL + Redis)
+   → Depends on: context builder output
+   → Produces: instant briefing retrieval
+
+4. LLM Gateway (model routing, tool schema, prompt templates)
+   → Depends on: context builder output (for context injection)
+   → Produces: reasoning, narrative, tool-call intents
+
+5. Agent Orchestrator (intent routing, tool dispatch)
+   → Depends on: LLM gateway, memory layers, briefing cache
+   → Produces: coordinated session flow
+
+6. Approval Gate + Action Executor + Action Log
+   → Depends on: orchestrator (receives tool-call intents)
+   → Produces: safe external-facing actions
+
+7. Voice Layer (STT + TTS + Session Manager)
+   → Depends on: orchestrator (consumes/produces text)
+   → Produces: voice I/O loop
+```
+
+**Implication for M1 phase structure:**
+- **Phase 1 (Foundation):** Token vault, integration adapters, database schema
+- **Phase 2 (Data pipeline):** Context builder, briefing cache, ranking
+- **Phase 3 (Reasoning):** LLM gateway, orchestrator, basic conversational Q&A
+- **Phase 4 (Actions):** Approval gate, action executor, action log
+- **Phase 5 (Voice):** STT, TTS, session manager, voice interaction loop
+- **Phase 6 (Personalisation):** Long-term memory, preference signals, user profile
 
 ## Sources
 
-- Direct inspection of codebase at `/Users/jacobmarriott/Documents/Personal/projects/dAIly/src/daily/`
-- PROJECT.md requirements: v1.1 targets INTEL-01/02, MEM-01/02/03, ACT-07, CONV-01/02/03, FIX-01/02/03
-- LangGraph interrupt() pattern: existing `approval_node` as implementation reference
-- pgvector: already in stack per `CLAUDE.md`; `user_profile` JSONB pattern as schema evolution precedent
-- mem0 library considered but not recommended: existing pgvector + SQLAlchemy 2.0 stack handles
-  M1 memory scale adequately; mem0 adds opaque extraction layer over a system where prompt control
-  is required by SEC-05 constraints
+- [The 2026 Voice AI Stack: Every Layer Explained — Calculus VC](https://calculusvc.com/the-2026-voice-ai-stack-every-layer-explained/)
+- [The Voice AI Stack for Building Agents — AssemblyAI](https://www.assemblyai.com/blog/the-voice-ai-stack-for-building-agents)
+- [Engineering Low-Latency Voice Agents — Sierra AI](https://sierra.ai/blog/voice-latency)
+- [How to Optimise Latency for Voice Agents — Nikhil R (2025)](https://rnikhil.com/2025/05/18/how-to-reduce-latency-voice-agents)
+- [AI Agent Memory: Types, Architecture & Implementation — Redis](https://redis.io/blog/ai-agent-memory-stateful-systems/)
+- [Human-in-the-Loop Architecture: When Humans Approve Agent Decisions — Agent Patterns](https://www.agentpatterns.tech/en/architecture/human-in-the-loop-architecture)
+- [LLM Orchestration Architecture — DEV Community](https://dev.to/prince_d02d8ea487b1268cb5/llm-orchestration-architecture-10mj)
+- [OAuth for AI Agents: Production Architecture — Scalekit](https://www.scalekit.com/blog/oauth-ai-agents-architecture)
+- [Architecting Resilient LLM Agents: Secure Plan-then-Execute — arXiv](https://arxiv.org/pdf/2509.08646)
+- [Context Engineering for Reliable AI Agents — Kubiya (2025)](https://www.kubiya.ai/blog/context-engineering-ai-agents)
+
+---
+*Architecture research for: voice-first AI personal assistant (dAIly)*
+*Researched: 2026-04-05*

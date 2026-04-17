@@ -70,23 +70,12 @@ RESPOND_SYSTEM_PROMPT = (
     'Output MUST be valid JSON: {{"action": "answer", "narrative": "your response text", "target_id": null}}'
 )
 
-IDENTIFY_SYSTEM_PROMPT = (
-    "Identify which email the user is asking about from AVAILABLE EMAILS.\n\n"
-    "AVAILABLE EMAILS:\n{email_context}\n\n"
-    'Output MUST be valid JSON: {{"action": "summarise_thread", '
-    '"narrative": "", "target_id": "message_id or null"}}'
-)
-
 SUMMARISE_SYSTEM_PROMPT = (
-    "You are a personal briefing assistant. The user wants to summarise an email thread.\n\n"
-    "AVAILABLE EMAILS:\n{email_context}\n\n"
-    "Match the user's request to one of the AVAILABLE EMAILS and set `target_id` "
-    "to that email's message_id. If none match, set target_id to null.\n\n"
-    "Then summarise the thread using the REDACTED THREAD CONTENT below. "
-    "Be concise, highlight key decisions and action items.\n\n"
+    "You are a personal briefing assistant. Summarise the following email thread "
+    "for the user. Be concise, highlight key decisions and action items.\n\n"
     "REDACTED THREAD CONTENT:\n{redacted_content}\n\n"
     'Output MUST be valid JSON: {{"action": "summarise_thread", '
-    '"narrative": "your summary", "target_id": "message_id or null"}}'
+    '"narrative": "your summary", "target_id": "{target_id}"}}'
 )
 
 DRAFT_SYSTEM_PROMPT = (
@@ -203,13 +192,8 @@ async def respond_node(state: SessionState) -> dict:
 async def summarise_thread_node(state: SessionState) -> dict:
     """Summarise an email thread using GPT-4.1 (D-02, BRIEF-07).
 
-    Two-step flow:
-    1. IDENTIFY: LLM picks target_id (message_id) from state.email_context.
-    2. SUMMARISE: fetch body via adapter, redact, then LLM summarises.
-
     Security boundaries:
-    - Resolves message_id from state.email_context via LLM — never passes raw
-      user utterance to get_email_body (FIX-03)
+    - Fetches email body via adapter from the adapter registry
     - Passes raw_body through summarise_and_redact() BEFORE any state write (SEC-04)
     - raw_body is a local variable only — never assigned to state fields (T-03-07)
     - No `tools=` parameter (SEC-05/T-03-06)
@@ -218,7 +202,7 @@ async def summarise_thread_node(state: SessionState) -> dict:
     Fire-and-forget expand signal via asyncio.create_task() (D-08).
 
     Args:
-        state: Current SessionState with messages and email_context.
+        state: Current SessionState with messages.
 
     Returns:
         State update dict with AIMessage containing the thread summary.
@@ -236,63 +220,16 @@ async def summarise_thread_node(state: SessionState) -> dict:
             ]
         }
 
-    email_context_str = _format_email_context(state.email_context)
-
-    # Fallback before any LLM/adapter call: no email_context => can't resolve
-    if not state.email_context:
-        return {
-            "messages": [AIMessage(content=(
-                "I couldn't identify which email you meant. "
-                "Let me load your briefing first."
-            ))]
-        }
+    # Extract target reference from last user message
+    last_content = state.messages[-1].content if state.messages else ""
+    # Use a placeholder message_id — real extraction depends on briefing context
+    # In Phase 3 this is a best-effort lookup; Phase 5 will wire full context
+    message_id = last_content  # pass through so adapter can match by subject/id
 
     client = _openai_client()
 
-    # STEP 1 — IDENTIFY: ask LLM to pick the message_id from AVAILABLE EMAILS.
-    # No tools= parameter (SEC-05/T-03-06).
-    message_id: str | None = None
     try:
-        identify_response = await client.chat.completions.create(
-            model="gpt-4.1",
-            messages=[
-                {
-                    "role": "system",
-                    "content": IDENTIFY_SYSTEM_PROMPT.format(
-                        email_context=email_context_str,
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": state.messages[-1].content if state.messages else "",
-                },
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=200,
-        )
-        identify_raw = identify_response.choices[0].message.content
-        identify_intent = OrchestratorIntent.model_validate_json(identify_raw)
-        target = identify_intent.target_id
-
-        # Treat "null" string (from LLM) and empty/None as no match
-        if not target or target.lower() == "null":
-            return {
-                "messages": [AIMessage(content=(
-                    "I couldn't identify which email you meant. "
-                    "Could you be more specific (sender or subject)?"
-                ))]
-            }
-        message_id = target
-
-    except Exception as exc:
-        logger.warning("summarise_thread_node: identify step failed: %s", exc)
-        return {
-            "messages": [AIMessage(content="I had trouble identifying that email. Please try again.")]
-        }
-
-    # STEP 2 — FETCH + SUMMARISE
-    try:
-        # Fetch raw body via first available email adapter (FIX-03: real message_id)
+        # Fetch raw body via first available email adapter
         raw_body = await adapters[0].get_email_body(message_id)
 
         # CRITICAL (SEC-04/T-03-07): raw_body MUST pass through summarise_and_redact
@@ -301,15 +238,14 @@ async def summarise_thread_node(state: SessionState) -> dict:
         redacted_content = await summarise_and_redact(raw_body, client)
 
         # Generate thread summary with GPT-4.1 (full model — D-02)
-        # No tools= parameter (SEC-05/T-03-06)
         response = await client.chat.completions.create(
             model="gpt-4.1",
             messages=[
                 {
                     "role": "system",
                     "content": SUMMARISE_SYSTEM_PROMPT.format(
-                        email_context=email_context_str,
                         redacted_content=redacted_content,
+                        target_id=message_id,
                     ),
                 },
                 {"role": "user", "content": "Summarise this thread."},
@@ -322,23 +258,13 @@ async def summarise_thread_node(state: SessionState) -> dict:
         narrative = intent.narrative
 
     except Exception as exc:
-        logger.warning("summarise_thread_node: summarise step error: %s", exc)
+        logger.warning("summarise_thread_node: error: %s", exc)
         narrative = "I had trouble fetching that thread. Please try again."
 
     # Fire-and-forget expand signal (D-08)
-    # Look up sender from email_context by message_id (T-08-05: server-side only — never user-controlled)
     if state.active_user_id:
-        sender = next(
-            (e.get("sender") for e in state.email_context if e.get("message_id") == message_id),
-            None,
-        )
         asyncio.create_task(
-            _capture_signal(
-                state.active_user_id,
-                SignalType.expand,
-                target_id=message_id,
-                sender=sender,
-            )
+            _capture_signal(state.active_user_id, SignalType.expand, target_id=message_id)
         )
 
     return {"messages": [AIMessage(content=narrative)]}
@@ -348,7 +274,6 @@ async def _capture_signal(
     user_id: int,
     signal_type: SignalType,
     target_id: str | None = None,
-    sender: str | None = None,
 ) -> None:
     """Fire-and-forget signal capture. Creates its own DB session.
 
@@ -359,18 +284,10 @@ async def _capture_signal(
         user_id: User to record the signal for.
         signal_type: The interaction signal to record.
         target_id: Optional reference to an email or message.
-        sender: Optional sender email address. When provided, normalised to
-                lowercase and stripped, then stored in metadata_json as
-                {"sender": normalised}. When None, metadata is omitted
-                (preserves existing behaviour for follow_up signals).
     """
     try:
         from daily.db.engine import async_session
         from daily.profile.signals import append_signal
-
-        metadata = None
-        if sender:
-            metadata = {"sender": sender.lower().strip()}
 
         async with async_session() as session:
             await append_signal(
@@ -378,7 +295,6 @@ async def _capture_signal(
                 signal_type=signal_type,
                 session=session,
                 target_id=target_id,
-                metadata=metadata,
             )
     except Exception as exc:
         # Signal capture failure must never propagate to the graph
