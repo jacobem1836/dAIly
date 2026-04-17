@@ -36,7 +36,7 @@ Add memory-specific keywords to the `route_intent()` whitelist in `src/daily/orc
 Routes matched intents to a new `memory_node` (single node handling all three operations based on sub-intent).
 
 ### D-02: Memory Introspection
-New `memory_node` sub-path for query intent: calls `retrieve_relevant_memories()` with a broad synthetic query (e.g., "user profile personal facts preferences"), returns top-10 facts. Response formatted as spoken list — no LLM re-summarisation needed (avoids latency). Falls back to "I don't know anything about you yet" when no facts stored.
+New `memory_node` sub-path for query intent: calls `list_all_memories(user_id, db_session, limit=10)` which queries `memory_facts` directly ordered by `created_at.desc()`, bypassing the `memory_enabled` gate in `retrieve_relevant_memories()`. This ensures transparency always works even when memory learning is disabled (per Research Pitfall 3 — `retrieve_relevant_memories()` hard-gates on `memory_enabled=False` and returns `[]`, which would hide existing facts from the user). Response formatted as spoken list — no LLM re-summarisation needed (avoids latency). Falls back to "I don't know anything about you yet" when no facts stored.
 
 ### D-03: Fact Deletion
 "Forget that / delete that fact" path:
@@ -51,7 +51,7 @@ Deletion threshold: use cosine_distance < 0.2 (slightly looser than the 0.1 dedu
 "Forget everything" path: `DELETE FROM memory_facts WHERE user_id = :user_id`. Confirm with count: "Done, I've cleared all 12 things I knew about you."
 
 ### D-05: Disable Memory Learning
-"Disable memory" path: call `upsert_preference(user_id, "memory_enabled", False, db_session)`. No migration needed — `memory_enabled` already exists in `UserPreferences` JSONB blob. Confirm verbally: "Memory learning disabled. I'll stop extracting new facts." Extraction and retrieval gates in `memory.py` already check this flag.
+"Disable memory" path: call `upsert_preference(user_id, "memory_enabled", "false", db_session)` — note: pass string `"false"` not Python bool `False`, consistent with `upsert_preference` signature (`value: str`) and existing test patterns (`test_memory.py` line 113). No migration needed — `memory_enabled` already exists in `UserPreferences` JSONB blob. Pydantic v2 `model_validate()` coerces `"false"` to `False` bool on read-back. Confirm verbally: "Memory learning disabled. I'll stop extracting new facts." Extraction and retrieval gates in `memory.py` already check this flag.
 
 ### D-06: No Approval Gate
 Memory transparency commands are user-initiated and local-only. No `approval_node` interrupt. Direct DB operations execute immediately and confirm verbally.

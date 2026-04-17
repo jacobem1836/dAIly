@@ -26,7 +26,7 @@ Add memory-specific keywords to `route_intent()` in `src/daily/orchestrator/grap
 Routes matched intents to a new `memory_node` (single node handling all three operations based on sub-intent).
 
 **D-02: Memory Introspection**
-New `memory_node` sub-path for query intent: calls `retrieve_relevant_memories()` with a broad synthetic query ("user profile personal facts preferences"), returns top-10 facts. Response formatted as spoken list — no LLM re-summarisation. Falls back to "I don't know anything about you yet" when no facts stored.
+New `memory_node` sub-path for query intent: calls `list_all_memories(user_id, db_session, limit=10)` which queries `memory_facts` directly ordered by `created_at.desc()`, bypassing the `memory_enabled` gate in `retrieve_relevant_memories()` (per Pitfall 3). Response formatted as spoken list — no LLM re-summarisation. Falls back to "I don't know anything about you yet" when no facts stored.
 
 **D-03: Fact Deletion**
 "Forget that / delete that fact" path:
@@ -40,7 +40,7 @@ New `memory_node` sub-path for query intent: calls `retrieve_relevant_memories()
 "Forget everything" path: `DELETE FROM memory_facts WHERE user_id = :user_id`. Confirm with count: "Done, I've cleared all 12 things I knew about you."
 
 **D-05: Disable Memory Learning**
-"Disable memory" path: call `upsert_preference(user_id, "memory_enabled", False, db_session)`. No migration needed. Confirm verbally: "Memory learning disabled. I'll stop extracting new facts." Extraction and retrieval gates already check this flag.
+"Disable memory" path: call `upsert_preference(user_id, "memory_enabled", "false", db_session)` — string `"false"` per `upsert_preference` signature (`value: str`) and existing test patterns (`test_memory.py` line 113). No migration needed. Confirm verbally: "Memory learning disabled. I'll stop extracting new facts." Extraction and retrieval gates already check this flag.
 
 **D-06: No Approval Gate**
 Memory transparency commands are user-initiated and local-only. No `approval_node` interrupt. Direct DB operations execute immediately and confirm verbally.
@@ -64,9 +64,9 @@ Memory transparency commands are user-initiated and local-only. No `approval_nod
 
 | ID | Description | Research Support |
 |----|-------------|------------------|
-| MEM-01 | "What do you know about me?" returns verbal summary of up to 10 stored facts | `retrieve_relevant_memories()` already returns `list[str]` top-K facts; format as numbered spoken list in `memory_node` |
+| MEM-01 | "What do you know about me?" returns verbal summary of up to 10 stored facts | `list_all_memories()` queries `memory_facts` directly ordered by `created_at.desc()`, bypassing `memory_enabled` gate; format as numbered spoken list in `memory_node` |
 | MEM-02 | User can delete a specific stored fact by stating it; subsequent briefings no longer reflect that fact | New `delete_memory_fact()` in `memory.py` using cosine similarity DELETE; embeddings already indexed via HNSW on `memory_facts.embedding` |
-| MEM-03 | User can say "forget everything" and all stored memories are cleared; user can disable memory learning | `clear_all_memories()` via bulk DELETE; disable via `upsert_preference(user_id, "memory_enabled", False, db_session)` |
+| MEM-03 | User can say "forget everything" and all stored memories are cleared; user can disable memory learning | `clear_all_memories()` via bulk DELETE; disable via `upsert_preference(user_id, "memory_enabled", "false", db_session)` |
 </phase_requirements>
 
 ## Standard Stack
@@ -94,7 +94,7 @@ src/daily/
 │   ├── graph.py         # EDIT: add memory keywords + "memory" edge
 │   └── nodes.py         # EDIT: add memory_node()
 └── profile/
-    └── memory.py        # EDIT: add delete_memory_fact(), clear_all_memories()
+    └── memory.py        # EDIT: add list_all_memories(), delete_memory_fact(), clear_all_memories()
 
 tests/
 └── test_memory.py       # EDIT: add Phase 10 test cases
@@ -217,9 +217,7 @@ async def clear_all_memories(user_id: int, db_session: AsyncSession) -> int:
 
 ### Pattern 5: upsert_preference() for disable path
 
-The existing `upsert_preference(user_id, key, value, session)` signature takes `value: str`. The test suite uses `upsert_preference(2, "memory_enabled", "false", db_session)` with string `"false"` — see `test_memory.py` line 113. However, calling code in `memory_node` will pass the Python bool `False`. The current implementation stores the raw value, and `UserPreferences.model_validate()` reads it back — Pydantic v2 coerces `"false"` string to `False` bool via `model_validate`. Passing `False` (bool) directly also works.
-
-**Critical finding:** The current `upsert_preference` signature is `value: str`. For `memory_enabled`, the node needs to pass `False` (bool). Either: (a) pass the string `"false"` and rely on Pydantic coercion (consistent with existing test patterns), or (b) pass `False` and note the type annotation mismatch. Option (a) is safer and consistent with existing tests.
+The existing `upsert_preference(user_id, key, value, session)` signature takes `value: str`. The test suite uses `upsert_preference(2, "memory_enabled", "false", db_session)` with string `"false"` — see `test_memory.py` line 113. The `memory_node` passes string `"false"` to match this convention. Pydantic v2 `model_validate()` coerces `"false"` string to `False` bool on read-back.
 
 [VERIFIED: service.py line 37-71, test_memory.py line 113 — confirmed "false" string is the existing pattern]
 
@@ -363,17 +361,19 @@ No deprecated patterns introduced. This phase is purely additive.
 | A3 | Exact ordering strategy for the query path (synthetic embedding query vs `created_at.desc()`) | Code Examples | Low risk — either approach satisfies MEM-01 |
 | A4 | `upsert_preference` called with string `"false"` not Python `False` for `memory_enabled` toggle | Pitfall 2 + Pattern 5 | Type error if `False` is passed; minor — easy fix |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **`retrieve_relevant_memories()` gate bypass for introspection**
+1. **`retrieve_relevant_memories()` gate bypass for introspection** (RESOLVED)
    - What we know: The function hard-gates on `memory_enabled=False` and returns `[]`
    - What's unclear: Whether the planner should add a bypass parameter to the existing function or implement a new `list_all_memories()` that skips the gate
    - Recommendation: Add a new `list_all_memories(user_id, db_session, limit=10)` function that does NOT check `memory_enabled`. Keeps the existing function's semantics unchanged. 3 lines of new code.
+   - **Resolution:** Planner chose `list_all_memories()` (new function, no bypass parameter). This avoids changing the existing `retrieve_relevant_memories()` contract. CONTEXT.md D-02 updated to reflect this approach.
 
-2. **`upsert_preference` type signature for bool values**
+2. **`upsert_preference` type signature for bool values** (RESOLVED)
    - What we know: Current signature is `value: str`; existing tests pass `"false"` as string
    - What's unclear: Whether to keep string convention or broaden the type
    - Recommendation: Pass `"false"` (string) from `memory_node` — consistent with existing test_memory.py patterns. No signature change needed.
+   - **Resolution:** Planner chose string `"false"` (no signature change). CONTEXT.md D-05 updated to specify string `"false"` explicitly.
 
 ## Environment Availability
 
