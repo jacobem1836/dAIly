@@ -36,6 +36,7 @@ def _make_state(
     briefing_narrative="Test briefing",
     active_user_id=1,
     preferences=None,
+    email_context=None,
 ):
     """Create a SessionState for testing."""
     from daily.orchestrator.state import SessionState
@@ -45,6 +46,7 @@ def _make_state(
         briefing_narrative=briefing_narrative,
         active_user_id=active_user_id,
         preferences=preferences or {"tone": "conversational", "briefing_length": "standard"},
+        email_context=email_context or [],
     )
 
 
@@ -447,3 +449,158 @@ class TestSummariseThreadNode:
 
         source = inspect.getsource(nodes.summarise_thread_node)
         assert "model_validate_json" in source or "OrchestratorIntent" in source
+
+
+# ---------------------------------------------------------------------------
+# email_context resolution tests (FIX-03)
+# ---------------------------------------------------------------------------
+
+SAMPLE_EMAIL_CONTEXT = [
+    {
+        "message_id": "msg_001",
+        "thread_id": "thread_001",
+        "subject": "Quarterly Report Q1",
+        "sender": "Alice Johnson <alice@example.com>",
+        "recipient": "user@example.com",
+        "timestamp": "2026-04-16T09:00:00",
+    },
+    {
+        "message_id": "msg_002",
+        "thread_id": "thread_002",
+        "subject": "Team Standup Notes",
+        "sender": "Bob Smith <bob@example.com>",
+        "recipient": "user@example.com",
+        "timestamp": "2026-04-16T10:00:00",
+    },
+]
+
+
+class TestSummariseThreadNodeResolution:
+    """Tests for message_id resolution from email_context (FIX-03)."""
+
+    @pytest.mark.asyncio
+    async def test_resolves_message_id_from_subject_match(self):
+        """summarise_thread_node resolves message_id from email_context when user message
+        matches a subject — adapter.get_email_body called with the matching email's
+        message_id, NOT the user's raw message text."""
+        from daily.orchestrator.nodes import summarise_thread_node
+        from daily.orchestrator.session import set_email_adapters
+
+        mock_adapter = AsyncMock()
+        mock_adapter.get_email_body = AsyncMock(return_value="Email body content")
+        set_email_adapters([mock_adapter])
+
+        mock_openai_resp = _make_openai_response("summarise_thread", "Summary of quarterly report.")
+
+        with patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_resp)
+            mock_client_class.return_value = mock_client
+
+            with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
+                mock_redact.return_value = "Redacted content"
+
+                state = _make_state(
+                    messages=[HumanMessage(content="Tell me about the quarterly report")],
+                    email_context=SAMPLE_EMAIL_CONTEXT,
+                )
+                await summarise_thread_node(state)
+
+        mock_adapter.get_email_body.assert_called_once_with("msg_001")
+
+    @pytest.mark.asyncio
+    async def test_resolves_message_id_from_sender_match(self):
+        """summarise_thread_node resolves message_id when user message matches a sender
+        name — adapter.get_email_body called with the matching email's message_id."""
+        from daily.orchestrator.nodes import summarise_thread_node
+        from daily.orchestrator.session import set_email_adapters
+
+        mock_adapter = AsyncMock()
+        mock_adapter.get_email_body = AsyncMock(return_value="Email body content")
+        set_email_adapters([mock_adapter])
+
+        mock_openai_resp = _make_openai_response("summarise_thread", "Summary from Alice.")
+
+        with patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_resp)
+            mock_client_class.return_value = mock_client
+
+            with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
+                mock_redact.return_value = "Redacted content"
+
+                state = _make_state(
+                    messages=[HumanMessage(content="What did Alice say?")],
+                    email_context=SAMPLE_EMAIL_CONTEXT,
+                )
+                await summarise_thread_node(state)
+
+        mock_adapter.get_email_body.assert_called_once_with("msg_001")
+
+    @pytest.mark.asyncio
+    async def test_empty_email_context_returns_error(self):
+        """summarise_thread_node returns user-friendly error when email_context is empty."""
+        from daily.orchestrator.nodes import summarise_thread_node
+        from daily.orchestrator.session import set_email_adapters
+
+        mock_adapter = AsyncMock()
+        set_email_adapters([mock_adapter])
+
+        state = _make_state(
+            messages=[HumanMessage(content="Summarise that email")],
+            email_context=[],
+        )
+        result = await summarise_thread_node(state)
+
+        messages = result.get("messages", [])
+        assert len(messages) == 1
+        assert "I can't find that email" in messages[0].content
+
+    @pytest.mark.asyncio
+    async def test_no_match_returns_error(self):
+        """summarise_thread_node returns user-friendly error when no email in
+        email_context matches the user's request."""
+        from daily.orchestrator.nodes import summarise_thread_node
+        from daily.orchestrator.session import set_email_adapters
+
+        mock_adapter = AsyncMock()
+        set_email_adapters([mock_adapter])
+
+        state = _make_state(
+            messages=[HumanMessage(content="Tell me about the budget proposal")],
+            email_context=SAMPLE_EMAIL_CONTEXT,
+        )
+        result = await summarise_thread_node(state)
+
+        messages = result.get("messages", [])
+        assert len(messages) == 1
+        assert "I can't find that email" in messages[0].content
+
+    @pytest.mark.asyncio
+    async def test_case_insensitive_matching(self):
+        """summarise_thread_node matching is case-insensitive — uppercase user query
+        matches email subject with mixed case."""
+        from daily.orchestrator.nodes import summarise_thread_node
+        from daily.orchestrator.session import set_email_adapters
+
+        mock_adapter = AsyncMock()
+        mock_adapter.get_email_body = AsyncMock(return_value="Email body content")
+        set_email_adapters([mock_adapter])
+
+        mock_openai_resp = _make_openai_response("summarise_thread", "Summary.")
+
+        with patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_resp)
+            mock_client_class.return_value = mock_client
+
+            with patch("daily.orchestrator.nodes.summarise_and_redact", new_callable=AsyncMock) as mock_redact:
+                mock_redact.return_value = "Redacted content"
+
+                state = _make_state(
+                    messages=[HumanMessage(content="QUARTERLY REPORT")],
+                    email_context=SAMPLE_EMAIL_CONTEXT,
+                )
+                await summarise_thread_node(state)
+
+        mock_adapter.get_email_body.assert_called_once_with("msg_001")
