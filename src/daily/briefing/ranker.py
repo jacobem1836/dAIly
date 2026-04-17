@@ -13,6 +13,7 @@ Design decisions:
 """
 
 from datetime import datetime, timezone
+from email.utils import parseaddr
 
 from daily.briefing.models import RankedEmail
 from daily.integrations.models import EmailMetadata
@@ -49,19 +50,27 @@ DEADLINE_KEYWORDS = frozenset(
 def _is_direct_recipient(user_email: str, recipient_field: str) -> bool:
     """Check if user_email appears as a complete address in recipient field.
 
-    Splits recipient field by comma, strips whitespace, and compares each
-    address individually. Prevents substring false positives.
+    Normalises both sides using email.utils.parseaddr to handle RFC 2822
+    formatted addresses (e.g., "Display Name <addr@host>"). Splits recipient
+    field by comma and compares each address individually, preventing substring
+    false positives.
 
     Args:
-        user_email: The user's email address to look for.
+        user_email: The user's email address (may be bare or RFC 2822 formatted).
         recipient_field: Comma-separated list of recipient addresses.
 
     Returns:
-        True if user_email is one of the recipient addresses.
+        True if the normalised user email matches any normalised recipient.
     """
-    user_lower = user_email.lower().strip()
-    recipients = [r.strip().lower() for r in recipient_field.split(",")]
-    return user_lower in recipients
+    _, user_bare = parseaddr(user_email)
+    user_lower = user_bare.lower().strip()
+    if not user_lower:
+        return False
+    for r in recipient_field.split(","):
+        _, addr = parseaddr(r.strip())
+        if addr.lower().strip() == user_lower:
+            return True
+    return False
 
 
 def score_email(
