@@ -130,5 +130,19 @@ No new network endpoints, auth paths, file access, or schema changes introduced.
 
 ---
 
+## Self-Check: PASSED
+
+- FOUND: src/daily/profile/memory.py
+- FOUND: src/daily/orchestrator/nodes.py
+- FOUND: src/daily/orchestrator/graph.py
+- FOUND: .planning/phases/10-memory-transparency/10-01-SUMMARY.md
+- FOUND commit: f6c1a77 (Task 1)
+- FOUND commit: d13dc66 (Task 2)
+- Graph builds without error
+- All helpers importable
+- route_intent returns "memory" at line 65
+
+---
+
 *Phase: 10-memory-transparency*
 *Completed: 2026-04-18*
