@@ -250,19 +250,163 @@ async def test_extraction_swallows_errors(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="pending Plan 03 implementation")
-async def test_retrieve_relevant_facts():
-    raise NotImplementedError
+async def test_retrieve_relevant_facts(async_db_session, monkeypatch):
+    """retrieve_relevant_memories returns top-K fact texts ordered by cosine similarity."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sqlalchemy import select
+
+    from daily.db.models import MemoryFact
+    from daily.profile import memory as memory_mod
+    from daily.profile.service import _ensure_default_user
+
+    # Seed two MemoryFact rows with different embeddings
+    await _ensure_default_user(10, async_db_session)
+    await async_db_session.commit()
+
+    # First fact: embedding [0.1, 0.0, ...] (1536 dims)
+    embedding_a = [0.1] + [0.0] * 1535
+    # Second fact: embedding [0.0, 0.1, ...] — different direction
+    embedding_b = [0.0, 0.1] + [0.0] * 1534
+
+    fact_a = MemoryFact(
+        user_id=10,
+        fact_text="User travels to Sydney",
+        embedding=embedding_a,
+        source_session_id="seed-a",
+    )
+    fact_b = MemoryFact(
+        user_id=10,
+        fact_text="User prefers concise emails",
+        embedding=embedding_b,
+        source_session_id="seed-b",
+    )
+    async_db_session.add(fact_a)
+    async_db_session.add(fact_b)
+    await async_db_session.commit()
+
+    # Mock embeddings.create to return embedding_a (closest to fact_a)
+    mock_client = MagicMock()
+    mock_embed = AsyncMock(
+        return_value=MagicMock(data=[MagicMock(embedding=embedding_a)])
+    )
+    mock_client.embeddings.create = mock_embed
+    monkeypatch.setattr(memory_mod, "_get_openai_client", lambda: mock_client)
+
+    results = await memory_mod.retrieve_relevant_memories(
+        user_id=10,
+        query_text="travel plans",
+        db_session=async_db_session,
+        top_k=2,
+    )
+
+    assert isinstance(results, list)
+    assert len(results) == 2
+    # fact_a should be closest (identical embedding)
+    assert results[0] == "User travels to Sydney"
 
 
-@pytest.mark.skip(reason="pending Plan 03 implementation")
-async def test_retrieval_skipped_when_disabled():
-    raise NotImplementedError
+async def test_retrieval_skipped_when_disabled(async_db_session, monkeypatch):
+    """retrieve_relevant_memories returns [] and never calls embeddings when memory_enabled=False."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from daily.db.models import MemoryFact
+    from daily.profile import memory as memory_mod
+    from daily.profile.service import _ensure_default_user, upsert_preference
+
+    await _ensure_default_user(11, async_db_session)
+    await async_db_session.commit()
+    await upsert_preference(11, "memory_enabled", "false", async_db_session)
+
+    # Seed a fact
+    async_db_session.add(
+        MemoryFact(
+            user_id=11,
+            fact_text="User drinks coffee",
+            embedding=[0.5] * 1536,
+            source_session_id="seed",
+        )
+    )
+    await async_db_session.commit()
+
+    mock_client = MagicMock()
+    mock_embed = AsyncMock()
+    mock_client.embeddings.create = mock_embed
+    monkeypatch.setattr(memory_mod, "_get_openai_client", lambda: mock_client)
+
+    results = await memory_mod.retrieve_relevant_memories(
+        user_id=11,
+        query_text="coffee",
+        db_session=async_db_session,
+    )
+
+    assert results == []
+    mock_embed.assert_not_called()
 
 
-@pytest.mark.skip(reason="pending Plan 03 implementation")
-async def test_session_state_includes_memories():
-    raise NotImplementedError
+async def test_session_state_includes_memories(async_db_session, monkeypatch):
+    """initialize_session_state includes user_memories when memory_enabled=True, [] when False."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    import fakeredis.aioredis
+
+    from daily.db.models import MemoryFact
+    from daily.profile import memory as memory_mod
+    from daily.profile.service import _ensure_default_user, upsert_preference
+
+    await _ensure_default_user(12, async_db_session)
+    await async_db_session.commit()
+
+    # Seed two facts
+    embedding = [0.3] * 1536
+    async_db_session.add(
+        MemoryFact(
+            user_id=12,
+            fact_text="User has a standing Monday meeting",
+            embedding=embedding,
+            source_session_id="seed-s1",
+        )
+    )
+    async_db_session.add(
+        MemoryFact(
+            user_id=12,
+            fact_text="User prefers formal tone",
+            embedding=[0.4] * 1536,
+            source_session_id="seed-s2",
+        )
+    )
+    await async_db_session.commit()
+
+    mock_client = MagicMock()
+    mock_embed = AsyncMock(
+        return_value=MagicMock(data=[MagicMock(embedding=embedding)])
+    )
+    mock_client.embeddings.create = mock_embed
+    monkeypatch.setattr(memory_mod, "_get_openai_client", lambda: mock_client)
+
+    fake_redis = fakeredis.aioredis.FakeRedis()
+
+    from daily.orchestrator.session import initialize_session_state
+
+    state = await initialize_session_state(
+        user_id=12,
+        redis=fake_redis,
+        db_session=async_db_session,
+    )
+
+    assert "user_memories" in state
+    assert isinstance(state["user_memories"], list)
+    assert len(state["user_memories"]) >= 1
+
+    # Now test with memory_enabled=False
+    await upsert_preference(12, "memory_enabled", "false", async_db_session)
+
+    state_disabled = await initialize_session_state(
+        user_id=12,
+        redis=fake_redis,
+        db_session=async_db_session,
+    )
+    assert state_disabled["user_memories"] == []
 
 
 # ---------------------------------------------------------------------------
