@@ -67,7 +67,11 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details.
   2. Memory extraction fires at session end without delaying the voice response
   3. Recalled memories do not create a hallucination loop — facts injected back into context are not re-extracted as new facts
   4. A user with memory_enabled=False has no facts extracted or injected
-**Plans**: TBD
+**Plans**: 4 plans
+  - [ ] 09-01-PLAN.md — Foundation: pgvector dep, MemoryFact ORM, migration 005, memory_enabled flag, test scaffold
+  - [ ] 09-02-PLAN.md — Extraction module: extract_and_store_memories with dedup + gate + fail-silent
+  - [ ] 09-03-PLAN.md — Retrieval + injection: narrator preamble, pipeline call, SessionState.user_memories, live-session node wiring
+  - [ ] 09-04-PLAN.md — Voice loop trigger: fire-and-forget asyncio.create_task in finally + hallucination-loop regression test
 
 ### Phase 10: Memory Transparency
 **Goal**: User can inspect, delete, and disable the memory the system holds about them entirely via voice
