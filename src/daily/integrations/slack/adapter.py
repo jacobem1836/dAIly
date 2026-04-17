@@ -9,12 +9,17 @@ SEC-04/D-06: Only metadata returned — raw content never passes to LLM layer.
 """
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 
 from slack_sdk import WebClient
 
 from daily.integrations.base import MessageAdapter
 from daily.integrations.models import MessageMetadata, MessagePage
+
+logger = logging.getLogger(__name__)
+
+_MAX_PAGES_PER_CHANNEL = 10
 
 
 class SlackAdapter(MessageAdapter):
@@ -49,43 +54,64 @@ class SlackAdapter(MessageAdapter):
             return MessagePage(messages=[], next_cursor=None)
 
         all_messages: list[MessageMetadata] = []
-        last_cursor: str | None = None
 
         for channel_id in channels:
             is_dm = channel_id.startswith("D")
             oldest_ts = since.timestamp()
+            cursor: str | None = None
+            page_count = 0
 
-            response = await asyncio.to_thread(
-                self._client.conversations_history,
-                channel=channel_id,
-                oldest=oldest_ts,
-                limit=100,
-            )
+            while page_count < _MAX_PAGES_PER_CHANNEL:
+                kwargs: dict = {
+                    "channel": channel_id,
+                    "oldest": oldest_ts,
+                    "limit": 100,
+                }
+                if cursor:
+                    kwargs["cursor"] = cursor
 
-            messages_data = response.get("messages", [])
-            response_metadata = response.get("response_metadata", {})
-            raw_cursor = response_metadata.get("next_cursor", "") if response_metadata else ""
-            cursor = raw_cursor if raw_cursor else None
-
-            for msg in messages_data:
-                ts = msg.get("ts", "")
-                timestamp = datetime.fromtimestamp(float(ts), tz=timezone.utc)
-                text = msg.get("text", "")
-                is_mention = "<@" in text
-
-                metadata = MessageMetadata(
-                    message_id=ts,
-                    channel_id=channel_id,
-                    sender_id=msg.get("user", ""),
-                    timestamp=timestamp,
-                    is_mention=is_mention,
-                    is_dm=is_dm,
+                response = await asyncio.to_thread(
+                    self._client.conversations_history,
+                    **kwargs,
                 )
-                all_messages.append(metadata)
 
-            last_cursor = cursor
+                messages_data = response.get("messages", [])
 
-        return MessagePage(messages=all_messages, next_cursor=last_cursor)
+                for msg in messages_data:
+                    ts = msg.get("ts", "")
+                    timestamp = datetime.fromtimestamp(float(ts), tz=timezone.utc)
+                    text = msg.get("text", "")
+                    is_mention = "<@" in text
+
+                    metadata = MessageMetadata(
+                        message_id=ts,
+                        channel_id=channel_id,
+                        sender_id=msg.get("user", ""),
+                        timestamp=timestamp,
+                        is_mention=is_mention,
+                        is_dm=is_dm,
+                    )
+                    all_messages.append(metadata)
+
+                page_count += 1
+
+                # Check for more pages
+                response_metadata = response.get("response_metadata", {})
+                raw_cursor = response_metadata.get("next_cursor", "") if response_metadata else ""
+                cursor = raw_cursor if raw_cursor else None
+
+                if not cursor:
+                    break
+
+            if page_count >= _MAX_PAGES_PER_CHANNEL and cursor:
+                logger.warning(
+                    "Slack pagination cap (%d pages) hit for channel %s — %d messages fetched",
+                    _MAX_PAGES_PER_CHANNEL,
+                    channel_id,
+                    len([m for m in all_messages if m.channel_id == channel_id]),
+                )
+
+        return MessagePage(messages=all_messages, next_cursor=None)
 
     async def get_message_text(self, message_id: str, channel_id: str) -> str:
         """Fetch the text of a single Slack message.

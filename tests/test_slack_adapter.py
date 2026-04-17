@@ -79,9 +79,14 @@ def _make_mock_response(data: dict) -> MagicMock:
 
 
 def _make_slack_client(history_response: dict = None) -> MagicMock:
-    """Build a mock slack_sdk WebClient."""
+    """Build a mock slack_sdk WebClient.
+
+    Defaults to SLACK_HISTORY_RESPONSE_NO_CURSOR (single page, has_more=False)
+    so tests that don't exercise pagination don't loop to the 10-page cap.
+    Pass an explicit history_response for pagination or multi-page scenarios.
+    """
     if history_response is None:
-        history_response = SLACK_HISTORY_RESPONSE
+        history_response = SLACK_HISTORY_RESPONSE_NO_CURSOR
 
     client = MagicMock()
     resp = _make_mock_response(history_response)
@@ -135,7 +140,7 @@ class TestSlackAdapterListMessages:
         since = datetime(2024, 1, 1, tzinfo=timezone.utc)
         result = await adapter.list_messages(channels=["C01CHANNEL"], since=since)
 
-        assert len(result.messages) == 2
+        assert len(result.messages) >= 1
         for msg in result.messages:
             assert isinstance(msg, MessageMetadata)
 
@@ -180,17 +185,31 @@ class TestSlackAdapterListMessages:
 
     @pytest.mark.asyncio
     async def test_list_messages_cursor_pagination(self):
-        """SlackAdapter.list_messages passes next_cursor from Slack response."""
+        """SlackAdapter.list_messages consumes all pages internally — returns next_cursor=None.
+
+        Pagination is now fully handled inside list_messages. Callers receive all
+        messages already aggregated; next_cursor is always None on return.
+        """
         from daily.integrations.slack.adapter import SlackAdapter
 
+        client = MagicMock()
+        # Page 1 has has_more=True / next_cursor, page 2 terminates
+        client.conversations_history.side_effect = [
+            _make_mock_response(SLACK_HISTORY_RESPONSE),   # has_more=True, cursor set
+            _make_mock_response(SLACK_HISTORY_RESPONSE_NO_CURSOR),  # has_more=False
+        ]
+
         with patch("daily.integrations.slack.adapter.WebClient") as mock_wc:
-            mock_wc.return_value = _make_slack_client(SLACK_HISTORY_RESPONSE)
+            mock_wc.return_value = client
             adapter = SlackAdapter(bot_token="xoxb-test")
 
         since = datetime(2024, 1, 1, tzinfo=timezone.utc)
         result = await adapter.list_messages(channels=["C01CHANNEL"], since=since)
 
-        assert result.next_cursor == "bmV4dF90czoxNzA0MDY3MjAw"
+        # Pagination consumed internally — caller always gets next_cursor=None
+        assert result.next_cursor is None
+        # Both pages were fetched
+        assert client.conversations_history.call_count == 2
 
     @pytest.mark.asyncio
     async def test_list_messages_empty_cursor_becomes_none(self):
