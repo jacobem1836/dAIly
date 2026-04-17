@@ -356,6 +356,8 @@ async def test_session_state_includes_memories(async_db_session, monkeypatch):
 
     await _ensure_default_user(12, async_db_session)
     await async_db_session.commit()
+    # Ensure memory_enabled=True (may have been set False in a previous test run)
+    await upsert_preference(12, "memory_enabled", "true", async_db_session)
 
     # Seed two facts
     embedding = [0.3] * 1536
