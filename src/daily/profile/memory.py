@@ -235,3 +235,60 @@ async def extract_and_store_memories(
         logger.warning(
             "extract_and_store_memories: unexpected failure: %s", exc
         )
+
+
+# ---------------------------------------------------------------------------
+# Public retrieval entry point (Plan 03)
+# ---------------------------------------------------------------------------
+
+
+async def retrieve_relevant_memories(
+    user_id: int,
+    query_text: str,
+    db_session: "AsyncSession",
+    top_k: int = 10,
+) -> list[str]:
+    """Retrieve top-K most relevant facts for a user by cosine similarity.
+
+    Returns [] if memory_enabled=False or on any failure (fail-silent).
+    Fact text only — no metadata exposed to LLM (D-06 specifics).
+
+    Security (T-09-11): hard-filters WHERE user_id = :user_id — no cross-user
+    retrieval is possible through this function.
+
+    Args:
+        user_id: Authenticated user identifier.
+        query_text: Text to embed and use as the similarity query.
+        db_session: AsyncSession provided by the caller.
+        top_k: Maximum number of facts to return (default 10).
+
+    Returns:
+        List of fact_text strings ordered by cosine similarity, or [].
+    """
+    try:
+        preferences = await load_profile(user_id, db_session)
+        if not preferences.memory_enabled:
+            logger.debug(
+                "retrieve_relevant_memories: skipped for user=%d memory_enabled=False",
+                user_id,
+            )
+            return []
+
+        client = _get_openai_client()
+        query_embedding = await _embed(query_text, client)
+
+        stmt = (
+            select(MemoryFact.fact_text)
+            .where(MemoryFact.user_id == user_id)
+            .order_by(MemoryFact.embedding.cosine_distance(query_embedding))
+            .limit(top_k)
+        )
+        rows = (await db_session.execute(stmt)).scalars().all()
+        return list(rows)
+    except Exception as exc:
+        logger.warning(
+            "retrieve_relevant_memories: failed for user=%d: %s",
+            user_id,
+            exc,
+        )
+        return []

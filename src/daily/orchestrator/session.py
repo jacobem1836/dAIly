@@ -110,6 +110,18 @@ async def initialize_session_state(
     briefing = await get_briefing(redis, user_id, d)
     preferences = await load_profile(user_id, db_session)
 
+    # Phase 9 INTEL-02: retrieve cross-session memories for live-session injection.
+    # Hard-gated on memory_enabled — retrieve_relevant_memories returns [] when False.
+    user_memories: list[str] = []
+    if preferences.memory_enabled:
+        from daily.profile.memory import retrieve_relevant_memories  # noqa: PLC0415
+        user_memories = await retrieve_relevant_memories(
+            user_id=user_id,
+            query_text="today's briefing context",
+            db_session=db_session,
+            top_k=10,
+        )
+
     email_context: list[dict] = []
     adapters = get_email_adapters()
     if adapters:
@@ -135,6 +147,7 @@ async def initialize_session_state(
         "active_user_id": user_id,
         "preferences": preferences.model_dump(),
         "email_context": email_context,
+        "user_memories": user_memories,
     }
 
 

@@ -156,7 +156,18 @@ async def respond_node(state: SessionState) -> dict:
             role = "user"
         conversation.append({"role": role, "content": msg.content})
 
-    system_content = RESPOND_SYSTEM_PROMPT.format(
+    # Phase 9 INTEL-02: inject recalled memories into live-session system prompt.
+    memory_preamble = ""
+    if state.user_memories:
+        memory_lines = "\n".join(f"- {m}" for m in state.user_memories)
+        memory_preamble = (
+            "User memories (facts recalled from previous sessions):\n"
+            f"{memory_lines}\n\n"
+            "Incorporate relevant memories naturally when answering. "
+            "Do not invent memories.\n\n"
+        )
+
+    system_content = memory_preamble + RESPOND_SYSTEM_PROMPT.format(
         briefing_narrative=state.briefing_narrative or "(no briefing loaded)",
         tone=state.preferences.get("tone", "conversational"),
         length=state.preferences.get("briefing_length", "standard"),

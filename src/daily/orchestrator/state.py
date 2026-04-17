@@ -38,6 +38,10 @@ class SessionState(BaseModel):
                        to match user intent to a specific email thread. Stored as plain
                        dicts (not EmailMetadata) for clean LangGraph state serialisation.
                        Only metadata is stored — never raw bodies (SEC-04).
+        user_memories: Cross-session memory facts loaded at session init
+                       (Phase 9 INTEL-02). Injected into the live-session response
+                       prompt so follow-up turns reflect prior-session context.
+                       Empty list when memory_enabled=False. Never contains raw bodies.
     """
 
     messages: Annotated[list, add_messages] = Field(default_factory=list)
@@ -48,3 +52,4 @@ class SessionState(BaseModel):
     pending_action: ActionDraft | None = None
     approval_decision: str | None = None
     email_context: list[dict] = Field(default_factory=list)
+    user_memories: list[str] = Field(default_factory=list)

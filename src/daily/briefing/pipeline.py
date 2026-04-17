@@ -19,6 +19,7 @@ when called from the cron job, or passed directly for on-demand generation.
 
 import logging
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from openai import AsyncOpenAI
 from redis.asyncio import Redis
@@ -29,7 +30,11 @@ from daily.briefing.models import BriefingOutput
 from daily.briefing.narrator import generate_narrative
 from daily.briefing.redactor import redact_emails, redact_messages
 from daily.integrations.base import CalendarAdapter, EmailAdapter, MessageAdapter
+from daily.profile.memory import retrieve_relevant_memories
 from daily.profile.models import UserPreferences
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +50,7 @@ async def run_briefing_pipeline(
     redis: Redis,
     openai_client: AsyncOpenAI,
     preferences: UserPreferences | None = None,
+    db_session: "AsyncSession | None" = None,
 ) -> BriefingOutput:
     """Full pipeline: ingest -> rank -> fetch bodies -> redact -> narrate -> cache.
 
@@ -71,6 +77,10 @@ async def run_briefing_pipeline(
         openai_client: Async OpenAI client for redaction and narration.
         preferences: Optional user preferences for tone/length/order. If None,
                      narrator uses defaults.
+        db_session: Optional AsyncSession for adaptive ranking (Phase 8) and
+                    cross-session memory retrieval (Phase 9 INTEL-02). When None,
+                    adaptive ranking and memory retrieval are skipped — briefing
+                    always delivers regardless (graceful-degradation contract).
 
     Returns:
         BriefingOutput with narrative, generated_at, and version.
@@ -87,6 +97,7 @@ async def run_briefing_pipeline(
         vip_senders=vip_senders,
         user_email=user_email,
         top_n=top_n,
+        db_session=db_session,
     )
 
     # Step 2: Redact -- summarise + credential strip per-item (SEC-02)
@@ -120,9 +131,23 @@ async def run_briefing_pipeline(
     # Clear raw_bodies after redaction -- no longer needed in memory (T-02-11)
     context.raw_bodies.clear()
 
+    # Phase 9 INTEL-02: retrieve cross-session memories for narrator injection (D-06).
+    # Hard-gated on memory_enabled via retrieve_relevant_memories — returns [] when disabled.
+    # db_session is None on on-demand path (get_or_generate_briefing) — skip retrieval.
+    user_memories: list[str] = []
+    if db_session is not None:
+        user_memories = await retrieve_relevant_memories(
+            user_id=user_id,
+            query_text="today's daily briefing",
+            db_session=db_session,
+            top_k=10,
+        )
+
     # Step 3: Generate narrative (BRIEF-06)
     # Narrator receives only pre-summarised metadata -- no raw bodies (D-11/SEC-05)
-    output = await generate_narrative(context, openai_client, preferences=preferences)
+    output = await generate_narrative(
+        context, openai_client, preferences=preferences, user_memories=user_memories
+    )
 
     # Step 4: Cache in Redis (BRIEF-01, D-14)
     await cache_briefing(redis, user_id, output)
