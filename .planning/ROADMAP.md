@@ -29,7 +29,7 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details.
 - [x] **Phase 8: Adaptive Ranker** - Replace static email heuristics with signal-learned personal scoring — completed 2026-04-16
 - [x] **Phase 9: Cross-Session Memory** - Persist durable user facts across days via pgvector extraction and retrieval — completed 2026-04-17
 - [x] **Phase 10: Memory Transparency** - Voice interface for user to inspect, edit, and reset what the system knows (completed 2026-04-17)
-- [ ] **Phase 11: Trusted Actions** - User-configurable autonomy levels with explicit opt-in and safety locks
+- [x] **Phase 11: Trusted Actions** - User-configurable autonomy levels with explicit opt-in and safety locks (completed 2026-04-18)
 - [ ] **Phase 12: Conversational Flow** - Natural interruption, fluid mode switching, and adaptive tone
 
 ## Phase Details
@@ -105,8 +105,8 @@ Plans:
   4. User can change autonomy level via config command; the change takes effect on the next session
 **Plans**: 2 plans
 Plans:
-  - [ ] 11-01-PLAN.md — Autonomy constants, UserPreferences field, and approval gate bypass
-  - [ ] 11-02-PLAN.md — CLI config commands and comprehensive tests
+  - [x] 11-01-PLAN.md — Autonomy constants, UserPreferences field, and approval gate bypass
+  - [x] 11-02-PLAN.md — CLI config commands and comprehensive tests
 
 ### Phase 12: Conversational Flow
 **Goal**: User can interrupt the briefing, switch modes, and receive tone-adapted responses without breaking session state
@@ -116,7 +116,10 @@ Plans:
   1. User can speak mid-briefing and the system stops playback, processes the interruption, and can resume the briefing from the correct section
   2. User can switch from briefing to asking a question to requesting an action and back, all within one session, without the system losing context
   3. When user signals time pressure ("I'm in a rush"), subsequent responses in that session are compressed and more direct
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+  - [ ] 12-01-PLAN.md — State fields, sentence-level briefing delivery, resume routing, and tone adaptation
+  - [ ] 12-02-PLAN.md — Comprehensive tests for conversational flow (CONV-01, CONV-02, CONV-03)
 
 ## Progress
 
@@ -132,5 +135,5 @@ Plans:
 | 8. Adaptive Ranker | v1.1 | 4/4 | Complete | 2026-04-16 |
 | 9. Cross-Session Memory | v1.1 | 4/4 | Complete | 2026-04-17 |
 | 10. Memory Transparency | v1.1 | 2/2 | Complete   | 2026-04-17 |
-| 11. Trusted Actions | v1.1 | 0/2 | Not started | — |
-| 12. Conversational Flow | v1.1 | 0/? | Not started | — |
+| 11. Trusted Actions | v1.1 | 2/2 | Complete   | 2026-04-18 |
+| 12. Conversational Flow | v1.1 | 0/2 | Not started | — |
