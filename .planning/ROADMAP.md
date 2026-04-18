@@ -67,8 +67,10 @@ Plans:
   2. Setting LOG_LEVEL=DEBUG in the environment increases verbosity; setting LOG_LEVEL=WARNING suppresses info-level output — no code change required
   3. GET /health returns 200 with a structured body showing DB connectivity, Redis connectivity, and scheduler state
   4. Briefing generation latency, signal counts by type, and memory store size are queryable (via the health endpoint or a dedicated metrics route)
-**Plans**: TBD
-**UI hint**: yes
+**Plans:** 2 plans
+Plans:
+- [ ] 14-01-PLAN.md — Structured logging infrastructure (JSONFormatter, ContextAdapter, LOG_LEVEL)
+- [ ] 14-02-PLAN.md — Health and metrics endpoints (/health, /metrics, pipeline latency)
 
 ### Phase 15: Deployment
 **Goal**: Any developer can clone the repo, set environment variables, and run the full stack — locally or on a VPS
@@ -97,5 +99,5 @@ Plans:
 | 11. Trusted Actions | v1.1 | 2/2 | Complete | 2026-04-18 |
 | 12. Conversational Flow | v1.1 | 2/2 | Complete | 2026-04-18 |
 | 13. Signal Capture | v1.2 | 3/3 | Complete   | 2026-04-18 |
-| 14. Observability | v1.2 | 0/? | Not started | - |
+| 14. Observability | v1.2 | 0/2 | Not started | - |
 | 15. Deployment | v1.2 | 0/? | Not started | - |
