@@ -24,6 +24,7 @@ from daily.briefing.scheduler import scheduler, setup_scheduler
 from daily.config import Settings
 from daily.db.engine import async_session
 from daily.db.models import BriefingConfig
+from daily.logging_config import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """FastAPI lifespan: start scheduler on boot, stop on shutdown."""
     settings = Settings()
+    configure_logging(settings.log_level)
 
     # Parse briefing schedule time (format: "HH:MM")
     try:

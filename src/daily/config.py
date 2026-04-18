@@ -24,3 +24,4 @@ class Settings(BaseSettings):
     cartesia_api_key: str = ""
     briefing_email_top_n: int = 5  # per D-05
     briefing_schedule_time: str = "05:00"  # per D-13, default precompute time
+    log_level: str = "INFO"  # per D-04: configurable via LOG_LEVEL env var
