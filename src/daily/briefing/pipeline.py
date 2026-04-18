@@ -19,6 +19,7 @@ when called from the cron job, or passed directly for on-demand generation.
 
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
@@ -88,6 +89,7 @@ async def run_briefing_pipeline(
         BriefingOutput with narrative, generated_at, and version.
     """
     logger.info("Starting briefing pipeline for user %d", user_id)
+    pipeline_start = time.monotonic()
 
     # Step 1: Build context (ingest + rank + fetch bodies for top-N)
     # build_context populates context.raw_bodies with fetched email/Slack bodies.
@@ -164,6 +166,17 @@ async def run_briefing_pipeline(
     except Exception as exc:
         # Item cache failure must not block the briefing pipeline (graceful degradation)
         logger.warning("Failed to cache briefing items: %s", exc)
+
+    # Phase 14 OBS-04: record pipeline latency for /metrics aggregation (D-10)
+    try:
+        latency_s = time.monotonic() - pipeline_start
+        await redis.set(
+            f"briefing:{user_id}:latency_s",
+            str(round(latency_s, 3)),
+            ex=86400,  # 24h TTL, refreshed each precompute
+        )
+    except Exception as exc:
+        logger.warning("Failed to write latency key: %s", exc)
 
     logger.info("Briefing pipeline complete for user %d, cached", user_id)
     return output
