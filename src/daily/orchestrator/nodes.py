@@ -29,7 +29,7 @@ from langchain_core.messages import AIMessage
 from langgraph.types import interrupt
 from openai import AsyncOpenAI
 
-from daily.actions.base import ActionDraft, ActionType
+from daily.actions.base import BLOCKED_ACTION_TYPES, ActionDraft, ActionType
 from daily.briefing.redactor import summarise_and_redact
 from daily.orchestrator.models import OrchestratorIntent
 from daily.orchestrator.session import get_email_adapters
@@ -595,20 +595,28 @@ async def draft_node(state: SessionState) -> dict:
 async def approval_node(state: SessionState) -> dict:
     """Human-in-the-loop approval gate using LangGraph interrupt() (T-04-02).
 
+    Phase 11 autonomy pre-check (D-05, D-06):
+      1. If action_type is in BLOCKED_ACTION_TYPES -> always interrupt (never bypass).
+      2. Else if user's autonomy_levels has this type set to "auto" -> skip interrupt,
+         return confirm directly with auto_executed flag.
+      3. Otherwise (approve, suggest, or missing) -> interrupt as before.
+
     CRITICAL: interrupt() must NOT be wrapped in try/except. LangGraph uses
     a special exception mechanism internally — catching it would break the
     human-in-the-loop pattern entirely.
-
-    Builds a preview payload from pending_action and calls interrupt() to
-    pause graph execution. The user's decision string is returned via
-    Command(resume=...) and stored as approval_decision.
-
-    Args:
-        state: Current SessionState with pending_action set.
-
-    Returns:
-        State update dict with approval_decision set to the user's decision string.
     """
+    action_type = state.pending_action.action_type
+
+    # --- Phase 11 autonomy pre-check (D-05, D-06) ---
+    # Blocked types ALWAYS require approval — no config can override this.
+    if action_type not in BLOCKED_ACTION_TYPES:
+        autonomy_levels = state.preferences.get("autonomy_levels", {})
+        level = autonomy_levels.get(action_type.value, "approve")
+        if level == "auto":
+            return {"approval_decision": "confirm", "auto_executed": True}
+        # "suggest" treated as "approve" in Phase 11 (D-09) — fall through to interrupt
+
+    # --- Existing approval gate (unchanged from v1.0) ---
     payload = {
         "preview": state.pending_action.card_text(),
         "action_type": state.pending_action.action_type.value,

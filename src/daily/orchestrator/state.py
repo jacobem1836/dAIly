@@ -53,3 +53,4 @@ class SessionState(BaseModel):
     approval_decision: str | None = None
     email_context: list[dict] = Field(default_factory=list)
     user_memories: list[str] = Field(default_factory=list)
+    auto_executed: bool = False  # True when approval was bypassed by autonomy level (Phase 11)
