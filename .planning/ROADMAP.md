@@ -38,7 +38,7 @@ See `.planning/milestones/v1.1-ROADMAP.md` for full phase details.
 
 ### v1.2 Deployability Layer
 
-- [ ] **Phase 13: Signal Capture** — Wire skip and re_request signals end-to-end into the adaptive ranker
+- [x] **Phase 13: Signal Capture** — Wire skip and re_request signals end-to-end into the adaptive ranker (completed 2026-04-18)
 - [ ] **Phase 14: Observability** — Structured logging, configurable log level, health endpoint, and queryable metrics
 - [ ] **Phase 15: Deployment** — Docker Compose stack, env var template, and VPS production guide
 
@@ -52,11 +52,11 @@ See `.planning/milestones/v1.1-ROADMAP.md` for full phase details.
   1. When a user skips a briefing item, a skip signal is written to the signal table
   2. When a user asks to repeat or clarify a briefing item, a re_request signal is written to the signal table
   3. The adaptive ranker reads skip and re_request signals alongside expand when computing decay-adjusted scores — items skipped repeatedly rank lower over time
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 Plans:
-- [ ] 13-01-PLAN.md — Adaptive ranker TDD (get_sender_multipliers with decay formula)
-- [ ] 13-02-PLAN.md — Item tracking infrastructure (BriefingItem model, pipeline cache, session init)
-- [ ] 13-03-PLAN.md — Skip and re_request nodes + voice loop integration
+- [x] 13-01-PLAN.md — Adaptive ranker TDD (get_sender_multipliers with decay formula)
+- [x] 13-02-PLAN.md — Item tracking infrastructure (BriefingItem model, pipeline cache, session init)
+- [x] 13-03-PLAN.md — Skip and re_request nodes + voice loop integration
 
 ### Phase 14: Observability
 **Goal**: Every module emits structured logs and the system exposes its health and key metrics without touching code
@@ -96,6 +96,6 @@ Plans:
 | 10. Memory Transparency | v1.1 | 2/2 | Complete | 2026-04-17 |
 | 11. Trusted Actions | v1.1 | 2/2 | Complete | 2026-04-18 |
 | 12. Conversational Flow | v1.1 | 2/2 | Complete | 2026-04-18 |
-| 13. Signal Capture | v1.2 | 0/3 | Planning | - |
+| 13. Signal Capture | v1.2 | 3/3 | Complete   | 2026-04-18 |
 | 14. Observability | v1.2 | 0/? | Not started | - |
 | 15. Deployment | v1.2 | 0/? | Not started | - |
