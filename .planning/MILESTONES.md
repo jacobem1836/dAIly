@@ -1,5 +1,26 @@
 # Milestones
 
+## v1.1 Intelligence Layer (Shipped: 2026-04-18)
+
+**Phases completed:** 6 phases, 14 plans, 9 tasks
+
+**Key accomplishments:**
+
+- One-liner:
+- One-liner:
+- One-liner:
+- 1. [Rule 1 - Bug] Score comparison tests use tolerance, not equality
+- One-liner:
+- One-liner:
+- 1. [Rule 1 - Bug] Restored phase-8-04 adaptive ranking wiring stripped by phase-9-01
+- 1. [Rule 1 - Bug] Defensive thread_id access prevents KeyError in tests
+- Voice-driven memory audit and control: three transparency helpers in memory.py plus memory_node with query/delete/clear/disable sub-paths, wired into the orchestrator graph with keyword-first routing
+- 19 pytest tests covering list_all_memories, delete_memory_fact, clear_all_memories helpers and memory intent routing — all passing against live PostgreSQL + pgvector
+- CLI autonomy configuration with validation gates and 15-test suite covering all four trusted-actions success criteria.
+- One-liner:
+
+---
+
 ## v1.0 MVP (Shipped: 2026-04-14)
 
 **Phases:** 1–6 | **Plans:** 22 | **Timeline:** 2026-04-05 → 2026-04-14 (10 days)
@@ -17,6 +38,7 @@
 **Requirements satisfied:** 31/31 v1 requirements
 
 **Tech debt carried to v1.1:**
+
 - `user_email=""` in scheduler — WEIGHT_DIRECT scoring path never fires for scheduled runs
 - Slack pagination is single-page only (multi-workspace TODO in place)
 - `message_id = last_content` stub in summarise_thread_node (approximate, functional)

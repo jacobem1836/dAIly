@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
 status: executing
-last_updated: "2026-04-18T04:16:28.526Z"
-last_activity: 2026-04-18 -- Phase 11 execution started
+last_updated: "2026-04-18T05:13:39.043Z"
+last_activity: 2026-04-18
 progress:
   total_phases: 6
-  completed_phases: 5
-  total_plans: 12
-  completed_plans: 15
+  completed_phases: 6
+  total_plans: 14
+  completed_plans: 17
   percent: 100
 ---
 
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** The briefing always delivers — every morning, the user gets a prioritised, conversational summary of what matters without touching a single app.
-**Current focus:** Phase 11 — trusted-actions
+**Current focus:** Phase 12 — conversational-flow
 
 ## Current Position
 
-Phase: 11 (trusted-actions) — EXECUTING
+Phase: 12 (conversational-flow) — EXECUTING
 Plan: 1 of 2
-Status: Executing Phase 11
-Last activity: 2026-04-18 -- Phase 11 execution started
+Status: Executing Phase 12
+Last activity: 2026-04-18
 
 ## Accumulated Context
 

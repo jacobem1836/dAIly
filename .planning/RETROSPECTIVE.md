@@ -55,15 +55,69 @@
 
 ---
 
+## Milestone: v1.1 — Intelligence Layer
+
+**Shipped:** 2026-04-18
+**Phases:** 6 | **Plans:** 14 | **Timeline:** 13 days (2026-04-05 → 2026-04-18)
+
+### What Was Built
+
+1. Three tech debt fixes — RFC 2822 address normalization, Slack cursor pagination, message ID resolution from briefing metadata
+2. Adaptive sender ranking — 14-day exponential decay scoring with sigmoid normalization (neutral=1.25), cold-start guard, graceful degradation
+3. pgvector cross-session memory — LLM-driven fact extraction, cosine dedup (threshold=0.1), narrator injection, fire-and-forget session-end trigger
+4. Memory transparency — voice-driven query/delete/clear/disable sub-paths via `memory_node`, keyword-first routing in orchestrator
+5. Trusted actions — `BLOCKED_ACTION_TYPES` frozenset, per-action-type autonomy levels (suggest/approve/auto), CLI `profile.autonomy.*` config commands
+6. Conversational flow — sentence-level briefing segmentation, cursor-tracked `resume_briefing` route, tone compression via keyword and implicit signal detection
+
+### What Worked
+
+- **Dependency-ordering again held** — Phase 7 (tech debt) before Phase 8 (adaptive ranker) meant the ranking bugs were fixed before the learning layer was added. Correct call.
+- **pgvector in same Postgres instance** — no additional infra, HNSW cosine dedup worked cleanly at M1 scale. The "don't add a separate vector DB" constraint from CLAUDE.md was validated.
+- **Sentence-level briefing segmentation** — the implementation was cleaner than expected. Splitting on `.` at delivery time gave cursor tracking for free. CONV-01 was the hardest success criterion and turned out to be the simplest to verify.
+- **BLOCKED_ACTION_TYPES as a code-level constant** — making it a frozenset at import time (not a config value) was the right call. T-11-01 security constraint enforced without any runtime check.
+- **Fire-and-forget memory extraction** — `asyncio.create_task` with a dedicated `async_session` inside the detached task solved the "don't block voice loop shutdown" requirement cleanly.
+
+### What Was Inefficient
+
+- **SUMMARY.md structured one-liners still inconsistent** — v1.1 SUMMARY.md files still didn't use the `one_liner:` structured field reliably. The milestone tooling extracted garbled output again. Same lesson as v1.0, not yet fixed in practice.
+- **Phase 7 completion state missing from ROADMAP.md mid-milestone** — Phase 7 showed "Not started" in the progress table even though it was complete. This was a tooling issue (milestone complete ran before Phase 7's completion was reflected).
+- **Phase 8 took 4 plans vs. expected 2** — the adaptive ranker required more wiring than anticipated (signal model → sender metadata capture → pipeline wire → session wiring were each non-trivial). Pre-phase planning underestimated integration depth.
+- **Redundant `* 2.md` files in phase dirs** — artifact files (`08-01-PLAN 2.md`, `08-CONTEXT 2.md`, etc.) accumulated across all phase directories. These appear to be duplicate artifacts from worktree operations and add noise.
+
+### Patterns Established
+
+- **Cold-start guard is mandatory for any learned model** — ship the learning system with an explicit "< N samples → heuristic fallback" path from day one. Don't assume signal volume.
+- **Transparency before trust** — Memory Transparency (Phase 10) before Trusted Actions (Phase 11) was the right order. User visibility into what the system knows should precede any increased autonomy.
+- **Implicit signal detection as a tone path** — detecting time pressure from conversational patterns (not just keywords) is the right architecture for adaptive behaviour. Keeps the signal detection extensible.
+- **Security constraints as code, not config** — high-impact action types that must never be auto-executed belong in a frozenset constant, not in a config file that a future code path might bypass.
+
+### Key Lessons
+
+- **Fix the SUMMARY.md one-liner format** — this is the third time manual extraction was needed. The solution is to add a SUMMARY.md template check to the execution hook, not to keep noting it.
+- **Run `gsd-health` before milestone close** — caught the W009 VALIDATION.md gap for Phase 8 before archiving. This should be a standard pre-completion step.
+- **Verify plan checkbox sync in ROADMAP.md at phase close** — the Phase 7 progress table discrepancy persisted because there was no automated sync between execution and the ROADMAP.md status column.
+- **`skip` and `re_request` signals are still uncaptured** — the Phase 8 decision to defer adding new signal capture points means the adaptive ranker only learns from `expand` signals today. This limits ranking quality until a future phase adds capture for those signal types.
+
+### Tech Debt Inventory
+
+| Item | Severity | Phase | Fix in |
+|------|----------|-------|--------|
+| `known_channels=set()` in SlackExecutor — no channel whitelist | Low | 04 | v2.0 |
+| `skip` and `re_request` signals uncaptured — ranker learns from `expand` only | Medium | 08 | v2.0 |
+| Hallucination-loop guard is a binary flag — embedding dedup at injection is stronger | Low | 09 | v2.0 |
+| `* 2.md` duplicate artifacts in phase directories (worktree artifacts) | Low | — | /gsd-cleanup |
+
+---
+
 ## Cross-Milestone Trends
 
-| Metric | v1.0 |
-|--------|------|
-| Phases | 6 |
-| Plans | 22 |
-| Days | 10 |
-| LOC (Python) | 7,049 |
-| Plans/day | 2.2 |
-| Tests failed at UAT | 0 |
-| Gaps found in audit | 1 |
-| Tech debt items | 4 |
+| Metric | v1.0 | v1.1 |
+|--------|------|------|
+| Phases | 6 | 6 |
+| Plans | 22 | 14 |
+| Days | 10 | 13 |
+| LOC (Python) | 7,049 | ~9,000+ |
+| Plans/day | 2.2 | 1.1 |
+| Tests failed at UAT | 0 | 0 |
+| Gaps found in audit | 1 | 0 (no audit run) |
+| Tech debt items | 4 | 4 |
