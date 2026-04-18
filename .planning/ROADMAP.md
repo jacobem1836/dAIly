@@ -52,7 +52,11 @@ See `.planning/milestones/v1.1-ROADMAP.md` for full phase details.
   1. When a user skips a briefing item, a skip signal is written to the signal table
   2. When a user asks to repeat or clarify a briefing item, a re_request signal is written to the signal table
   3. The adaptive ranker reads skip and re_request signals alongside expand when computing decay-adjusted scores — items skipped repeatedly rank lower over time
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 13-01-PLAN.md — Adaptive ranker TDD (get_sender_multipliers with decay formula)
+- [ ] 13-02-PLAN.md — Item tracking infrastructure (BriefingItem model, pipeline cache, session init)
+- [ ] 13-03-PLAN.md — Skip and re_request nodes + voice loop integration
 
 ### Phase 14: Observability
 **Goal**: Every module emits structured logs and the system exposes its health and key metrics without touching code
@@ -92,6 +96,6 @@ See `.planning/milestones/v1.1-ROADMAP.md` for full phase details.
 | 10. Memory Transparency | v1.1 | 2/2 | Complete | 2026-04-17 |
 | 11. Trusted Actions | v1.1 | 2/2 | Complete | 2026-04-18 |
 | 12. Conversational Flow | v1.1 | 2/2 | Complete | 2026-04-18 |
-| 13. Signal Capture | v1.2 | 0/? | Not started | - |
+| 13. Signal Capture | v1.2 | 0/3 | Planning | - |
 | 14. Observability | v1.2 | 0/? | Not started | - |
 | 15. Deployment | v1.2 | 0/? | Not started | - |
