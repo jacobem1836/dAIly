@@ -30,6 +30,7 @@ from daily.orchestrator.session import (
     run_session,
     set_email_adapters,
 )
+from daily.profile.signals import SignalType
 from daily.voice.barge_in import VoiceTurnManager
 from daily.voice.stt import STTPipeline
 from daily.voice.tts import TTSPipeline
@@ -40,13 +41,38 @@ _SEPARATOR = "-" * 40
 
 
 def _split_sentences(text: str) -> list[str]:
-    """Split text into sentences on sentence-ending punctuation followed by whitespace.
+    """Split text into sentences — delegates to shared implementation.
 
-    Uses stdlib regex — nltk is not installed in the project venv.
-    Handles '.', '?', '!' as sentence terminators.
+    Uses daily.briefing.items._split_sentences for consistency with
+    pipeline-time sentence range computation (Pitfall 5).
     """
-    parts = re.split(r'(?<=[.?!])\s+', text)
-    return [s.strip() for s in parts if s.strip()]
+    from daily.briefing.items import _split_sentences as _shared_split  # noqa: PLC0415
+    return _shared_split(text)
+
+
+async def _capture_signal_inline(
+    user_id: int,
+    signal_type: "SignalType",
+    target_id: str | None = None,
+) -> None:
+    """Fire-and-forget signal capture from the voice loop.
+
+    Mirrors _capture_signal in nodes.py but importable without circular deps.
+    Per D-01: implicit skip in voice loop fires signal inline (no orchestrator round-trip).
+    """
+    try:
+        from daily.db.engine import async_session as _async_session  # noqa: PLC0415
+        from daily.profile.signals import append_signal  # noqa: PLC0415
+
+        async with _async_session() as session:
+            await append_signal(
+                user_id=user_id,
+                signal_type=signal_type,
+                session=session,
+                target_id=target_id,
+            )
+    except Exception as exc:
+        logger.warning("_capture_signal_inline: failed to write signal: %s", exc)
 
 
 async def _handle_voice_approval(
@@ -198,23 +224,69 @@ async def run_voice_session(user_id: int = 1) -> None:
                 print("dAIly: [briefing spoken]")
                 sentences = _split_sentences(briefing_narrative)
                 briefing_interrupted = False
-                briefing_cursor_val = None  # Will be set if interrupted
+                briefing_cursor_val = None
+
+                # Phase 13 D-03: Load item cursor for signal tracking
+                briefing_items = initial_state.get("briefing_items", [])
+                current_item_idx = 0
+                implicit_skip_threshold = 2.0  # seconds of silence after barge-in
 
                 for i, sentence in enumerate(sentences):
+                    # Phase 13 D-03: Advance item cursor when sentence crosses item boundary
+                    if briefing_items and current_item_idx < len(briefing_items):
+                        item = briefing_items[current_item_idx]
+                        item_end = (
+                            item.get("sentence_range_end", 0)
+                            if isinstance(item, dict)
+                            else getattr(item, "sentence_range_end", 0)
+                        )
+                        if i >= item_end and current_item_idx < len(briefing_items) - 1:
+                            current_item_idx += 1
+
                     completed = await turn_manager.speak(sentence)
                     if not completed:
-                        # Barge-in detected — store resume point (D-01)
-                        briefing_cursor_val = i + 1  # next unspoken sentence
-                        briefing_interrupted = True
-                        # Verbal acknowledgement before processing interruption (D-06)
-                        await turn_manager.speak("Sure, I'll pick up your briefing after.")
-                        break
+                        # Barge-in detected — check for implicit skip (D-01)
+                        try:
+                            utterance = await asyncio.wait_for(
+                                turn_manager.wait_for_utterance(),
+                                timeout=implicit_skip_threshold,
+                            )
+                        except asyncio.TimeoutError:
+                            utterance = None
+
+                        if utterance is None or utterance.strip() == "":
+                            # Silence after barge-in -> implicit skip (D-01)
+                            sender = None
+                            if briefing_items and current_item_idx < len(briefing_items):
+                                item = briefing_items[current_item_idx]
+                                sender = (
+                                    item.get("sender")
+                                    if isinstance(item, dict)
+                                    else getattr(item, "sender", None)
+                                )
+                            asyncio.create_task(
+                                _capture_signal_inline(user_id, SignalType.skip, target_id=sender)
+                            )
+                            logger.info("Implicit skip signal fired for item %d", current_item_idx)
+                            # Advance to next item
+                            if current_item_idx < len(briefing_items) - 1:
+                                current_item_idx += 1
+                            continue
+                        else:
+                            # User spoke — handle as interruption (existing flow)
+                            briefing_cursor_val = i + 1
+                            briefing_interrupted = True
+                            await turn_manager.speak("Sure, I'll pick up your briefing after.")
+                            # Store pending utterance for the first main loop turn
+                            initial_state["_pending_utterance"] = utterance
+                            break
 
                 if not briefing_interrupted:
                     briefing_cursor_val = None  # fully delivered
 
-                # Surface briefing_cursor into initial_state so LangGraph state has it
+                # Surface briefing_cursor and item cursor into initial_state for LangGraph
                 initial_state["briefing_cursor"] = briefing_cursor_val
+                initial_state["current_item_index"] = current_item_idx
             else:
                 print("  No cached briefing. Run 'daily chat' first to generate one.")
                 print()
