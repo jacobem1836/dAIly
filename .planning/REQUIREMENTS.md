@@ -57,22 +57,22 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SIG-01 | — | Pending |
-| SIG-02 | — | Pending |
-| SIG-03 | — | Pending |
-| OBS-01 | — | Pending |
-| OBS-02 | — | Pending |
-| OBS-03 | — | Pending |
-| OBS-04 | — | Pending |
-| DEPLOY-01 | — | Pending |
-| DEPLOY-02 | — | Pending |
-| DEPLOY-03 | — | Pending |
+| SIG-01 | Phase 13 | Pending |
+| SIG-02 | Phase 13 | Pending |
+| SIG-03 | Phase 13 | Pending |
+| OBS-01 | Phase 14 | Pending |
+| OBS-02 | Phase 14 | Pending |
+| OBS-03 | Phase 14 | Pending |
+| OBS-04 | Phase 14 | Pending |
+| DEPLOY-01 | Phase 15 | Pending |
+| DEPLOY-02 | Phase 15 | Pending |
+| DEPLOY-03 | Phase 15 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 10 total
-- Mapped to phases: 0
-- Unmapped: 10 ⚠️
+- Mapped to phases: 10
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-18*
-*Last updated: 2026-04-18 after initial definition*
+*Last updated: 2026-04-18 after v1.2 roadmap creation*

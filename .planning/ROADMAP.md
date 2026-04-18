@@ -4,6 +4,7 @@
 
 - ✅ **v1.0 MVP** — Phases 1–6 (shipped 2026-04-14)
 - ✅ **v1.1 Intelligence Layer** — Phases 7–12 (shipped 2026-04-18)
+- 🔄 **v1.2 Deployability Layer** — Phases 13–15 (in progress)
 
 ## Phases
 
@@ -35,6 +36,46 @@ See `.planning/milestones/v1.1-ROADMAP.md` for full phase details.
 
 </details>
 
+### v1.2 Deployability Layer
+
+- [ ] **Phase 13: Signal Capture** — Wire skip and re_request signals end-to-end into the adaptive ranker
+- [ ] **Phase 14: Observability** — Structured logging, configurable log level, health endpoint, and queryable metrics
+- [ ] **Phase 15: Deployment** — Docker Compose stack, env var template, and VPS production guide
+
+## Phase Details
+
+### Phase 13: Signal Capture
+**Goal**: The adaptive ranker learns from all three interaction signal types — not just expand
+**Depends on**: Nothing (v1.2 start; adaptive ranker from Phase 8 is already in place)
+**Requirements**: SIG-01, SIG-02, SIG-03
+**Success Criteria** (what must be TRUE):
+  1. When a user skips a briefing item, a skip signal is written to the signal table
+  2. When a user asks to repeat or clarify a briefing item, a re_request signal is written to the signal table
+  3. The adaptive ranker reads skip and re_request signals alongside expand when computing decay-adjusted scores — items skipped repeatedly rank lower over time
+**Plans**: TBD
+
+### Phase 14: Observability
+**Goal**: Every module emits structured logs and the system exposes its health and key metrics without touching code
+**Depends on**: Phase 13
+**Requirements**: OBS-01, OBS-02, OBS-03, OBS-04
+**Success Criteria** (what must be TRUE):
+  1. Every log line across the codebase is valid JSON with timestamp, level, module, message, and context fields
+  2. Setting LOG_LEVEL=DEBUG in the environment increases verbosity; setting LOG_LEVEL=WARNING suppresses info-level output — no code change required
+  3. GET /health returns 200 with a structured body showing DB connectivity, Redis connectivity, and scheduler state
+  4. Briefing generation latency, signal counts by type, and memory store size are queryable (via the health endpoint or a dedicated metrics route)
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 15: Deployment
+**Goal**: Any developer can clone the repo, set environment variables, and run the full stack — locally or on a VPS
+**Depends on**: Phase 14
+**Requirements**: DEPLOY-01, DEPLOY-02, DEPLOY-03
+**Success Criteria** (what must be TRUE):
+  1. Running docker compose up from a fresh clone starts the app, Postgres, and Redis with no manual steps beyond copying .env.example
+  2. .env.example documents every required environment variable with a description and placeholder — no secrets are committed to the repo
+  3. A production guide exists that walks through single-host VPS deployment: systemd or Docker, reverse proxy (nginx/caddy), and TLS termination
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -51,3 +92,6 @@ See `.planning/milestones/v1.1-ROADMAP.md` for full phase details.
 | 10. Memory Transparency | v1.1 | 2/2 | Complete | 2026-04-17 |
 | 11. Trusted Actions | v1.1 | 2/2 | Complete | 2026-04-18 |
 | 12. Conversational Flow | v1.1 | 2/2 | Complete | 2026-04-18 |
+| 13. Signal Capture | v1.2 | 0/? | Not started | - |
+| 14. Observability | v1.2 | 0/? | Not started | - |
+| 15. Deployment | v1.2 | 0/? | Not started | - |

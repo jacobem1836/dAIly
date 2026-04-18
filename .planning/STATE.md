@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Deployability Layer
-status: planning
+status: roadmapped
 last_updated: "2026-04-18T00:00:00.000Z"
 last_activity: 2026-04-18
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -24,10 +24,26 @@ See: .planning/PROJECT.md (updated 2026-04-18)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 13 — Signal Capture (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-04-18 — Milestone v1.2 started
+Status: Roadmap defined, ready to plan Phase 13
+Last activity: 2026-04-18 — v1.2 roadmap created (3 phases, 10 requirements)
+
+```
+v1.2 progress: [                    ] 0%
+Phase 13: Signal Capture    [ ] Not started
+Phase 14: Observability     [ ] Not started
+Phase 15: Deployment        [ ] Not started
+```
+
+## Performance Metrics
+
+| Metric | v1.0 | v1.1 |
+|--------|------|------|
+| Phases | 6 | 6 |
+| Plans | 22 | 14 |
+| Timeline | 10 days | 4 days |
+| Requirements | 31 | 12 |
 
 ## Accumulated Context
 
@@ -37,14 +53,13 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-- Address tech debt before or during v1.1:
-  - `user_email=""` in scheduler (WEIGHT_DIRECT never fires)
-  - Slack pagination (single-page only)
-  - `message_id = last_content` stub in thread summarisation
+- Phase 13: Fire skip signals from voice session loop (skip node currently wired but signal not written)
+- Phase 13: Fire re_request signals when user asks to repeat an item
+- Phase 13: Update adaptive ranker decay computation to include skip + re_request alongside expand
 
 ### Blockers/Concerns
 
-None — v1.0 shipped clean.
+None — v1.1 shipped clean.
 
 ### Quick Tasks Completed
 
@@ -55,5 +70,6 @@ None — v1.0 shipped clean.
 
 ## Session Continuity
 
-Last session: 2026-04-18T04:16:28.522Z
-Milestone v1.0 complete.
+Last session: 2026-04-18
+v1.1 Intelligence Layer complete. v1.2 roadmap defined — 3 phases covering signal capture, observability, and deployment.
+Next: `/gsd-plan-phase 13`
