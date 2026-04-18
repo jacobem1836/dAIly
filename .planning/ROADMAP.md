@@ -94,7 +94,6 @@ Plans:
 
 
 
-
 ### Phase 11: Trusted Actions
 **Goal**: User can configure specific action types to execute without per-action approval; high-impact actions remain locked to approve
 **Depends on**: Phase 7
@@ -104,7 +103,10 @@ Plans:
   2. Send-email and create-external-calendar-invite are never auto-executed regardless of user autonomy settings
   3. The approve level (default) behaves identically to v1.0 — no regression in the approval gate
   4. User can change autonomy level via config command; the change takes effect on the next session
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+  - [ ] 11-01-PLAN.md — Autonomy constants, UserPreferences field, and approval gate bypass
+  - [ ] 11-02-PLAN.md — CLI config commands and comprehensive tests
 
 ### Phase 12: Conversational Flow
 **Goal**: User can interrupt the briefing, switch modes, and receive tone-adapted responses without breaking session state
@@ -130,5 +132,5 @@ Plans:
 | 8. Adaptive Ranker | v1.1 | 4/4 | Complete | 2026-04-16 |
 | 9. Cross-Session Memory | v1.1 | 4/4 | Complete | 2026-04-17 |
 | 10. Memory Transparency | v1.1 | 2/2 | Complete   | 2026-04-17 |
-| 11. Trusted Actions | v1.1 | 0/? | Not started | — |
+| 11. Trusted Actions | v1.1 | 0/2 | Not started | — |
 | 12. Conversational Flow | v1.1 | 0/? | Not started | — |
