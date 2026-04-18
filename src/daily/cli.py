@@ -63,6 +63,64 @@ async def _upsert_profile(user_id: int, key: str, value: str) -> str:
         return f"Set profile.{key} = {value}"
 
 
+async def _upsert_autonomy(user_id: int, action_type: str, level: str) -> str:
+    """Async helper to set autonomy level for an action type.
+
+    Validates action_type against CONFIGURABLE_ACTION_TYPES and level against
+    allowed values before writing to the autonomy_levels dict in UserPreferences.
+    Returns a success or error message string.
+    """
+    from daily.actions.base import BLOCKED_ACTION_TYPES, CONFIGURABLE_ACTION_TYPES, ActionType
+    from daily.db.engine import async_session
+    from daily.profile.service import load_profile, upsert_preference
+
+    # Validate level
+    valid_levels = {"approve", "auto", "suggest"}
+    if level not in valid_levels:
+        return f"Invalid autonomy level: {level}. Must be one of: {', '.join(sorted(valid_levels))}"
+
+    # Validate action_type exists in ActionType enum
+    try:
+        at = ActionType(action_type)
+    except ValueError:
+        valid_types = sorted(t.value for t in CONFIGURABLE_ACTION_TYPES)
+        return f"Unknown action type: {action_type}. Configurable types: {', '.join(valid_types)}"
+
+    # Reject blocked types
+    if at in BLOCKED_ACTION_TYPES:
+        return f"Cannot configure autonomy for {action_type}: this action type always requires approval."
+
+    # Reject types not in configurable set
+    if at not in CONFIGURABLE_ACTION_TYPES:
+        valid_types = sorted(t.value for t in CONFIGURABLE_ACTION_TYPES)
+        return f"Unknown action type: {action_type}. Configurable types: {', '.join(valid_types)}"
+
+    async with async_session() as session:
+        prefs = await load_profile(user_id, session)
+        updated_levels = dict(prefs.autonomy_levels)
+        updated_levels[action_type] = level
+        await upsert_preference(user_id, "autonomy_levels", updated_levels, session)
+        return f"Set profile.autonomy.{action_type} = {level}"
+
+
+async def _get_autonomy(user_id: int) -> str:
+    """Async helper to display current autonomy levels.
+
+    Shows all configurable action types with their current level.
+    """
+    from daily.actions.base import CONFIGURABLE_ACTION_TYPES
+    from daily.db.engine import async_session
+    from daily.profile.service import load_profile
+
+    async with async_session() as session:
+        prefs = await load_profile(user_id, session)
+        lines = []
+        for at in sorted(CONFIGURABLE_ACTION_TYPES, key=lambda t: t.value):
+            level = prefs.autonomy_levels.get(at.value, "approve")
+            lines.append(f"  {at.value}: {level}")
+        return "Autonomy levels:\n" + "\n".join(lines)
+
+
 async def _get_profile(user_id: int) -> str:
     """Async helper to load and display current profile preferences.
 
@@ -191,11 +249,12 @@ def config_set(key: str, value: str):
     """Set a briefing or profile config value.
 
     Keys:
-      briefing.schedule_time  -- daily precompute time, format HH:MM (UTC)
-      briefing.email_top_n    -- number of top emails to include in briefing
-      profile.tone            -- narrative tone: formal, casual, conversational
-      profile.briefing_length -- length: concise, standard, detailed
-      profile.category_order  -- comma-separated section order (e.g. calendar,emails,slack)
+      briefing.schedule_time           -- daily precompute time, format HH:MM (UTC)
+      briefing.email_top_n             -- number of top emails to include in briefing
+      profile.tone                     -- narrative tone: formal, casual, conversational
+      profile.briefing_length          -- length: concise, standard, detailed
+      profile.category_order           -- comma-separated section order (e.g. calendar,emails,slack)
+      profile.autonomy.<action_type>   -- autonomy level: approve, auto, suggest
 
     Examples:
       daily config set briefing.schedule_time 06:00
@@ -203,7 +262,13 @@ def config_set(key: str, value: str):
       daily config set profile.tone casual
       daily config set profile.briefing_length detailed
       daily config set profile.category_order calendar,emails,slack
+      daily config set profile.autonomy.draft_email auto
     """
+    if key.startswith("profile.autonomy."):
+        action_type = key.removeprefix("profile.autonomy.")
+        result = asyncio.run(_upsert_autonomy(user_id=1, action_type=action_type, level=value))
+        typer.echo(result)
+        return
     if key.startswith("profile."):
         profile_key = key.removeprefix("profile.")
         result = asyncio.run(_upsert_profile(user_id=1, key=profile_key, value=value))
@@ -218,11 +283,17 @@ def config_get(key: str):
     """Get current config values.
 
     Keys:
-      profile  -- show all user profile preferences
+      profile          -- show all user profile preferences
+      profile.autonomy -- show autonomy levels for all action types
 
     Example:
       daily config get profile
+      daily config get profile.autonomy
     """
+    if key == "profile.autonomy":
+        result = asyncio.run(_get_autonomy(user_id=1))
+        typer.echo(result)
+        return
     if key == "profile":
         result = asyncio.run(_get_profile(user_id=1))
         typer.echo(result)

@@ -35,13 +35,14 @@ async def load_profile(user_id: int, session: AsyncSession) -> UserPreferences:
 
 
 async def upsert_preference(
-    user_id: int, key: str, value: str, session: AsyncSession
+    user_id: int, key: str, value: str | dict | list, session: AsyncSession
 ) -> UserPreferences:
     """Set a single preference key for a user and persist it.
 
     Ensures a default user row exists before upserting the profile (PoC
     workaround for Phase 3 hardcoded user_id=1 stub — real auth in Phase 4).
-    For 'category_order', value is parsed as a comma-separated list.
+    For 'category_order' when value is a str, value is parsed as a comma-separated list.
+    For dict/list values (e.g. autonomy_levels), value is used directly.
     Returns the updated UserPreferences.
     """
     await _ensure_default_user(user_id, session)
@@ -55,9 +56,9 @@ async def upsert_preference(
         profile = UserProfile(user_id=user_id, preferences={})
         session.add(profile)
 
-    # Parse category_order as comma-separated list
-    parsed_value: str | list[str]
-    if key == "category_order":
+    # Parse value based on key type
+    parsed_value: str | list[str] | dict
+    if key == "category_order" and isinstance(value, str):
         parsed_value = [item.strip() for item in value.split(",")]
     else:
         parsed_value = value
