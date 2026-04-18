@@ -66,6 +66,24 @@ class TestBuildGraph:
         graph = build_graph(checkpointer=saver)
         assert graph.checkpointer is saver
 
+    def test_build_graph_has_skip_node(self):
+        """Compiled graph has 'skip' node (Phase 13 SIG-01)."""
+        from langgraph.checkpoint.memory import MemorySaver
+
+        from daily.orchestrator.graph import build_graph
+
+        graph = build_graph(checkpointer=MemorySaver())
+        assert "skip" in graph.nodes
+
+    def test_build_graph_has_re_request_node(self):
+        """Compiled graph has 're_request' node (Phase 13 SIG-02)."""
+        from langgraph.checkpoint.memory import MemorySaver
+
+        from daily.orchestrator.graph import build_graph
+
+        graph = build_graph(checkpointer=MemorySaver())
+        assert "re_request" in graph.nodes
+
 
 class TestRouteIntent:
     """Tests for the route_intent conditional edge function."""
@@ -133,6 +151,35 @@ class TestRouteIntent:
         state = SessionState(messages=[HumanMessage(content="SUMMARISE that thread please")])
         result = route_intent(state)
         assert result == "summarise_thread"
+
+    def test_route_intent_returns_skip_for_skip_keyword(self):
+        """route_intent routes to 'skip' for skip/next/move on keywords (Phase 13 D-01)."""
+        from langchain_core.messages import HumanMessage
+
+        from daily.orchestrator.graph import route_intent
+        from daily.orchestrator.state import SessionState
+
+        state = SessionState(messages=[HumanMessage(content="skip this")])
+        assert route_intent(state) == "skip"
+
+        state = SessionState(messages=[HumanMessage(content="next")])
+        assert route_intent(state) == "skip"
+
+        state = SessionState(messages=[HumanMessage(content="move on please")])
+        assert route_intent(state) == "skip"
+
+    def test_route_intent_returns_re_request_for_repeat_that(self):
+        """route_intent routes to 're_request' for repeat/say-again keywords (Phase 13 D-04)."""
+        from langchain_core.messages import HumanMessage
+
+        from daily.orchestrator.graph import route_intent
+        from daily.orchestrator.state import SessionState
+
+        state = SessionState(messages=[HumanMessage(content="repeat that")])
+        assert route_intent(state) == "re_request"
+
+        state = SessionState(messages=[HumanMessage(content="say that again")])
+        assert route_intent(state) == "re_request"
 
     def test_route_intent_returns_summarise_for_thread_keyword(self):
         """route_intent routes to 'summarise_thread' for 'thread'."""
