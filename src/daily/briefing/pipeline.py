@@ -17,6 +17,7 @@ All pipeline parameters are provided by _build_pipeline_kwargs() in scheduler.py
 when called from the cron job, or passed directly for on-demand generation.
 """
 
+import json
 import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
@@ -24,8 +25,9 @@ from typing import TYPE_CHECKING
 from openai import AsyncOpenAI
 from redis.asyncio import Redis
 
-from daily.briefing.cache import cache_briefing, get_briefing
+from daily.briefing.cache import CACHE_TTL, cache_briefing, get_briefing
 from daily.briefing.context_builder import build_context
+from daily.briefing.items import build_briefing_items
 from daily.briefing.models import BriefingOutput
 from daily.briefing.narrator import generate_narrative
 from daily.briefing.redactor import redact_emails, redact_messages
@@ -151,6 +153,17 @@ async def run_briefing_pipeline(
 
     # Step 4: Cache in Redis (BRIEF-01, D-14)
     await cache_briefing(redis, user_id, output)
+
+    # Phase 13 D-02: Cache structured item list alongside narrative for signal tracking
+    try:
+        briefing_items = build_briefing_items(context, output.narrative)
+        items_key = f"briefing:{user_id}:{output.generated_at.date().isoformat()}_items"
+        items_payload = json.dumps([item.model_dump() for item in briefing_items])
+        await redis.set(items_key, items_payload, ex=CACHE_TTL)
+        logger.info("Cached %d briefing items for user %d", len(briefing_items), user_id)
+    except Exception as exc:
+        # Item cache failure must not block the briefing pipeline (graceful degradation)
+        logger.warning("Failed to cache briefing items: %s", exc)
 
     logger.info("Briefing pipeline complete for user %d, cached", user_id)
     return output
