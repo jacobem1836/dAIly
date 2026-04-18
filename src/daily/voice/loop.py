@@ -307,6 +307,33 @@ async def run_voice_session(user_id: int = 1) -> None:
                             session_history.append({"role": "user", "content": user_input})
                             session_history.append({"role": "assistant", "content": content})
 
+                            # Phase 12: check briefing_cursor for auto-offer and resume re-entry
+                            graph_state_snap = await graph.aget_state(config)
+                            current_state = graph_state_snap.values if hasattr(graph_state_snap, "values") else {}
+                            cursor = current_state.get("briefing_cursor")
+
+                            # D-04: auto-offer briefing resume if cursor is set
+                            if cursor is not None and "resuming your briefing" not in content.lower():
+                                await turn_manager.speak("Want me to continue your briefing?")
+
+                            # Re-enter sentence loop when resume_briefing_node was just invoked
+                            if cursor is not None and "resuming your briefing" in content.lower():
+                                briefing_text = current_state.get("briefing_narrative", "")
+                                if briefing_text:
+                                    sentences = _split_sentences(briefing_text)
+                                    # Clamp cursor to valid range (T-12-01)
+                                    safe_cursor = max(0, min(cursor, len(sentences) - 1))
+                                    for j, sentence in enumerate(sentences[safe_cursor:], start=safe_cursor):
+                                        completed = await turn_manager.speak(sentence)
+                                        if not completed:
+                                            # Re-interrupted — update cursor
+                                            await graph.aupdate_state(config, {"briefing_cursor": j + 1})
+                                            await turn_manager.speak("Sure, I'll pick up your briefing after.")
+                                            break
+                                    else:
+                                        # Briefing fully delivered — clear cursor
+                                        await graph.aupdate_state(config, {"briefing_cursor": None})
+
             finally:
                 # 8. Clean shutdown
                 listen_stop.set()

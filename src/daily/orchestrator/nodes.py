@@ -202,6 +202,29 @@ async def respond_node(state: SessionState) -> dict:
     return {"messages": [AIMessage(content=narrative)]}
 
 
+async def resume_briefing_node(state: SessionState) -> dict:
+    """Resume briefing delivery from the stored cursor position.
+
+    Returns a confirmation message. The voice loop checks briefing_cursor
+    after speaking this message and re-enters the sentence iteration loop.
+    TTS orchestration stays in voice/loop.py — this node only provides
+    the verbal cue (RESEARCH.md Pattern 5, simpler alternative).
+
+    Phase 12 CONV-01/CONV-02: explicit resume path via D-03 keywords.
+
+    Args:
+        state: Current SessionState with briefing_cursor set.
+
+    Returns:
+        State update dict with AIMessage confirmation. briefing_cursor
+        is NOT cleared here — the voice loop clears it after delivery.
+    """
+    if state.briefing_cursor is None:
+        return {"messages": [AIMessage(content="There's no briefing to resume — it was fully delivered.")]}
+
+    return {"messages": [AIMessage(content="Resuming your briefing now.")]}
+
+
 def _resolve_message_id(user_query: str, email_context: list[dict]) -> str | None:
     """Match user's natural language query against email_context metadata.
 

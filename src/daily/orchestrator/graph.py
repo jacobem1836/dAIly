@@ -15,11 +15,15 @@ Phase 4 nodes (action layer, T-04-02 gate enforcement):
 Phase 10 nodes (memory transparency, MEM-01/MEM-02/MEM-03):
   memory            -> Query, delete, bulk-clear, or disable stored memory facts
 
+Phase 12 nodes (conversational flow, CONV-01/CONV-02):
+  resume_briefing   -> Confirm and re-enter sentence-level briefing delivery
+
 Route priority (most specific first):
-  1. memory_keywords    -> 'memory'          (Phase 10)
-  2. summarise_keywords -> 'summarise_thread'
-  3. draft_keywords     -> 'draft'
-  4. default            -> 'respond'
+  1. memory_keywords          -> 'memory'          (Phase 10)
+  2. resume_briefing_keywords -> 'resume_briefing' (Phase 12)
+  3. summarise_keywords       -> 'summarise_thread'
+  4. draft_keywords           -> 'draft'
+  5. default                  -> 'respond'
 
 Model selection happens inside the node functions (nodes.py), not here.
 
@@ -37,9 +41,10 @@ def route_intent(state: SessionState) -> str:
     """Route based on last user message content.
 
     Keyword matching only — no user-controlled code execution (T-03-04).
-    Priority: memory_keywords > summarise_keywords > draft_keywords > respond (default).
+    Priority: memory_keywords > resume_briefing_keywords > summarise_keywords > draft_keywords > respond (default).
 
     Memory check must come FIRST (most specific per D-01, Phase 10).
+    Resume briefing check must come BEFORE summarise (D-03, priority slot 2).
     Summarise check must come BEFORE draft check — "summarise that thread" should
     go to summarise_thread, not draft, even though 'thread' could be ambiguous.
 
@@ -47,7 +52,7 @@ def route_intent(state: SessionState) -> str:
         state: Current SessionState, checked for the last message.
 
     Returns:
-        Node name: 'memory', 'summarise_thread', 'draft', or 'respond'.
+        Node name: 'memory', 'resume_briefing', 'summarise_thread', 'draft', or 'respond'.
     """
     last_msg = state.messages[-1].content.lower() if state.messages else ""
 
@@ -63,6 +68,18 @@ def route_intent(state: SessionState) -> str:
                            + memory_delete_keywords + memory_disable_keywords)
     if any(kw in last_msg for kw in all_memory_keywords):
         return "memory"
+
+    # Resume briefing keywords — checked BEFORE summarise (D-03, priority slot 2)
+    resume_briefing_keywords = [
+        "continue my briefing",
+        "resume briefing",
+        "go back to the briefing",
+        "continue briefing",
+        "pick up the briefing",
+        "where were we",
+    ]
+    if any(kw in last_msg for kw in resume_briefing_keywords):
+        return "resume_briefing"
 
     # Summarise keywords — checked FIRST among non-memory (more specific than draft keywords)
     summarise_keywords = ["summarise", "summarize", "summary", "thread", "email chain"]
@@ -134,6 +151,7 @@ def build_graph(checkpointer=None):
         execute_node,
         memory_node,
         respond_node,
+        resume_briefing_node,
         summarise_thread_node,
     )
 
@@ -151,12 +169,16 @@ def build_graph(checkpointer=None):
     # Phase 10 nodes (memory transparency)
     builder.add_node("memory", memory_node)
 
+    # Phase 12 node (conversational flow)
+    builder.add_node("resume_briefing", resume_briefing_node)
+
     # Conditional entry from START
     builder.add_conditional_edges(
         START,
         route_intent,
         {
             "memory": "memory",
+            "resume_briefing": "resume_briefing",
             "respond": "respond",
             "summarise_thread": "summarise_thread",
             "draft": "draft",
@@ -169,6 +191,9 @@ def build_graph(checkpointer=None):
 
     # Phase 10 terminal edge
     builder.add_edge("memory", END)
+
+    # Phase 12 terminal edge
+    builder.add_edge("resume_briefing", END)
 
     # Phase 4 action chain: draft -> approval -> conditional -> END
     # approval_node uses interrupt() which pauses the graph — no bypass possible
