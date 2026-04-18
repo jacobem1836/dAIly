@@ -18,6 +18,7 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 |-----------|-------|--------|
 | **v1.0 — Core Backend** | OAuth integrations, briefing pipeline, orchestrator, action layer, voice interface, preferences | ✅ Shipped 2026-04-14 |
 | **v1.1 — Intelligence Layer** | Adaptive prioritisation, cross-session memory, memory transparency, trusted actions, conversational flow | ✅ Shipped 2026-04-18 |
+| **v1.2 — Deployability Layer** | Signal capture, observability, Docker deployment | 🔄 In progress |
 | **v2.0 — Ecosystem Expansion** | Travel, finance, health, smart home, document platforms, web dashboard | Planned |
 
 ## Requirements
@@ -68,7 +69,27 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 - ✓ FIX-02: Slack pagination — cursor-based multi-page ingestion — v1.1
 - ✓ FIX-03: Real message ID extraction from briefing metadata in summarise_thread_node — v1.1
 
-### Active (v2.0 targets)
+## Current Milestone: v1.2 Deployability Layer
+
+**Goal:** Close the v1.1 intelligence gap, add observability, and make the stack deployable — clearing the runway for v2.0 web UI.
+
+**Target features:**
+- Signal capture: skip + re_request signals wired to adaptive ranker
+- Observability: structured logging, metrics, health check endpoint
+- Deployment: Docker Compose stack, env var management, VPS-ready config
+
+### Active (v1.2 targets)
+
+- [ ] **SIG-01**: Skip signals captured and wired to adaptive ranker
+- [ ] **SIG-02**: Re-request signals captured and wired to adaptive ranker
+- [ ] **OBS-01**: Structured logging (JSON format, configurable level) across all modules
+- [ ] **OBS-02**: Health check endpoint exposing service status
+- [ ] **OBS-03**: Basic metrics (briefing latency, signal counts, memory size)
+- [ ] **DEPLOY-01**: Docker Compose stack (app + Postgres + Redis) with documented setup
+- [ ] **DEPLOY-02**: Environment variable management (.env template, secrets separation)
+- [ ] **DEPLOY-03**: VPS deployment guide (single-host production config)
+
+### Future (v2.0+ targets)
 
 - [ ] **DASH-01**: Web dashboard — briefing history, preference management, memory browser
 - [ ] **DASH-02**: Mobile companion app (iOS)
@@ -141,4 +162,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-18 after v1.1 milestone — Intelligence Layer shipped*
+*Last updated: 2026-04-18 after v1.2 milestone start — Deployability Layer*

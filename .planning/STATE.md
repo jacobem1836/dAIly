@@ -1,33 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Intelligence Layer
-status: executing
-last_updated: "2026-04-18T05:13:39.043Z"
+milestone: v1.2
+milestone_name: Deployability Layer
+status: planning
+last_updated: "2026-04-18T00:00:00.000Z"
 last_activity: 2026-04-18
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 14
-  completed_plans: 17
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-15)
+See: .planning/PROJECT.md (updated 2026-04-18)
 
 **Core value:** The briefing always delivers — every morning, the user gets a prioritised, conversational summary of what matters without touching a single app.
-**Current focus:** Phase 12 — conversational-flow
+**Current focus:** v1.2 — Deployability Layer
 
 ## Current Position
 
-Phase: 12 (conversational-flow) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 12
-Last activity: 2026-04-18
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-18 — Milestone v1.2 started
 
 ## Accumulated Context
 
