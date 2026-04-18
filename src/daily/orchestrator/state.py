@@ -10,6 +10,10 @@ LangGraph merges message lists correctly during state updates (append semantics)
 Phase 4 additions:
   pending_action: Holds an ActionDraft awaiting user approval.
   approval_decision: Holds the user's decision string ('confirm', 'reject', 'edit:*').
+
+Phase 12 additions:
+  briefing_cursor: Sentence index for mid-briefing resume (CONV-01).
+  tone_override: Session-scoped tone compression (CONV-03). Never persisted to DB.
 """
 from __future__ import annotations
 
@@ -42,6 +46,12 @@ class SessionState(BaseModel):
                        (Phase 9 INTEL-02). Injected into the live-session response
                        prompt so follow-up turns reflect prior-session context.
                        Empty list when memory_enabled=False. Never contains raw bodies.
+        briefing_cursor: Sentence index for mid-briefing resume (Phase 12 CONV-01).
+                         None = no briefing in progress or fully delivered.
+                         int = next unspoken sentence index.
+        tone_override: Session-scoped tone override (Phase 12 CONV-03).
+                       "brief" = compressed responses. None = use preference default.
+                       Never persisted to DB — resets when session ends.
     """
 
     messages: Annotated[list, add_messages] = Field(default_factory=list)
@@ -54,3 +64,5 @@ class SessionState(BaseModel):
     email_context: list[dict] = Field(default_factory=list)
     user_memories: list[str] = Field(default_factory=list)
     auto_executed: bool = False  # True when approval was bypassed by autonomy level (Phase 11)
+    briefing_cursor: int | None = None  # Phase 12: sentence index for briefing resume (D-02)
+    tone_override: str | None = None    # Phase 12: session-scoped tone compression (D-09)

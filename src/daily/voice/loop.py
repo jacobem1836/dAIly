@@ -15,6 +15,7 @@ Threat mitigations:
 """
 import asyncio
 import logging
+import re
 
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from redis.asyncio import Redis
@@ -36,6 +37,16 @@ from daily.voice.tts import TTSPipeline
 logger = logging.getLogger(__name__)
 
 _SEPARATOR = "-" * 40
+
+
+def _split_sentences(text: str) -> list[str]:
+    """Split text into sentences on sentence-ending punctuation followed by whitespace.
+
+    Uses stdlib regex — nltk is not installed in the project venv.
+    Handles '.', '?', '!' as sentence terminators.
+    """
+    parts = re.split(r'(?<=[.?!])\s+', text)
+    return [s.strip() for s in parts if s.strip()]
 
 
 async def _handle_voice_approval(
@@ -181,10 +192,29 @@ async def run_voice_session(user_id: int = 1) -> None:
             print()
 
             # 6. First turn — speak briefing from cache (VOICE-03: sub-1s from cache)
+            # Phase 12 D-01: sentence-by-sentence delivery with cursor tracking
             briefing_narrative = initial_state.get("briefing_narrative", "")
             if briefing_narrative:
                 print("dAIly: [briefing spoken]")
-                await turn_manager.speak(briefing_narrative)
+                sentences = _split_sentences(briefing_narrative)
+                briefing_interrupted = False
+                briefing_cursor_val = None  # Will be set if interrupted
+
+                for i, sentence in enumerate(sentences):
+                    completed = await turn_manager.speak(sentence)
+                    if not completed:
+                        # Barge-in detected — store resume point (D-01)
+                        briefing_cursor_val = i + 1  # next unspoken sentence
+                        briefing_interrupted = True
+                        # Verbal acknowledgement before processing interruption (D-06)
+                        await turn_manager.speak("Sure, I'll pick up your briefing after.")
+                        break
+
+                if not briefing_interrupted:
+                    briefing_cursor_val = None  # fully delivered
+
+                # Surface briefing_cursor into initial_state so LangGraph state has it
+                initial_state["briefing_cursor"] = briefing_cursor_val
             else:
                 print("  No cached briefing. Run 'daily chat' first to generate one.")
                 print()
