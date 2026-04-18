@@ -67,27 +67,45 @@ class TestHealthEndpoint:
     """UAT 6: Server starts and /health returns 200 with scheduler started."""
 
     def test_health_returns_ok(self):
-        """GET /health returns 200 and {"status": "ok"}."""
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
+        """GET /health returns 200 and status ok (with all dependency probes healthy)."""
+        # Lifespan session ctx (BriefingConfig query)
+        lifespan_result = MagicMock()
+        lifespan_result.scalar_one_or_none.return_value = None
+        lifespan_ctx, _ = _mock_db_session(execute_return=lifespan_result)
 
-        mock_ctx, _ = _mock_db_session(execute_return=mock_result)
+        # Health endpoint session ctx (SELECT 1 probe)
+        health_session_result = MagicMock()
+        health_ctx, _ = _mock_db_session(execute_return=health_session_result)
+
+        # async_session is called twice: once by lifespan, once by /health
+        mock_async_session = MagicMock(side_effect=[lifespan_ctx, health_ctx])
+
         mock_sched = _mock_scheduler()
+        mock_sched.get_jobs = MagicMock(return_value=[MagicMock()])  # healthy
+
+        mock_redis = AsyncMock()
+        mock_redis.ping = AsyncMock(return_value=True)
+        mock_redis.aclose = AsyncMock()
 
         with (
-            patch("daily.main.async_session", return_value=mock_ctx),
+            patch("daily.main.async_session", mock_async_session),
             patch("daily.main.setup_scheduler"),
             patch("daily.main.scheduler", mock_sched),
+            patch("daily.main.AsyncRedis.from_url", return_value=mock_redis),
+            patch("daily.main.configure_logging"),
             patch("daily.main.Settings") as mock_settings_cls,
         ):
             mock_settings_cls.return_value.briefing_schedule_time = "05:00"
+            mock_settings_cls.return_value.log_level = "INFO"
+            mock_settings_cls.return_value.redis_url = "redis://localhost:6379/0"
             from daily.main import app
 
-            client = TestClient(app)
+            client = TestClient(app, raise_server_exceptions=False)
             response = client.get("/health")
 
         assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
+        body = response.json()
+        assert body["status"] == "ok"
 
     def test_scheduler_starts_during_lifespan(self):
         """Scheduler.start() is called when app starts."""
@@ -101,9 +119,12 @@ class TestHealthEndpoint:
             patch("daily.main.async_session", return_value=mock_ctx),
             patch("daily.main.setup_scheduler"),
             patch("daily.main.scheduler", mock_sched),
+            patch("daily.main.configure_logging"),
             patch("daily.main.Settings") as mock_settings_cls,
         ):
             mock_settings_cls.return_value.briefing_schedule_time = "05:00"
+            mock_settings_cls.return_value.log_level = "INFO"
+            mock_settings_cls.return_value.redis_url = "redis://localhost:6379/0"
             from daily.main import app
 
             with TestClient(app):
@@ -286,9 +307,11 @@ class TestSchedulePersistence:
             patch("daily.main.async_session", return_value=mock_ctx),
             patch("daily.main.setup_scheduler") as mock_setup,
             patch("daily.main.scheduler", mock_sched),
+            patch("daily.main.configure_logging"),
             patch("daily.main.Settings") as mock_settings_cls,
         ):
             mock_settings_cls.return_value.briefing_schedule_time = "05:00"
+            mock_settings_cls.return_value.log_level = "INFO"
             from fastapi import FastAPI
             from daily.main import lifespan
 
@@ -315,10 +338,12 @@ class TestSchedulePersistence:
             patch("daily.main.async_session", return_value=mock_ctx),
             patch("daily.main.setup_scheduler"),
             patch("daily.main.scheduler", mock_sched),
+            patch("daily.main.configure_logging"),
             patch("daily.main.Settings") as mock_settings_cls,
             caplog.at_level(logging.INFO, logger="daily.main"),
         ):
             mock_settings_cls.return_value.briefing_schedule_time = "05:00"
+            mock_settings_cls.return_value.log_level = "INFO"
             from fastapi import FastAPI
             from daily.main import lifespan
 
@@ -338,24 +363,44 @@ class TestGracefulDBFallback:
     """UAT 10: App starts and serves /health even when DB is down."""
 
     def test_health_works_without_db(self):
-        """GET /health returns 200 even when DB raises on startup."""
-        mock_ctx, _ = _mock_db_session(side_effect=Exception("Connection refused"))
+        """GET /health returns 503 degraded when DB is down (DB probe fails).
+
+        The lifespan DB read for BriefingConfig also fails (graceful fallback),
+        but /health still responds — status degraded because DB probe fails.
+        """
+        # Both lifespan ctx and health probe ctx raise DB errors
+        lifespan_ctx, _ = _mock_db_session(side_effect=Exception("Connection refused"))
+        health_ctx, _ = _mock_db_session(side_effect=Exception("Connection refused"))
+        mock_async_session = MagicMock(side_effect=[lifespan_ctx, health_ctx])
+
         mock_sched = _mock_scheduler()
+        mock_sched.get_jobs = MagicMock(return_value=[MagicMock()])
+
+        mock_redis = AsyncMock()
+        mock_redis.ping = AsyncMock(return_value=True)
+        mock_redis.aclose = AsyncMock()
 
         with (
-            patch("daily.main.async_session", return_value=mock_ctx),
+            patch("daily.main.async_session", mock_async_session),
             patch("daily.main.setup_scheduler"),
             patch("daily.main.scheduler", mock_sched),
+            patch("daily.main.AsyncRedis.from_url", return_value=mock_redis),
+            patch("daily.main.configure_logging"),
             patch("daily.main.Settings") as mock_settings_cls,
         ):
             mock_settings_cls.return_value.briefing_schedule_time = "05:00"
+            mock_settings_cls.return_value.log_level = "INFO"
+            mock_settings_cls.return_value.redis_url = "redis://localhost:6379/0"
             from daily.main import app
 
-            client = TestClient(app)
+            client = TestClient(app, raise_server_exceptions=False)
             response = client.get("/health")
 
-        assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
+        # /health responds even when DB is down — status is degraded (not ok)
+        assert response.status_code == 503
+        body = response.json()
+        assert body["status"] == "degraded"
+        assert body["db"].startswith("error:")
 
     def test_falls_back_to_env_schedule_on_db_failure(self):
         """When DB is down, setup_scheduler uses env default (05:00)."""
@@ -366,9 +411,12 @@ class TestGracefulDBFallback:
             patch("daily.main.async_session", return_value=mock_ctx),
             patch("daily.main.setup_scheduler") as mock_setup,
             patch("daily.main.scheduler", mock_sched),
+            patch("daily.main.configure_logging"),
             patch("daily.main.Settings") as mock_settings_cls,
         ):
             mock_settings_cls.return_value.briefing_schedule_time = "05:00"
+            mock_settings_cls.return_value.log_level = "INFO"
+            mock_settings_cls.return_value.redis_url = "redis://localhost:6379/0"
             from daily.main import app
 
             with TestClient(app):
@@ -386,10 +434,12 @@ class TestGracefulDBFallback:
             patch("daily.main.async_session", return_value=mock_ctx),
             patch("daily.main.setup_scheduler"),
             patch("daily.main.scheduler", mock_sched),
+            patch("daily.main.configure_logging"),
             patch("daily.main.Settings") as mock_settings_cls,
             caplog.at_level(logging.WARNING, logger="daily.main"),
         ):
             mock_settings_cls.return_value.briefing_schedule_time = "05:00"
+            mock_settings_cls.return_value.log_level = "INFO"
             from fastapi import FastAPI
             from daily.main import lifespan
 

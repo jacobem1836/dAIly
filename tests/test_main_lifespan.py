@@ -30,9 +30,11 @@ async def test_lifespan_uses_db_schedule():
         patch("daily.main.async_session", return_value=mock_ctx),
         patch("daily.main.setup_scheduler") as mock_setup,
         patch("daily.main.scheduler", mock_scheduler),
+        patch("daily.main.configure_logging"),
         patch("daily.main.Settings") as mock_settings_cls,
     ):
         mock_settings_cls.return_value.briefing_schedule_time = "05:00"
+        mock_settings_cls.return_value.log_level = "INFO"
         from fastapi import FastAPI
         from daily.main import lifespan
 
@@ -64,9 +66,11 @@ async def test_lifespan_falls_back_to_env_when_no_db_row():
         patch("daily.main.async_session", return_value=mock_ctx),
         patch("daily.main.setup_scheduler") as mock_setup,
         patch("daily.main.scheduler", mock_scheduler),
+        patch("daily.main.configure_logging"),
         patch("daily.main.Settings") as mock_settings_cls,
     ):
         mock_settings_cls.return_value.briefing_schedule_time = "06:15"
+        mock_settings_cls.return_value.log_level = "INFO"
         from fastapi import FastAPI
         from daily.main import lifespan
 
@@ -92,9 +96,11 @@ async def test_lifespan_falls_back_to_env_on_db_error():
         patch("daily.main.async_session", return_value=mock_ctx),
         patch("daily.main.setup_scheduler") as mock_setup,
         patch("daily.main.scheduler", mock_scheduler),
+        patch("daily.main.configure_logging"),
         patch("daily.main.Settings") as mock_settings_cls,
     ):
         mock_settings_cls.return_value.briefing_schedule_time = "05:00"
+        mock_settings_cls.return_value.log_level = "INFO"
         from fastapi import FastAPI
         from daily.main import lifespan
 
