@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -53,3 +53,10 @@ class UserPreferences(BaseModel):
     category_order: list[str] = ["emails", "calendar", "slack"]
     rejection_behaviour: Literal["ask_why", "discard"] = "ask_why"
     memory_enabled: bool = True
+    # Phase 11 additions:
+    #   autonomy_levels: Maps action type name -> autonomy level.
+    #     "approve" (default) — always interrupt for user approval.
+    #     "auto" — skip approval gate, execute immediately.
+    #     "suggest" — treated as "approve" in Phase 11 (placeholder for future).
+    #   Empty dict means all action types default to "approve" (per D-03).
+    autonomy_levels: dict[str, str] = Field(default_factory=dict)
