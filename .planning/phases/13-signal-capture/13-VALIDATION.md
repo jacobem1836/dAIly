@@ -1,10 +1,11 @@
 ---
 phase: 13
 slug: signal-capture
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-04-18
+audited: 2026-04-19
 ---
 
 # Phase 13 — Validation Strategy
@@ -38,12 +39,12 @@ created: 2026-04-18
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 13-01-01 | 01 | 0 | SIG-03 | — | N/A | unit | `pytest tests/test_adaptive_ranker.py -x -q` | ❌ W0 | ⬜ pending |
-| 13-01-02 | 01 | 1 | SIG-03 | — | N/A | unit | `pytest tests/test_adaptive_ranker.py -x -q` | ✅ W0 | ⬜ pending |
-| 13-02-01 | 02 | 1 | SIG-01, SIG-02 | — | N/A | unit | `pytest tests/ -x -q -k "state"` | ✅ | ⬜ pending |
-| 13-02-02 | 02 | 1 | SIG-01, SIG-02 | — | N/A | unit | `pytest tests/ -x -q -k "pipeline"` | ✅ | ⬜ pending |
-| 13-03-01 | 03 | 2 | SIG-01 | — | N/A | unit | `pytest tests/ -x -q -k "skip"` | ✅ | ⬜ pending |
-| 13-03-02 | 03 | 2 | SIG-02 | — | N/A | unit | `pytest tests/ -x -q -k "re_request"` | ✅ | ⬜ pending |
+| 13-01-01 | 01 | 0 | SIG-03 | — | N/A | unit | `pytest tests/test_adaptive_ranker.py -x -q` | ✅ | ✅ green |
+| 13-01-02 | 01 | 1 | SIG-03 | — | N/A | unit | `pytest tests/test_adaptive_ranker.py -x -q` | ✅ | ✅ green |
+| 13-02-01 | 02 | 1 | SIG-01, SIG-02 | — | N/A | unit | `pytest tests/ -x -q -k "state"` | ✅ | ✅ green |
+| 13-02-02 | 02 | 1 | SIG-01, SIG-02 | — | N/A | unit | `pytest tests/ -x -q -k "pipeline"` | ✅ | ✅ green |
+| 13-03-01 | 03 | 2 | SIG-01 | — | N/A | unit | `pytest tests/ -x -q -k "skip"` | ✅ | ✅ green |
+| 13-03-02 | 03 | 2 | SIG-02 | — | N/A | unit | `pytest tests/ -x -q -k "re_request"` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -51,8 +52,8 @@ created: 2026-04-18
 
 ## Wave 0 Requirements
 
-- [ ] `tests/test_adaptive_ranker.py` — stubs for SIG-03 (get_sender_multipliers unit tests)
-- [ ] Existing `tests/conftest.py` — verify async DB session fixture is available
+- [x] `tests/test_adaptive_ranker.py` — 12 tests for get_sender_multipliers ✅
+- [x] Existing `tests/conftest.py` — async DB session fixture confirmed ✅
 
 *Existing pytest-asyncio infrastructure covers integration with the test suite.*
 
@@ -70,11 +71,23 @@ created: 2026-04-18
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 15s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 15s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** 2026-04-19
+
+---
+
+## Validation Audit 2026-04-19
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 6 |
+| Resolved | 6 |
+| Escalated | 0 |
+
+Tests added: `tests/test_orchestrator_graph.py` (+4 methods), `tests/test_orchestrator_nodes.py` (new, 2 tests)
