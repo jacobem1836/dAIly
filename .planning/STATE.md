@@ -2,15 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Deployability Layer
-status: roadmapped
-last_updated: "2026-04-18T00:00:00.000Z"
-last_activity: 2026-04-18
+status: planning
+last_updated: "2026-04-18T12:45:59.647Z"
+last_activity: 2026-04-18 — v1.2 roadmap created (3 phases, 10 requirements)
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
-  percent: 0
 ---
 
 # Project State
@@ -70,6 +69,6 @@ None — v1.1 shipped clean.
 
 ## Session Continuity
 
-Last session: 2026-04-18
+Last session: 2026-04-18T12:45:59.645Z
 v1.1 Intelligence Layer complete. v1.2 roadmap defined — 3 phases covering signal capture, observability, and deployment.
 Next: `/gsd-plan-phase 13`
