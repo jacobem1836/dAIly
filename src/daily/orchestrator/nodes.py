@@ -274,6 +274,89 @@ async def resume_briefing_node(state: SessionState) -> dict:
     return {"messages": [AIMessage(content="Resuming your briefing now.")]}
 
 
+# ---------------------------------------------------------------------------
+# Phase 13 nodes: skip, re_request (signal capture)
+# ---------------------------------------------------------------------------
+
+
+def _get_current_item_sender(state: SessionState) -> str | None:
+    """Extract sender from the current briefing item, or None if unavailable.
+
+    Defensive: returns None if briefing_items is empty or current_item_index
+    is out of range (e.g. old cached briefing from before Phase 13).
+    Per Pitfall 2: signals fire with target_id=None rather than crashing.
+    """
+    if not state.briefing_items:
+        return None
+    idx = min(state.current_item_index, len(state.briefing_items) - 1)
+    item = state.briefing_items[idx]
+    # briefing_items stores dicts (not BriefingItem) for LangGraph serialisation
+    if isinstance(item, dict):
+        return item.get("sender")
+    return getattr(item, "sender", None)
+
+
+async def skip_node(state: SessionState) -> dict:
+    """Handle explicit skip intent — fire skip signal and acknowledge.
+
+    Per D-01: "skip", "next", "move on" route here.
+    Fires SignalType.skip with the current item's sender as target_id
+    (per Pitfall 1/A1: target_id = sender email for ranker aggregation).
+    Uses _capture_signal fire-and-forget pattern (D-08).
+
+    Args:
+        state: Current SessionState with briefing_items and current_item_index.
+
+    Returns:
+        Dict with acknowledgement message.
+    """
+    sender = _get_current_item_sender(state)
+    if state.active_user_id:
+        asyncio.create_task(
+            _capture_signal(state.active_user_id, SignalType.skip, target_id=sender)
+        )
+    return {"messages": [AIMessage(content="Skipping to the next item.")]}
+
+
+async def re_request_node(state: SessionState) -> dict:
+    """Handle re_request intent — fire signal and re-speak current item.
+
+    Per D-04: "repeat that", "say that again" route here.
+    Fires SignalType.re_request with the current item's sender as target_id.
+    Returns the current item's sentences for re-delivery.
+
+    Args:
+        state: Current SessionState with briefing_items and current_item_index.
+
+    Returns:
+        Dict with the current item's narrative content for re-speaking.
+    """
+    sender = _get_current_item_sender(state)
+    if state.active_user_id:
+        asyncio.create_task(
+            _capture_signal(state.active_user_id, SignalType.re_request, target_id=sender)
+        )
+
+    # Re-speak the current item's sentences from the narrative
+    content = "Sure, let me repeat that."
+    if state.briefing_narrative and state.briefing_items:
+        from daily.briefing.items import _split_sentences  # noqa: PLC0415
+        sentences = _split_sentences(state.briefing_narrative)
+        idx = min(state.current_item_index, len(state.briefing_items) - 1)
+        item = state.briefing_items[idx]
+        if isinstance(item, dict):
+            start = item.get("sentence_range_start", 0)
+            end = item.get("sentence_range_end", len(sentences))
+        else:
+            start = getattr(item, "sentence_range_start", 0)
+            end = getattr(item, "sentence_range_end", len(sentences))
+        item_sentences = sentences[start:end]
+        if item_sentences:
+            content = "Sure, let me repeat that. " + " ".join(item_sentences)
+
+    return {"messages": [AIMessage(content=content)]}
+
+
 def _resolve_message_id(user_query: str, email_context: list[dict]) -> str | None:
     """Match user's natural language query against email_context metadata.
 
