@@ -104,6 +104,20 @@ DRAFT_SYSTEM_PROMPT = (
 # Maximum number of sent emails to use as style examples (D-06)
 _MAX_STYLE_EXAMPLES = 5
 
+# Phase 12 CONV-03: tone compression triggers (D-07)
+COMPRESSION_PHRASES = [
+    "i'm in a rush",
+    "keep it brief",
+    "quick version",
+    "short version",
+    "make it snappy",
+    "i'm busy",
+]
+
+# Implicit trigger threshold: consecutive short messages (D-07)
+_IMPLICIT_TONE_MIN_TURNS = 2
+_IMPLICIT_TONE_MAX_WORDS = 5
+
 
 def _format_email_context(email_context: list[dict]) -> str:
     """Format email metadata list into a compact table for the LLM prompt.
@@ -169,11 +183,46 @@ async def respond_node(state: SessionState) -> dict:
             "Do not invent memories.\n\n"
         )
 
+    # Phase 12 CONV-03: tone override takes priority over preference (D-09)
+    effective_tone = state.preferences.get("tone", "conversational")
+    effective_length = state.preferences.get("briefing_length", "standard")
+    state_updates: dict = {}
+
+    if state.tone_override == "brief":
+        # Already triggered — keep compressed
+        effective_tone = "brief"
+        effective_length = "short"
+    elif not state.tone_override:
+        # Check explicit triggers (D-07: substring match, D-08: pre-LLM)
+        last_msg_lower = state.messages[-1].content.lower() if state.messages else ""
+        explicit_trigger = any(phrase in last_msg_lower for phrase in COMPRESSION_PHRASES)
+
+        # Check implicit triggers (D-07: < 5 words for 2 consecutive user turns)
+        human_messages = [m for m in state.messages if hasattr(m, "type") and m.type == "human"]
+        implicit_trigger = (
+            len(human_messages) >= _IMPLICIT_TONE_MIN_TURNS
+            and all(
+                len(human_messages[-(i + 1)].content.split()) < _IMPLICIT_TONE_MAX_WORDS
+                for i in range(_IMPLICIT_TONE_MIN_TURNS)
+            )
+        )
+
+        if explicit_trigger or implicit_trigger:
+            state_updates["tone_override"] = "brief"
+            effective_tone = "brief"
+            effective_length = "short"
+
     system_content = memory_preamble + RESPOND_SYSTEM_PROMPT.format(
         briefing_narrative=state.briefing_narrative or "(no briefing loaded)",
-        tone=state.preferences.get("tone", "conversational"),
-        length=state.preferences.get("briefing_length", "standard"),
+        tone=effective_tone,
+        length=effective_length,
     )
+
+    if effective_tone == "brief":
+        system_content += (
+            "\n\nIMPORTANT: The user is in a rush. Be compressed and direct. "
+            "Max 2 sentences per response. Skip pleasantries."
+        )
 
     client = _openai_client()
     try:
@@ -199,7 +248,7 @@ async def respond_node(state: SessionState) -> dict:
             _capture_signal(state.active_user_id, SignalType.follow_up)
         )
 
-    return {"messages": [AIMessage(content=narrative)]}
+    return {"messages": [AIMessage(content=narrative)], **state_updates}
 
 
 async def resume_briefing_node(state: SessionState) -> dict:
