@@ -80,7 +80,11 @@ Plans:
   1. Running docker compose up from a fresh clone starts the app, Postgres, and Redis with no manual steps beyond copying .env.example
   2. .env.example documents every required environment variable with a description and placeholder — no secrets are committed to the repo
   3. A production guide exists that walks through single-host VPS deployment: systemd or Docker, reverse proxy (nginx/caddy), and TLS termination
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 15-01-PLAN.md — Docker infrastructure (Dockerfile, entrypoint, compose, health checks)
+- [ ] 15-02-PLAN.md — Complete .env.example with all environment variables
+- [ ] 15-03-PLAN.md — VPS production deployment guide (DEPLOY.md with Caddy + auto-TLS)
 
 ## Progress
 
@@ -100,4 +104,4 @@ Plans:
 | 12. Conversational Flow | v1.1 | 2/2 | Complete | 2026-04-18 |
 | 13. Signal Capture | v1.2 | 3/3 | Complete   | 2026-04-18 |
 | 14. Observability | v1.2 | 0/2 | Not started | - |
-| 15. Deployment | v1.2 | 0/? | Not started | - |
+| 15. Deployment | v1.2 | 0/3 | Not started | - |
