@@ -27,8 +27,8 @@ decisions:
 metrics:
   duration: "15m"
   completed: "2026-04-19"
-  tasks_completed: 2
-  files_changed: 5
+  tasks_completed: 3
+  files_changed: 6
 requirements_satisfied: [DEPLOY-01]
 ---
 
@@ -61,7 +61,7 @@ Tasks 1 and 2 created the complete Docker infrastructure for a fresh-clone deplo
 
 ## Deviations from Plan
 
-None — plan executed exactly as written.
+One fix required post-execution: `docker compose up` failed with `[Errno 111] Connect call failed ('127.0.0.1', 5432)` because `.env` uses `localhost` hostnames which don't resolve inside Docker. Fix: added `environment:` overrides to the `app` service in `docker-compose.yml` for `DATABASE_URL`, `DATABASE_URL_PSYCOPG`, and `REDIS_URL` with Docker service names (`postgres`, `redis`). This keeps `.env` working for local dev while Docker uses correct networking. Commit `83d1aac`.
 
 ## Known Stubs
 
@@ -86,6 +86,6 @@ Threat mitigations confirmed per threat model:
 - [x] Commit 8297010 exists
 - [x] Commit cba7905 exists
 
-## Checkpoint Pending
+## Checkpoint: PASSED
 
-Task 3 is a `checkpoint:human-verify` — user must verify the Docker stack starts end-to-end. Plan execution is paused at this checkpoint.
+Task 3 human verification complete. `docker compose ps` showed all 3 containers healthy. `curl http://localhost:8000/health` returned `{"db":"ok","redis":"ok","scheduler":"running","status":"ok"}`.
