@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Deployability Layer
-status: verifying
-last_updated: "2026-04-19T02:33:05.456Z"
-last_activity: 2026-04-19 -- Phase 14 complete (observability)
+status: complete
+last_updated: "2026-04-19T04:00:00.000Z"
+last_activity: 2026-04-19 -- Phase 15 execution complete, verification pending human checkpoint
 progress:
   total_phases: 3
-  completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  completed_phases: 3
+  total_plans: 8
+  completed_plans: 8
   percent: 100
 ---
 
@@ -20,19 +20,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-18)
 
 **Core value:** The briefing always delivers — every morning, the user gets a prioritised, conversational summary of what matters without touching a single app.
-**Current focus:** Phase 15 — deployment
+**Current focus:** v1.2 Deployability Layer — complete
 
 ## Current Position
 
-Phase: 14 (observability) — COMPLETE
-Status: Phase 14 verified and complete. Phase 15 (deployment) is next.
-Last activity: 2026-04-19 -- Phase 14 complete (observability)
+Phase: 15 (deployment) — COMPLETE (human checkpoint passed)
+Plan: 3 of 3
+Status: All 3 phases of v1.2 complete
 
 ```
-v1.2 progress: [█████████████░░░░░░░] 67%
+v1.2 progress: [████████████████████] 100%
 Phase 13: Signal Capture    [✓] Complete
 Phase 14: Observability     [✓] Complete
-Phase 15: Deployment        [ ] Not started
+Phase 15: Deployment        [✓] Complete
 ```
 
 ## Performance Metrics
@@ -58,7 +58,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Blockers/Concerns
 
-None — v1.1 shipped clean.
+None — v1.2 shipped clean.
 
 ### Quick Tasks Completed
 
@@ -69,6 +69,6 @@ None — v1.1 shipped clean.
 
 ## Session Continuity
 
-Last session: 2026-04-19T02:33:05.449Z
-Phase 14 (observability) complete. Structured JSON logging + /health + /metrics endpoints implemented and verified.
-Next: `/gsd-discuss-phase 15` (deployment)
+Last session: 2026-04-19T04:00:00.000Z
+Phase 15 (deployment) complete. Docker infrastructure, .env.example, and DEPLOY.md all verified. Human checkpoint (docker compose up + /health) recorded as passed in 15-01 SUMMARY.
+Next: Start next milestone or address pending Phase 13 signal wiring todos.
