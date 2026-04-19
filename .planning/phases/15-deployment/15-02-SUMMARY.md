@@ -62,10 +62,6 @@ None. `.env.example` is a complete, non-stub configuration template with sensibl
 
 No new threat surface introduced. `.env.example` is a committed template — no real secrets.
 
-| Flag | File | Description |
-|------|------|-------------|
-| — | — | — |
-
 Threat mitigations confirmed:
 - T-15-06: All API key fields are empty; verification script confirmed no `sk-` or `ghp_` patterns
 - T-15-07: `.gitignore` line 1 is `.env` — real credentials cannot be accidentally committed
@@ -74,6 +70,6 @@ Threat mitigations confirmed:
 ## Self-Check: PASSED
 
 - [x] `.env.example` exists and contains 16 vars
-- [x] Commit f3edbd7 exists: `git log --oneline | grep f3edbd7`
+- [x] Commit f3edbd7 exists
 - [x] Verification script exits 0
 - [x] No Docker Compose hosts hardcoded as defaults (localhost is default; Docker variants are comments)
