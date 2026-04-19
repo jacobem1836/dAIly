@@ -21,7 +21,6 @@ Signal/action capture:
 
 import asyncio
 import json
-import logging
 import re
 from datetime import datetime, timedelta
 
@@ -30,6 +29,7 @@ from langgraph.types import interrupt
 from openai import AsyncOpenAI
 
 from daily.actions.base import BLOCKED_ACTION_TYPES, ActionDraft, ActionType
+from daily.logging_config import make_logger
 from daily.briefing.redactor import summarise_and_redact
 from daily.orchestrator.models import OrchestratorIntent
 from daily.orchestrator.session import get_email_adapters
@@ -38,7 +38,7 @@ from daily.profile.memory import clear_all_memories, delete_memory_fact, list_al
 from daily.profile.service import upsert_preference
 from daily.profile.signals import SignalType
 
-logger = logging.getLogger(__name__)
+logger = make_logger(__name__, stage="orchestrator")
 
 _EMAIL_RE = re.compile(r"[\w.+\-]+@[\w.\-]+")
 

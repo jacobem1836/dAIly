@@ -10,7 +10,7 @@ Per D-06: get_sender_multipliers(user_id, db_session) -> dict[str, float].
 
 from __future__ import annotations
 
-import logging
+from daily.logging_config import make_logger
 from datetime import datetime, timedelta, timezone
 from math import exp, tanh
 
@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from daily.profile.signals import SignalLog, SignalType
 
-logger = logging.getLogger(__name__)
+logger = make_logger(__name__, stage="ranker")
 
 # Tuning constants (D-05) — extracted for easy adjustment
 SIGNAL_WEIGHTS: dict[SignalType, float] = {

@@ -14,7 +14,6 @@ Threat mitigations:
 - T-05-12: Transcripts pass through route_intent keyword filter (same as chat)
 """
 import asyncio
-import logging
 import re
 
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -22,6 +21,7 @@ from redis.asyncio import Redis
 
 from daily.cli import _parse_approval_decision, _resolve_email_adapters
 from daily.config import Settings
+from daily.logging_config import make_logger
 from daily.db.engine import async_session
 from daily.orchestrator.graph import build_graph
 from daily.orchestrator.session import (
@@ -35,7 +35,7 @@ from daily.voice.barge_in import VoiceTurnManager
 from daily.voice.stt import STTPipeline
 from daily.voice.tts import TTSPipeline
 
-logger = logging.getLogger(__name__)
+logger = make_logger(__name__, stage="voice")
 
 _SEPARATOR = "-" * 40
 
