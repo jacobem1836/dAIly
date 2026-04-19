@@ -39,8 +39,9 @@ See `.planning/milestones/v1.1-ROADMAP.md` for full phase details.
 ### v1.2 Deployability Layer
 
 - [x] **Phase 13: Signal Capture** — Wire skip and re_request signals end-to-end into the adaptive ranker (completed 2026-04-18)
-- [ ] **Phase 14: Observability** — Structured logging, configurable log level, health endpoint, and queryable metrics
-- [ ] **Phase 15: Deployment** — Docker Compose stack, env var template, and VPS production guide
+- [x] **Phase 14: Observability** — Structured logging, configurable log level, health endpoint, and queryable metrics (completed 2026-04-19)
+- [x] **Phase 15: Deployment** — Docker Compose stack, env var template, and VPS production guide (completed 2026-04-19)
+- [ ] **Phase 16: Milestone Closeout** — Close v1.2 tech debt: tick requirements, update VALIDATION docs, adopt make_logger in Phase 13 hot path
 
 ## Phase Details
 
@@ -82,9 +83,23 @@ Plans:
   3. A production guide exists that walks through single-host VPS deployment: systemd or Docker, reverse proxy (nginx/caddy), and TLS termination
 **Plans:** 3 plans
 Plans:
-- [ ] 15-01-PLAN.md — Docker infrastructure (Dockerfile, entrypoint, compose, health checks)
-- [ ] 15-02-PLAN.md — Complete .env.example with all environment variables
-- [ ] 15-03-PLAN.md — VPS production deployment guide (DEPLOY.md with Caddy + auto-TLS)
+- [x] 15-01-PLAN.md — Docker infrastructure (Dockerfile, entrypoint, compose, health checks)
+- [x] 15-02-PLAN.md — Complete .env.example with all environment variables
+- [x] 15-03-PLAN.md — VPS production deployment guide (DEPLOY.md with Caddy + auto-TLS)
+
+### Phase 16: Milestone Closeout
+**Goal**: Clear all v1.2 tech debt before archiving the milestone
+**Depends on**: Phase 15
+**Requirements**: n/a (debt items, not new requirements)
+**Gap Closure:** Closes tech debt from v1.2 audit (2026-04-19)
+**Success Criteria** (what must be TRUE):
+  1. All 10 v1.2 REQUIREMENTS.md checkboxes are ticked `[x]` and traceability table shows Satisfied
+  2. Phase 14 VALIDATION.md is updated to `nyquist_compliant: true, wave_0_complete: true`
+  3. Phase 15 VALIDATION.md is updated to `nyquist_compliant: true, wave_0_complete: true`
+  4. `adaptive_ranker.py`, `nodes.py`, and `voice/loop.py` use `make_logger` with `ctx={user_id, stage}` instead of bare `logging.getLogger`
+**Plans:** 1 plan
+Plans:
+- [ ] 16-01-PLAN.md — Tick requirements, update VALIDATION docs, adopt make_logger in Phase 13 modules
 
 ## Progress
 
@@ -103,5 +118,6 @@ Plans:
 | 11. Trusted Actions | v1.1 | 2/2 | Complete | 2026-04-18 |
 | 12. Conversational Flow | v1.1 | 2/2 | Complete | 2026-04-18 |
 | 13. Signal Capture | v1.2 | 3/3 | Complete   | 2026-04-18 |
-| 14. Observability | v1.2 | 0/2 | Not started | - |
-| 15. Deployment | v1.2 | 0/3 | Not started | - |
+| 14. Observability | v1.2 | 2/2 | Complete | 2026-04-19 |
+| 15. Deployment | v1.2 | 3/3 | Complete | 2026-04-19 |
+| 16. Milestone Closeout | v1.2 | 0/1 | Not started | - |
