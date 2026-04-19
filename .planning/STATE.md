@@ -3,13 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Deployability Layer
 status: complete
-last_updated: "2026-04-19T04:00:00.000Z"
-last_activity: 2026-04-19 -- Phase 15 execution complete, verification pending human checkpoint
+last_updated: "2026-04-19T14:30:00.000Z"
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
+  total_phases: 4
+  completed_phases: 4
+  total_plans: 9
+  completed_plans: 9
   percent: 100
 ---
 
@@ -20,19 +19,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-18)
 
 **Core value:** The briefing always delivers — every morning, the user gets a prioritised, conversational summary of what matters without touching a single app.
-**Current focus:** v1.2 Deployability Layer — complete
+**Current focus:** v1.2 milestone complete — all phases done
 
 ## Current Position
 
-Phase: 15 (deployment) — COMPLETE (human checkpoint passed)
-Plan: 3 of 3
-Status: All 3 phases of v1.2 complete
+Phase: 16 (milestone-closeout) — COMPLETE
+Plan: 1 of 1
+Status: v1.2 Deployability Layer milestone complete
 
 ```
 v1.2 progress: [████████████████████] 100%
 Phase 13: Signal Capture    [✓] Complete
 Phase 14: Observability     [✓] Complete
 Phase 15: Deployment        [✓] Complete
+Phase 16: Milestone Closeout [✓] Complete
 ```
 
 ## Performance Metrics
@@ -69,6 +69,6 @@ None — v1.2 shipped clean.
 
 ## Session Continuity
 
-Last session: 2026-04-19T04:00:00.000Z
-Phase 15 (deployment) complete. Docker infrastructure, .env.example, and DEPLOY.md all verified. Human checkpoint (docker compose up + /health) recorded as passed in 15-01 SUMMARY.
-Next: Start next milestone or address pending Phase 13 signal wiring todos.
+Last session: 2026-04-19T14:30:00.000Z
+Phase 16 (milestone-closeout) complete. v1.2 Deployability Layer milestone fully closed — all VALIDATION.md files compliant, make_logger adopted in all Phase 13 hot-path modules, all 4 phases complete.
+Next: Start v1.3 milestone or address pending Phase 13 signal wiring todos.

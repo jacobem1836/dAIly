@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 MVP** — Phases 1–6 (shipped 2026-04-14)
 - ✅ **v1.1 Intelligence Layer** — Phases 7–12 (shipped 2026-04-18)
-- 🔄 **v1.2 Deployability Layer** — Phases 13–15 (in progress)
+- ✅ **v1.2 Deployability Layer** — Phases 13–16 (shipped 2026-04-19)
 
 ## Phases
 
@@ -41,7 +41,7 @@ See `.planning/milestones/v1.1-ROADMAP.md` for full phase details.
 - [x] **Phase 13: Signal Capture** — Wire skip and re_request signals end-to-end into the adaptive ranker (completed 2026-04-18)
 - [x] **Phase 14: Observability** — Structured logging, configurable log level, health endpoint, and queryable metrics (completed 2026-04-19)
 - [x] **Phase 15: Deployment** — Docker Compose stack, env var template, and VPS production guide (completed 2026-04-19)
-- [ ] **Phase 16: Milestone Closeout** — Close v1.2 tech debt: tick requirements, update VALIDATION docs, adopt make_logger in Phase 13 hot path
+- [x] **Phase 16: Milestone Closeout** — Close v1.2 tech debt: tick requirements, update VALIDATION docs, adopt make_logger in Phase 13 hot path (completed 2026-04-19)
 
 ## Phase Details
 
@@ -97,9 +97,9 @@ Plans:
   2. Phase 14 VALIDATION.md is updated to `nyquist_compliant: true, wave_0_complete: true`
   3. Phase 15 VALIDATION.md is updated to `nyquist_compliant: true, wave_0_complete: true`
   4. `adaptive_ranker.py`, `nodes.py`, and `voice/loop.py` use `make_logger` with `ctx={user_id, stage}` instead of bare `logging.getLogger`
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 16-01-PLAN.md — Tick requirements, update VALIDATION docs, adopt make_logger in Phase 13 modules
+- [x] 16-01-PLAN.md — Tick requirements, update VALIDATION docs, adopt make_logger in Phase 13 modules
 
 ## Progress
 
@@ -120,4 +120,4 @@ Plans:
 | 13. Signal Capture | v1.2 | 3/3 | Complete   | 2026-04-18 |
 | 14. Observability | v1.2 | 2/2 | Complete | 2026-04-19 |
 | 15. Deployment | v1.2 | 3/3 | Complete | 2026-04-19 |
-| 16. Milestone Closeout | v1.2 | 0/1 | Not started | - |
+| 16. Milestone Closeout | v1.2 | 1/1 | Complete   | 2026-04-19 |
