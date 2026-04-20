@@ -52,9 +52,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-- Phase 13: Fire skip signals from voice session loop (skip node currently wired but signal not written)
-- Phase 13: Fire re_request signals when user asks to repeat an item
-- Phase 13: Update adaptive ranker decay computation to include skip + re_request alongside expand
+None.
 
 ### Blockers/Concerns
 
@@ -66,9 +64,10 @@ None — v1.2 shipped clean.
 |---|-------------|------|--------|-----------|
 | 260411-vlh | Fix Google credentials reconstruction | 2026-04-11 | dc41c9f | [260411-vlh-fix-google-credentials-reconstruction-bu](./quick/260411-vlh-fix-google-credentials-reconstruction-bu/) |
 | 260412-gak | Fix null recipient in draft_node — pass email metadata to LLM prompt | 2026-04-12 | 60975dd | [260412-gak-fix-null-recipient-in-draft-node-pass-em](./quick/260412-gak-fix-null-recipient-in-draft-node-pass-em/) |
+| 260420-fg5 | tackle the Phase 13 signal wiring todos as ad-hoc fixes | 2026-04-20 | TBD | [260420-fg5-tackle-the-phase-13-signal-wiring-todos-](./quick/260420-fg5-tackle-the-phase-13-signal-wiring-todos-/) |
 
 ## Session Continuity
 
-Last session: 2026-04-19T14:30:00.000Z
+Last session: 2026-04-20 — Completed quick task 260420-fg5: tackle the Phase 13 signal wiring todos as ad-hoc fixes
 Phase 16 (milestone-closeout) complete. v1.2 Deployability Layer milestone fully closed — all VALIDATION.md files compliant, make_logger adopted in all Phase 13 hot-path modules, all 4 phases complete.
-Next: Start v1.3 milestone or address pending Phase 13 signal wiring todos.
+Next: Start v1.3 milestone planning.
