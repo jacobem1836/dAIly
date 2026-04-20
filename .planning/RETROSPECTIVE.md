@@ -109,15 +109,68 @@
 
 ---
 
+## Milestone: v1.2 — Deployability Layer
+
+**Shipped:** 2026-04-20
+**Phases:** 4 | **Plans:** 9 | **Timeline:** 3 days (2026-04-18 → 2026-04-20)
+**Files changed:** 62 (+7,604 / -118 lines)
+
+### What Was Built
+
+1. Full signal closure — `skip_node` and `re_request_node` wired into orchestrator graph; voice loop item cursor tracks position and auto-fires implicit skip on silence/barge-in
+2. `BriefingItem` model + Redis item cache — per-item sender attribution for signal capture; `SessionState.briefing_items` tracks current item index
+3. stdlib JSON logging — `JSONFormatter` + `ContextAdapter` on root logger; all 17+ existing `getLogger` call sites emit structured JSON without modification
+4. `/health` + `/metrics` endpoints — DB, Redis, APScheduler state checks inline; briefing latency, signal counts, memory size queryable without code changes
+5. Multi-stage Dockerfile + docker-compose — `uv`-based build, Alembic auto-migrations in entrypoint, health-checked app + postgres + redis services
+6. Tech debt closeout — `make_logger` adopted in `adaptive_ranker.py`, `nodes.py`, `voice/loop.py`; all VALIDATION.md files marked compliant
+
+### What Worked
+
+- **Phase 16 as explicit debt-close phase** — naming a milestone-closeout phase and planning it explicitly (not ad-hoc) worked well. The audit-driven phase had a clear scope and finished in 8 minutes.
+- **`task fire-and-forget` for signal capture** — the same `asyncio.create_task` pattern from memory extraction applied cleanly to signal writes. Consistent pattern across the codebase.
+- **stdlib over structlog** — using `logging.Formatter` subclass required zero new dependencies and intercepted all existing `getLogger` call sites transparently. The "no new deps" constraint paid off.
+- **multi-stage Dockerfile with uv** — separating the uv binary (upstream image) from the Python runtime (slim) gave stable build caching. Layer order (deps before src) worked correctly.
+- **Audit status `tech_debt` (not `gaps_found`)** — the v1.2 audit found no requirement gaps; only implementation polish items. This meant milestone close could proceed immediately after closeout phase.
+
+### What Was Inefficient
+
+- **SUMMARY.md one-liner tool extraction still broken** — gsd-tools couldn't parse the structured `one_liner:` field from YAML frontmatter in SUMMARY.md files for the third consecutive milestone. MILESTONES.md entries required manual writing every time.
+- **Phase 13 plan checkboxes showed `[ ]` in ROADMAP.md mid-milestone** — Phases 14 and 15 had the same issue. The ROADMAP.md progress table drifted from actual state during execution.
+- **Tech debt found by audit required a separate phase** — three modules still used bare `logging.getLogger` after Phase 14 was "complete." A linting rule or grep hook on commit would have caught this inline.
+
+### Patterns Established
+
+- **Close debt before archiving** — Phase 16 as a named milestone-closeout phase is a pattern worth keeping. It gives the debt a home instead of letting it slip into quick tasks.
+- **stdlib-first for infrastructure concerns** — JSON logging, health checks, and metrics were all implemented with stdlib + FastAPI primitives. No new library dependencies added in v1.2.
+- **`env_file` not `environment:` in compose** — using `env_file: .env` in docker-compose prevents config baking into the image and aligns with twelve-factor principles.
+
+### Key Lessons
+
+- **Add a grep-based lint for bare `logging.getLogger` after introducing `make_logger`** — three files slipped through. A `rg "logging.getLogger" src/` check in the phase verification step would catch this.
+- **Phase UAT should verify signal attribution end-to-end** — Phase 13 was verified in isolation but the audit revealed the `ctx={}` issue in hot-path modules. Integration-level signal verification at UAT close would catch this.
+- **Item cursor is the right primitive for voice UX** — tracking which briefing item the user is on (by sentence boundaries) turned out to be clean and enables a whole class of signal-aware behaviours. Worth keeping as a first-class concept.
+
+### Tech Debt Inventory
+
+| Item | Severity | Phase | Fix in |
+|------|----------|-------|--------|
+| `known_channels=set()` in SlackExecutor — no channel whitelist | Low | 04 | v2.0 |
+| Hallucination-loop guard is a binary flag — embedding dedup at injection is stronger | Low | 09 | v2.0 |
+| `* 2.md` duplicate artifacts in phase directories (worktree artifacts) | Low | — | /gsd-cleanup |
+| SUMMARY.md one-liner tool extraction broken — manual milestone summary always needed | Medium | — | Fix gsd-tools |
+
+---
+
 ## Cross-Milestone Trends
 
-| Metric | v1.0 | v1.1 |
-|--------|------|------|
-| Phases | 6 | 6 |
-| Plans | 22 | 14 |
-| Days | 10 | 13 |
-| LOC (Python) | 7,049 | ~9,000+ |
-| Plans/day | 2.2 | 1.1 |
-| Tests failed at UAT | 0 | 0 |
-| Gaps found in audit | 1 | 0 (no audit run) |
-| Tech debt items | 4 | 4 |
+| Metric | v1.0 | v1.1 | v1.2 |
+|--------|------|------|------|
+| Phases | 6 | 6 | 4 |
+| Plans | 22 | 14 | 9 |
+| Days | 10 | 13 | 3 |
+| LOC (Python) | 7,049 | ~9,000+ | ~9,500+ |
+| Plans/day | 2.2 | 1.1 | 3.0 |
+| Tests failed at UAT | 0 | 0 | 0 |
+| Gaps found in audit | 1 | 0 | 0 |
+| Tech debt items at close | 4 | 4 | 1 (carry-forward) |
+| Quick tasks post-milestone | 2 | 0 | 1 |

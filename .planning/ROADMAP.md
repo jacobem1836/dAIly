@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 MVP** — Phases 1–6 (shipped 2026-04-14)
 - ✅ **v1.1 Intelligence Layer** — Phases 7–12 (shipped 2026-04-18)
-- ✅ **v1.2 Deployability Layer** — Phases 13–16 (shipped 2026-04-19)
+- ✅ **v1.2 Deployability Layer** — Phases 13–16 (shipped 2026-04-20)
 
 ## Phases
 
@@ -36,70 +36,17 @@ See `.planning/milestones/v1.1-ROADMAP.md` for full phase details.
 
 </details>
 
-### v1.2 Deployability Layer
+<details>
+<summary>✅ v1.2 Deployability Layer (Phases 13–16) — SHIPPED 2026-04-20</summary>
 
-- [x] **Phase 13: Signal Capture** — Wire skip and re_request signals end-to-end into the adaptive ranker (completed 2026-04-18)
-- [x] **Phase 14: Observability** — Structured logging, configurable log level, health endpoint, and queryable metrics (completed 2026-04-19)
-- [x] **Phase 15: Deployment** — Docker Compose stack, env var template, and VPS production guide (completed 2026-04-19)
-- [x] **Phase 16: Milestone Closeout** — Close v1.2 tech debt: tick requirements, update VALIDATION docs, adopt make_logger in Phase 13 hot path (completed 2026-04-19)
+- [x] Phase 13: Signal Capture (3/3 plans) — completed 2026-04-18
+- [x] Phase 14: Observability (2/2 plans) — completed 2026-04-19
+- [x] Phase 15: Deployment (3/3 plans) — completed 2026-04-19
+- [x] Phase 16: Milestone Closeout (1/1 plan) — completed 2026-04-19
 
-## Phase Details
+See `.planning/milestones/v1.2-ROADMAP.md` for full phase details.
 
-### Phase 13: Signal Capture
-**Goal**: The adaptive ranker learns from all three interaction signal types — not just expand
-**Depends on**: Nothing (v1.2 start; adaptive ranker from Phase 8 is already in place)
-**Requirements**: SIG-01, SIG-02, SIG-03
-**Success Criteria** (what must be TRUE):
-  1. When a user skips a briefing item, a skip signal is written to the signal table
-  2. When a user asks to repeat or clarify a briefing item, a re_request signal is written to the signal table
-  3. The adaptive ranker reads skip and re_request signals alongside expand when computing decay-adjusted scores — items skipped repeatedly rank lower over time
-**Plans:** 3/3 plans complete
-Plans:
-- [x] 13-01-PLAN.md — Adaptive ranker TDD (get_sender_multipliers with decay formula)
-- [x] 13-02-PLAN.md — Item tracking infrastructure (BriefingItem model, pipeline cache, session init)
-- [x] 13-03-PLAN.md — Skip and re_request nodes + voice loop integration
-
-### Phase 14: Observability
-**Goal**: Every module emits structured logs and the system exposes its health and key metrics without touching code
-**Depends on**: Phase 13
-**Requirements**: OBS-01, OBS-02, OBS-03, OBS-04
-**Success Criteria** (what must be TRUE):
-  1. Every log line across the codebase is valid JSON with timestamp, level, module, message, and context fields
-  2. Setting LOG_LEVEL=DEBUG in the environment increases verbosity; setting LOG_LEVEL=WARNING suppresses info-level output — no code change required
-  3. GET /health returns 200 with a structured body showing DB connectivity, Redis connectivity, and scheduler state
-  4. Briefing generation latency, signal counts by type, and memory store size are queryable (via the health endpoint or a dedicated metrics route)
-**Plans:** 2 plans
-Plans:
-- [ ] 14-01-PLAN.md — Structured logging infrastructure (JSONFormatter, ContextAdapter, LOG_LEVEL)
-- [ ] 14-02-PLAN.md — Health and metrics endpoints (/health, /metrics, pipeline latency)
-
-### Phase 15: Deployment
-**Goal**: Any developer can clone the repo, set environment variables, and run the full stack — locally or on a VPS
-**Depends on**: Phase 14
-**Requirements**: DEPLOY-01, DEPLOY-02, DEPLOY-03
-**Success Criteria** (what must be TRUE):
-  1. Running docker compose up from a fresh clone starts the app, Postgres, and Redis with no manual steps beyond copying .env.example
-  2. .env.example documents every required environment variable with a description and placeholder — no secrets are committed to the repo
-  3. A production guide exists that walks through single-host VPS deployment: systemd or Docker, reverse proxy (nginx/caddy), and TLS termination
-**Plans:** 3 plans
-Plans:
-- [x] 15-01-PLAN.md — Docker infrastructure (Dockerfile, entrypoint, compose, health checks)
-- [x] 15-02-PLAN.md — Complete .env.example with all environment variables
-- [x] 15-03-PLAN.md — VPS production deployment guide (DEPLOY.md with Caddy + auto-TLS)
-
-### Phase 16: Milestone Closeout
-**Goal**: Clear all v1.2 tech debt before archiving the milestone
-**Depends on**: Phase 15
-**Requirements**: n/a (debt items, not new requirements)
-**Gap Closure:** Closes tech debt from v1.2 audit (2026-04-19)
-**Success Criteria** (what must be TRUE):
-  1. All 10 v1.2 REQUIREMENTS.md checkboxes are ticked `[x]` and traceability table shows Satisfied
-  2. Phase 14 VALIDATION.md is updated to `nyquist_compliant: true, wave_0_complete: true`
-  3. Phase 15 VALIDATION.md is updated to `nyquist_compliant: true, wave_0_complete: true`
-  4. `adaptive_ranker.py`, `nodes.py`, and `voice/loop.py` use `make_logger` with `ctx={user_id, stage}` instead of bare `logging.getLogger`
-**Plans:** 1/1 plans complete
-Plans:
-- [x] 16-01-PLAN.md — Tick requirements, update VALIDATION docs, adopt make_logger in Phase 13 modules
+</details>
 
 ## Progress
 

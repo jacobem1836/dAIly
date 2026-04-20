@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Deployability Layer
-status: complete
-last_updated: "2026-04-19T14:30:00.000Z"
+status: completed
+last_updated: "2026-04-20T01:14:19.573Z"
 progress:
   total_phases: 4
   completed_phases: 4
@@ -16,10 +16,10 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-18)
+See: .planning/PROJECT.md (updated 2026-04-20)
 
 **Core value:** The briefing always delivers — every morning, the user gets a prioritised, conversational summary of what matters without touching a single app.
-**Current focus:** v1.2 milestone complete — all phases done
+**Current focus:** v1.2 archived — planning v2.0 Ecosystem Expansion
 
 ## Current Position
 
@@ -68,6 +68,5 @@ None — v1.2 shipped clean.
 
 ## Session Continuity
 
-Last session: 2026-04-20 — Completed quick task 260420-fg5: tackle the Phase 13 signal wiring todos as ad-hoc fixes
-Phase 16 (milestone-closeout) complete. v1.2 Deployability Layer milestone fully closed — all VALIDATION.md files compliant, make_logger adopted in all Phase 13 hot-path modules, all 4 phases complete.
-Next: Start v1.3 milestone planning.
+Last session: 2026-04-20 — Archived v1.2 Deployability Layer milestone (4 phases, 9 plans). MILESTONES.md updated, ROADMAP.md collapsed, PROJECT.md evolved, REQUIREMENTS.md archived and deleted, RETROSPECTIVE.md updated.
+Next: `/gsd-new-milestone` to plan v2.0 Ecosystem Expansion.

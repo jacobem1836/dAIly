@@ -8,6 +8,8 @@ v1.0 shipped a complete backend: OAuth integrations (Gmail, GCal, Outlook, Slack
 
 v1.1 added the intelligence layer: the briefing now learns the user. Adaptive ranking replaces heuristics, pgvector-powered memory persists context across days, users can inspect and manage what the system knows, action autonomy is configurable, and the conversation handles interrupts and tone adaptation natively.
 
+v1.2 made the stack deployable: all three signal types (skip, re_request, expand) wire into the adaptive ranker, structured JSON logging covers all modules, `/health` and `/metrics` endpoints expose system state, and docker-compose brings up the full stack from a fresh clone.
+
 ## Core Value
 
 The briefing always delivers: every morning, the user gets a prioritised, conversational summary of what matters — without touching a single app. And over time, it gets better at knowing what matters.
@@ -18,7 +20,7 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 |-----------|-------|--------|
 | **v1.0 — Core Backend** | OAuth integrations, briefing pipeline, orchestrator, action layer, voice interface, preferences | ✅ Shipped 2026-04-14 |
 | **v1.1 — Intelligence Layer** | Adaptive prioritisation, cross-session memory, memory transparency, trusted actions, conversational flow | ✅ Shipped 2026-04-18 |
-| **v1.2 — Deployability Layer** | Signal capture, observability, Docker deployment | 🔄 In progress |
+| **v1.2 — Deployability Layer** | Signal capture, observability, Docker deployment | ✅ Shipped 2026-04-20 |
 | **v2.0 — Ecosystem Expansion** | Travel, finance, health, smart home, document platforms, web dashboard | Planned |
 
 ## Requirements
@@ -68,26 +70,27 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 - ✓ FIX-01: RFC 2822 address normalization — WEIGHT_DIRECT scoring path fires correctly — v1.1
 - ✓ FIX-02: Slack pagination — cursor-based multi-page ingestion — v1.1
 - ✓ FIX-03: Real message ID extraction from briefing metadata in summarise_thread_node — v1.1
+- ✓ SIG-01: Skip signals captured and stored; adaptive ranker ingests them — v1.2
+- ✓ SIG-02: Re-request signals captured and stored; adaptive ranker ingests them — v1.2
+- ✓ SIG-03: Adaptive ranker ingests all three signal types (skip, re_request, expand) with decay scoring — v1.2
+- ✓ OBS-01: All modules emit structured JSON logs (JSONFormatter + ContextAdapter) — v1.2
+- ✓ OBS-02: LOG_LEVEL env var controls verbosity without code changes — v1.2
+- ✓ OBS-03: `/health` returns 200 with DB, Redis, and scheduler status — v1.2
+- ✓ OBS-04: `/metrics` exposes briefing latency, signal counts, memory size — v1.2
+- ✓ DEPLOY-01: `docker compose up` starts app + Postgres + Redis from fresh clone — v1.2
+- ✓ DEPLOY-02: `.env.example` documents all 16 env vars with descriptions — v1.2
+- ✓ DEPLOY-03: `DEPLOY.md` production guide covers VPS + Caddy + auto-TLS — v1.2
 
-## Current Milestone: v1.2 Deployability Layer
+## Next Milestone: v2.0 Ecosystem Expansion
 
-**Goal:** Close the v1.1 intelligence gap, add observability, and make the stack deployable — clearing the runway for v2.0 web UI.
+v1.2 shipped. The stack is now deployable, observable, and signal-complete.
+Next: `/gsd-new-milestone` to define v2.0 scope.
 
-**Target features:**
-- Signal capture: skip + re_request signals wired to adaptive ranker
-- Observability: structured logging, metrics, health check endpoint
-- Deployment: Docker Compose stack, env var management, VPS-ready config
+### Active (v2.0 candidates)
 
-### Active (v1.2 targets)
-
-- [ ] **SIG-01**: Skip signals captured and wired to adaptive ranker
-- [ ] **SIG-02**: Re-request signals captured and wired to adaptive ranker
-- [ ] **OBS-01**: Structured logging (JSON format, configurable level) across all modules
-- [ ] **OBS-02**: Health check endpoint exposing service status
-- [ ] **OBS-03**: Basic metrics (briefing latency, signal counts, memory size)
-- [ ] **DEPLOY-01**: Docker Compose stack (app + Postgres + Redis) with documented setup
-- [ ] **DEPLOY-02**: Environment variable management (.env template, secrets separation)
-- [ ] **DEPLOY-03**: VPS deployment guide (single-host production config)
+- [ ] **DASH-01**: Web dashboard — briefing history, preference management, memory browser
+- [ ] **DASH-02**: Mobile companion app (iOS)
+- [ ] **INTG-06–10**: Travel, finance, health, smart home, document integrations
 
 ### Future (v2.0+ targets)
 
@@ -108,14 +111,14 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 
 ## Context
 
-**Current state (v1.1):** Python backend, FastAPI, PostgreSQL + pgvector (1536-dim HNSW-indexed memory embeddings) + Redis, LangGraph orchestrator with sentence-level briefing delivery and cursor-tracked resume. CLI-driven (`daily briefing`, `daily chat`, `daily voice`, `daily config`).
+**Current state (v1.2 shipped):** Python backend, FastAPI, PostgreSQL + pgvector (1536-dim HNSW-indexed memory embeddings) + Redis, LangGraph orchestrator with sentence-level briefing delivery, cursor-tracked resume, and structured JSON logging. Docker Compose stack deployable from fresh clone. CLI-driven (`daily briefing`, `daily chat`, `daily voice`, `daily config`).
 
 **Architecture:** `[Voice/UI] → [Orchestrator] → [Context Builder + Memory Retrieval] → [LLM] → [Action Engine (autonomy-gated)] → [Integrations]`
 
 **Known gaps / tech debt:**
 - Slack channel whitelist is empty set — all channels pass validation (intentional M1 deferral)
-- `skip` and `re_request` signal types captured in schema but no node fires them yet (Phase 8 deferred capture)
 - Hallucination-loop guard is a binary flag check — could be made more robust with embedding dedup at injection time
+- Sigmoid midpoint uses 1.25 (not 1.0) — intentional product decision, documented in Key Decisions
 
 ## Constraints
 
@@ -143,6 +146,11 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 | BLOCKED_ACTION_TYPES frozenset constant | User config cannot bypass high-impact actions (T-11-01) | ✓ Good — security constraint enforced at code level |
 | Sentence-level briefing segmentation | Enables cursor-tracked resume after interruption | ✓ Good — CONV-01 verified; implementation cleaner than expected |
 | Fire-and-forget memory extraction | Session end doesn't block voice loop shutdown | ✓ Good — asyncio.create_task pattern with dedicated async_session |
+| Fire-and-forget signal capture | Signal writes don't block voice loop; skip/re_request captured asynchronously | ✓ Good — asyncio.create_task in skip_node and re_request_node |
+| stdlib logging over structlog | Zero new dependencies; JSONFormatter subclass intercepts all existing getLogger call sites | ✓ Good — 17+ call sites migrated without code change |
+| In-process /health endpoint | No sidecar dependency; checks DB, Redis, APScheduler state inline | ✓ Good — OBS-03 satisfied with minimal infra |
+| Multi-stage Dockerfile (uv + python:3.11-slim) | Stable dep layer for build cache; uv binary sourced from upstream image | ✓ Good — DEPLOY-01 satisfied; clean layer caching |
+| make_logger factory with stage ctx | Structured ctx field (user_id, stage) propagated without threading context | ✓ Good — v1.2 tech debt closed; hot-path modules compliant |
 
 ## Evolution
 
@@ -162,4 +170,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-18 after v1.2 milestone start — Deployability Layer*
+*Last updated: 2026-04-20 after v1.2 milestone completion — Deployability Layer shipped*
