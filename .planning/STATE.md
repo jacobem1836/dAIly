@@ -64,7 +64,7 @@ None — v1.2 shipped clean.
 |---|-------------|------|--------|-----------|
 | 260411-vlh | Fix Google credentials reconstruction | 2026-04-11 | dc41c9f | [260411-vlh-fix-google-credentials-reconstruction-bu](./quick/260411-vlh-fix-google-credentials-reconstruction-bu/) |
 | 260412-gak | Fix null recipient in draft_node — pass email metadata to LLM prompt | 2026-04-12 | 60975dd | [260412-gak-fix-null-recipient-in-draft-node-pass-em](./quick/260412-gak-fix-null-recipient-in-draft-node-pass-em/) |
-| 260420-fg5 | tackle the Phase 13 signal wiring todos as ad-hoc fixes | 2026-04-20 | TBD | [260420-fg5-tackle-the-phase-13-signal-wiring-todos-](./quick/260420-fg5-tackle-the-phase-13-signal-wiring-todos-/) |
+| 260420-fg5 | tackle the Phase 13 signal wiring todos as ad-hoc fixes | 2026-04-20 | d594fc8 | [260420-fg5-tackle-the-phase-13-signal-wiring-todos-](./quick/260420-fg5-tackle-the-phase-13-signal-wiring-todos-/) |
 
 ## Session Continuity
 
