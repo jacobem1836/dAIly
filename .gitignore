@@ -8,3 +8,9 @@ alembic/versions/__pycache__/
 dist/
 build/
 .DS_Store
+
+# Non-backend assets (landing page, marketing, brand)
+landing/
+marketing/
+header.png
+logo.png
