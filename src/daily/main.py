@@ -16,18 +16,14 @@ is persisted to BriefingConfig in the database and takes effect on the next app 
 
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, Response
-from redis.asyncio import Redis as AsyncRedis
-from sqlalchemy import func, select, text
+from fastapi import FastAPI
+from sqlalchemy import select
 
 from daily.briefing.scheduler import scheduler, setup_scheduler
 from daily.config import Settings
 from daily.db.engine import async_session
-from daily.db.models import BriefingConfig, MemoryFact
-from daily.logging_config import configure_logging
-from daily.profile.signals import SignalLog
+from daily.db.models import BriefingConfig
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +32,6 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """FastAPI lifespan: start scheduler on boot, stop on shutdown."""
     settings = Settings()
-    configure_logging(settings.log_level)
 
     # Parse briefing schedule time (format: "HH:MM")
     try:
@@ -97,103 +92,6 @@ app = FastAPI(
 
 
 @app.get("/health")
-async def health(response: Response) -> dict:
-    """Health check endpoint.
-
-    Probes DB (SELECT 1), Redis (PING), and APScheduler (get_jobs).
-    Returns 200 when all healthy, 503 when any dependency is degraded.
-
-    Per D-05/D-06/D-07 (14-CONTEXT.md).
-    T-14-04: Error messages from stdlib exceptions only — no credentials exposed.
-    """
-    settings = Settings()
-    result: dict = {}
-    degraded = False
-
-    # Probe DB
-    try:
-        async with async_session() as session:
-            await session.execute(text("SELECT 1"))
-        result["db"] = "ok"
-    except Exception as exc:
-        result["db"] = f"error: {exc}"
-        degraded = True
-
-    # Probe Redis
-    redis = AsyncRedis.from_url(settings.redis_url)
-    try:
-        await redis.ping()
-        result["redis"] = "ok"
-    except Exception as exc:
-        result["redis"] = f"error: {exc}"
-        degraded = True
-    finally:
-        await redis.aclose()
-
-    # Check scheduler (APScheduler 3.x get_jobs() is synchronous)
-    jobs = scheduler.get_jobs()
-    if jobs:
-        result["scheduler"] = "running"
-    else:
-        result["scheduler"] = "no_jobs"
-        degraded = True
-
-    result["status"] = "degraded" if degraded else "ok"
-
-    if degraded:
-        response.status_code = 503
-
-    return result
-
-
-@app.get("/metrics")
-async def metrics() -> dict:
-    """Operational metrics endpoint.
-
-    Returns aggregate signal counts, memory entry count, and avg briefing latency.
-    Per D-08 through D-12 (14-CONTEXT.md).
-
-    T-14-03: Aggregate counts only — no PII. Acceptable for M1 single-host.
-    T-14-05: At M1 scale (1 user), scan_iter matches 0-1 keys — acceptable.
-    """
-    settings = Settings()
-    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=7)
-
-    # Signal counts (7-day rolling window) and memory entries
-    signals_7d: dict = {}
-    memory_entries: int = 0
-
-    async with async_session() as session:
-        # Signal counts per type in last 7 days (D-09, D-11)
-        signal_result = await session.execute(
-            select(SignalLog.signal_type, func.count(SignalLog.id))
-            .where(SignalLog.created_at >= cutoff)
-            .group_by(SignalLog.signal_type)
-        )
-        signals_7d = {row[0]: row[1] for row in signal_result.all()}
-
-        # Memory fact count (D-09)
-        memory_result = await session.execute(select(func.count(MemoryFact.id)))
-        memory_entries = memory_result.scalar_one()
-
-    # Briefing latency: scan Redis for per-user latency keys (D-10)
-    # T-14-05: scan_iter at M1 scale matches 0-1 keys — acceptable
-    latency_values: list[float] = []
-    redis = AsyncRedis.from_url(settings.redis_url)
-    try:
-        async for key in redis.scan_iter("briefing:*:latency_s"):
-            value = await redis.get(key)
-            if value is not None:
-                latency_values.append(float(value))
-    finally:
-        await redis.aclose()
-
-    briefing_latency_avg_s = (
-        sum(latency_values) / len(latency_values) if latency_values else 0.0
-    )
-
-    return {
-        "briefing_latency_avg_s": briefing_latency_avg_s,
-        "signals_7d": signals_7d,
-        "memory_entries": memory_entries,
-    }
+async def health() -> dict:
+    """Health check endpoint."""
+    return {"status": "ok"}

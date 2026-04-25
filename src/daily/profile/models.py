@@ -2,8 +2,8 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
-from sqlalchemy import DateTime, ForeignKey, String, func
+from pydantic import BaseModel
+from sqlalchemy import DateTime, ForeignKey, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,7 +22,6 @@ class UserProfile(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
-    email: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     preferences: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -40,23 +39,9 @@ class UserPreferences(BaseModel):
         rejection_behaviour: Controls what happens after a user rejects an action draft.
             'ask_why' — prompt the user for a reason and allow edit (default per D-03).
             'discard' — silently discard the draft without prompting.
-
-    Phase 9 additions:
-        memory_enabled: Gates both extraction and injection of cross-session memory facts.
-            True (default) — facts extracted at session end; relevant facts injected
-              into briefing narrator and live session context.
-            False — no extraction, no injection. Hard gate (no partial opt-out). Per D-05.
     """
 
     tone: Literal["formal", "casual", "conversational"] = "conversational"
     briefing_length: Literal["concise", "standard", "detailed"] = "standard"
     category_order: list[str] = ["emails", "calendar", "slack"]
     rejection_behaviour: Literal["ask_why", "discard"] = "ask_why"
-    memory_enabled: bool = True
-    # Phase 11 additions:
-    #   autonomy_levels: Maps action type name -> autonomy level.
-    #     "approve" (default) — always interrupt for user approval.
-    #     "auto" — skip approval gate, execute immediately.
-    #     "suggest" — treated as "approve" in Phase 11 (placeholder for future).
-    #   Empty dict means all action types default to "approve" (per D-03).
-    autonomy_levels: dict[str, str] = Field(default_factory=dict)

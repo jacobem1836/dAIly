@@ -6,26 +6,33 @@ A voice-first AI personal assistant that proactively synthesises a user's digita
 
 v1.0 shipped a complete backend: OAuth integrations (Gmail, GCal, Outlook, Slack), precomputed briefing pipeline, LangGraph orchestrator, approval-gated action layer, full voice session loop, and user preferences applied end-to-end.
 
-v1.1 added the intelligence layer: the briefing now learns the user. Adaptive ranking replaces heuristics, pgvector-powered memory persists context across days, users can inspect and manage what the system knows, action autonomy is configurable, and the conversation handles interrupts and tone adaptation natively.
-
-v1.2 made the stack deployable: all three signal types (skip, re_request, expand) wire into the adaptive ranker, structured JSON logging covers all modules, `/health` and `/metrics` endpoints expose system state, and docker-compose brings up the full stack from a fresh clone.
-
 ## Core Value
 
-The briefing always delivers: every morning, the user gets a prioritised, conversational summary of what matters — without touching a single app. And over time, it gets better at knowing what matters.
+The briefing always delivers: every morning, the user gets a prioritised, conversational summary of what matters — without touching a single app.
+
+## Current Milestone: v1.1 Intelligence Layer
+
+**Goal:** Transform the briefing from a consistent daily output into a personalised, adaptive system that learns the user over time and earns increasing autonomy.
+
+**Target features:**
+- Adaptive prioritisation — learned scoring replaces heuristics
+- Cross-session memory — persistent user profile across days via pgvector
+- Memory transparency — inspect, edit, and delete what the system knows
+- Trusted actions — configurable autonomy levels (suggest / approve / auto)
+- Conversational flow improvements — natural interruption, fluid mode switching, adaptive tone
+- Tech debt fixes — scheduler user_email bug, Slack pagination, thread summarisation stub
 
 ## Milestone Plan
 
 | Milestone | Scope | Status |
 |-----------|-------|--------|
 | **v1.0 — Core Backend** | OAuth integrations, briefing pipeline, orchestrator, action layer, voice interface, preferences | ✅ Shipped 2026-04-14 |
-| **v1.1 — Intelligence Layer** | Adaptive prioritisation, cross-session memory, memory transparency, trusted actions, conversational flow | ✅ Shipped 2026-04-18 |
-| **v1.2 — Deployability Layer** | Signal capture, observability, Docker deployment | ✅ Shipped 2026-04-20 |
+| **v1.1 — Intelligence Layer** | Adaptive prioritisation, deeper memory system, trusted actions, improved conversation flow | 🔄 In Progress |
 | **v2.0 — Ecosystem Expansion** | Travel, finance, health, smart home, document platforms, web dashboard | Planned |
 
 ## Requirements
 
-### Validated (v1.0 + v1.1)
+### Validated (v1.0)
 
 - ✓ BRIEF-01: System precomputes morning briefing overnight, caches for instant delivery — v1.0
 - ✓ BRIEF-02: User can configure briefing precompute schedule time — v1.0 (Plan 02-05)
@@ -50,7 +57,6 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 - ✓ ACT-04: All external actions require explicit user approval — no bypass path — v1.0
 - ✓ ACT-05: Every action logged with timestamp, type, target, content summary, approval status, outcome — v1.0
 - ✓ ACT-06: Executor validates recipient, content type, and scope before dispatch — v1.0
-- ✓ ACT-07: User can configure autonomy level (suggest-only / approve-per-action / trusted-auto) — v1.1
 - ✓ PERS-01: User profile stores preferences (tone, briefing length, category order); applied to scheduled briefing — v1.0 (Phase 6)
 - ✓ PERS-02: Interaction signals captured (skips, corrections, re-requests) and stored — v1.0
 - ✓ PERS-03: Heuristic defaults at cold start (sender importance, deadline keywords, thread recency) — v1.0
@@ -59,66 +65,43 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 - ✓ SEC-03: Each integration requests only minimum required OAuth scopes — v1.0
 - ✓ SEC-04: Raw email/message bodies not stored long-term — only summaries and metadata — v1.0
 - ✓ SEC-05: LLM outputs are intents only; backend orchestrator validates and dispatches — v1.0
-- ✓ INTEL-01: Priority ranking learns from signal data to replace heuristic defaults with personalised scoring — v1.1
-- ✓ INTEL-02: Cross-session conversational memory persists context across days (pgvector + structured user profile extraction) — v1.1
-- ✓ MEM-01: User can inspect what the system knows about them ("What do you know about me?") — v1.1
-- ✓ MEM-02: User can edit or delete specific memory entries — v1.1
-- ✓ MEM-03: User can disable learning or reset all memory — v1.1
-- ✓ CONV-01: Briefing supports natural mid-session interruption without breaking conversation state — v1.1
-- ✓ CONV-02: Fluid switching between briefing, discussion, and action modes — v1.1
-- ✓ CONV-03: Adaptive tone — system adjusts formality and verbosity based on context signals — v1.1
-- ✓ FIX-01: RFC 2822 address normalization — WEIGHT_DIRECT scoring path fires correctly — v1.1
-- ✓ FIX-02: Slack pagination — cursor-based multi-page ingestion — v1.1
-- ✓ FIX-03: Real message ID extraction from briefing metadata in summarise_thread_node — v1.1
-- ✓ SIG-01: Skip signals captured and stored; adaptive ranker ingests them — v1.2
-- ✓ SIG-02: Re-request signals captured and stored; adaptive ranker ingests them — v1.2
-- ✓ SIG-03: Adaptive ranker ingests all three signal types (skip, re_request, expand) with decay scoring — v1.2
-- ✓ OBS-01: All modules emit structured JSON logs (JSONFormatter + ContextAdapter) — v1.2
-- ✓ OBS-02: LOG_LEVEL env var controls verbosity without code changes — v1.2
-- ✓ OBS-03: `/health` returns 200 with DB, Redis, and scheduler status — v1.2
-- ✓ OBS-04: `/metrics` exposes briefing latency, signal counts, memory size — v1.2
-- ✓ DEPLOY-01: `docker compose up` starts app + Postgres + Redis from fresh clone — v1.2
-- ✓ DEPLOY-02: `.env.example` documents all 16 env vars with descriptions — v1.2
-- ✓ DEPLOY-03: `DEPLOY.md` production guide covers VPS + Caddy + auto-TLS — v1.2
 
-## Next Milestone: v2.0 Ecosystem Expansion
+### Active (v1.1 targets)
 
-v1.2 shipped. The stack is now deployable, observable, and signal-complete.
-Next: `/gsd-new-milestone` to define v2.0 scope.
-
-### Active (v2.0 candidates)
-
-- [ ] **DASH-01**: Web dashboard — briefing history, preference management, memory browser
-- [ ] **DASH-02**: Mobile companion app (iOS)
-- [ ] **INTG-06–10**: Travel, finance, health, smart home, document integrations
-
-### Future (v2.0+ targets)
-
-- [ ] **DASH-01**: Web dashboard — briefing history, preference management, memory browser
-- [ ] **DASH-02**: Mobile companion app (iOS)
-- [ ] **INTG-06**: Apple Mail (IMAP/SMTP) integration
-- [ ] **INTG-07**: Travel integration (flights, hotels, itinerary)
-- [ ] **INTG-08**: Finance integration (transactions, balances, alerts)
-- [ ] **INTG-09**: Health integration (calendar-aware fitness/wellbeing)
-- [ ] **INTG-10**: Smart home integration
+- [ ] **INTEL-01**: Priority ranking learns from M1 signal data to replace heuristic defaults with personalised scoring
+- [ ] **INTEL-02**: Cross-session conversational memory persists context across days (pgvector + structured user profile extraction)
+- [ ] **MEM-01**: User can inspect what the system knows about them ("What do you know about me?")
+- [ ] **MEM-02**: User can edit or delete specific memory entries
+- [ ] **MEM-03**: User can disable learning or reset all memory
+- [ ] **ACT-07**: User can configure autonomy level (suggest-only / approve-per-action / trusted-auto)
+- [ ] **CONV-01**: Briefing supports natural mid-session interruption without breaking conversation state
+- [ ] **CONV-02**: Fluid switching between briefing, discussion, and action modes
+- [ ] **CONV-03**: Adaptive tone — system adjusts formality and verbosity based on context signals
+- [ ] **FIX-01**: `user_email=""` in scheduler — WEIGHT_DIRECT (10pts) path never fires; direct-to-user emails always scored as WEIGHT_CC (2pts)
+- [ ] **FIX-02**: Slack pagination single-page only — implement cursor-based pagination for multi-page workspaces
+- [ ] **FIX-03**: `message_id = last_content` stub in summarise_thread_node — real message ID extraction from briefing metadata
 
 ### Out of Scope
 
+- Mobile/iOS app — backend-first; UI comes in v2.0+
+- Web dashboard — deferred to v2.0 (DASH-01, DASH-02, DASH-03)
+- News integration — not in v1 integrations
+- Travel, finance, health, smart home — v2.0+
+- Full autonomous actions with no approval path — deferred to v2.0 (ACT-07 adds configurable levels, not full bypass)
+- Apple Mail (IMAP/SMTP) — INTG-06, v2.0+
 - Fully local LLM — GPT-class cloud model required for quality; out of scope indefinitely
-- News integration — not a core use case
-- Full autonomous actions with no safety locks — BLOCKED_ACTION_TYPES enforced permanently
-- Slack channel whitelist enforcement — intentional M1 deferral; revisit in v2.0
 
 ## Context
 
-**Current state (v1.2 shipped):** Python backend, FastAPI, PostgreSQL + pgvector (1536-dim HNSW-indexed memory embeddings) + Redis, LangGraph orchestrator with sentence-level briefing delivery, cursor-tracked resume, and structured JSON logging. Docker Compose stack deployable from fresh clone. CLI-driven (`daily briefing`, `daily chat`, `daily voice`, `daily config`).
+**Current state (v1.0):** 7,049 Python LOC, FastAPI backend, PostgreSQL + pgvector + Redis, LangGraph orchestrator. Full voice pipeline operational. CLI-driven (`daily briefing`, `daily chat`, `daily voice`, `daily config`).
 
-**Architecture:** `[Voice/UI] → [Orchestrator] → [Context Builder + Memory Retrieval] → [LLM] → [Action Engine (autonomy-gated)] → [Integrations]`
+**Architecture:** `[Voice/UI] → [Orchestrator] → [Context Builder] → [LLM] → [Action Engine] → [Integrations]`
 
 **Known gaps / tech debt:**
+- Scheduler uses `user_email=""` — WEIGHT_DIRECT scoring path never fires for scheduled runs (tracked as FIX-01)
+- Slack ingestion is single-page; multi-page workspaces miss messages beyond first page (tracked as FIX-02)
+- Thread summarisation uses `message_id = last_content` as approximate stub (tracked as FIX-03)
 - Slack channel whitelist is empty set — all channels pass validation (intentional M1 deferral)
-- Hallucination-loop guard is a binary flag check — could be made more robust with embedding dedup at injection time
-- Sigmoid midpoint uses 1.25 (not 1.0) — intentional product decision, documented in Key Decisions
 
 ## Constraints
 
@@ -126,31 +109,21 @@ Next: `/gsd-new-milestone` to define v2.0 scope.
 - **Privacy**: Raw email/message bodies must not be stored long-term — only summaries and metadata
 - **Latency**: Voice responses must feel instant — precompute briefings, stream TTS
 - **Security**: OAuth tokens encrypted at rest (AES-256), stored in secure vault (never frontend)
-- **Autonomy**: `BLOCKED_ACTION_TYPES` (send-email, create-external-calendar-invite) are permanently approval-gated — no user setting can bypass
+- **Autonomy**: Trusted-auto level requires explicit user opt-in; high-impact actions (send email, create event) always surface for approval at default level
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Backend-first for v1.0 | Validates core agent loop before investing in UI | ✓ Good — delivered complete pipeline in 10 days |
-| Cloud LLM (GPT-4.1) | GPT-class reasoning required for quality; local LLM insufficient | ✓ Good — instruction following solid |
-| Orchestrator pattern (LLM ≠ executor) | Security + reliability — LLM plans, backend executes | ✓ Good — SEC-05 held throughout |
-| Approval-required for all v1.0 actions | Build user trust before enabling autonomy | ✓ Good — ACT-07 (v1.1) extends with explicit opt-in |
+| Cloud LLM (GPT-4.1) | GPT-class reasoning required for quality; local LLM insufficient | ✓ Good — instruction following solid; consider Claude 3.5 Sonnet for structured output in v1.1 |
+| Orchestrator pattern (LLM ≠ executor) | Security + reliability — LLM plans, backend executes | ✓ Good — SEC-05 held throughout; no credentials touched by LLM |
+| Approval-required for all v1.0 actions | Build user trust before enabling autonomy | ✓ Good — human-in-the-loop gate in place; expand in v1.1 |
 | Precomputed briefing cache | Eliminates voice latency at delivery time | ✓ Good — <1s delivery from Redis confirmed |
-| LangGraph over custom state machine | Stateful graph + human-in-the-loop interrupts | ✓ Good — approval gate clean; sentence-cursor extension natural |
-| APScheduler 4.x in-process | No broker dependency for M1 single-process | ✓ Good — zero infra overhead |
+| LangGraph over custom state machine | Stateful graph + human-in-the-loop interrupts required for approval flow | ✓ Good — approval gate clean; debugging multi-layer indirection is the cost |
+| APScheduler 4.x in-process | No broker dependency for M1 single-process | ✓ Good — zero infra overhead; revisit if v1.1 requires distributed workers |
 | Cartesia Sonic-3 for TTS | 40–90ms TTFB, WebSocket streaming | ✓ Good — latency target met |
-| Deepgram Nova-3 for STT | Sub-300ms streaming | ✓ Good — real-time performance confirmed |
-| pgvector for memory (not separate vector DB) | Zero additional infra; same Postgres instance | ✓ Good — HNSW cosine dedup working at M1 scale |
-| Sigmoid midpoint at 1.25 (not 1.0) | Neutral sender gets a slight uplift; pure-heuristic behaviour preserved at cold start | ✓ Good — product intent confirmed |
-| BLOCKED_ACTION_TYPES frozenset constant | User config cannot bypass high-impact actions (T-11-01) | ✓ Good — security constraint enforced at code level |
-| Sentence-level briefing segmentation | Enables cursor-tracked resume after interruption | ✓ Good — CONV-01 verified; implementation cleaner than expected |
-| Fire-and-forget memory extraction | Session end doesn't block voice loop shutdown | ✓ Good — asyncio.create_task pattern with dedicated async_session |
-| Fire-and-forget signal capture | Signal writes don't block voice loop; skip/re_request captured asynchronously | ✓ Good — asyncio.create_task in skip_node and re_request_node |
-| stdlib logging over structlog | Zero new dependencies; JSONFormatter subclass intercepts all existing getLogger call sites | ✓ Good — 17+ call sites migrated without code change |
-| In-process /health endpoint | No sidecar dependency; checks DB, Redis, APScheduler state inline | ✓ Good — OBS-03 satisfied with minimal infra |
-| Multi-stage Dockerfile (uv + python:3.11-slim) | Stable dep layer for build cache; uv binary sourced from upstream image | ✓ Good — DEPLOY-01 satisfied; clean layer caching |
-| make_logger factory with stage ctx | Structured ctx field (user_id, stage) propagated without threading context | ✓ Good — v1.2 tech debt closed; hot-path modules compliant |
+| Deepgram Nova-3 for STT | Sub-300ms streaming, $0.0077/min | ✓ Good — real-time performance confirmed |
 
 ## Evolution
 
@@ -170,4 +143,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-20 after v1.2 milestone completion — Deployability Layer shipped*
+*Last updated: 2026-04-15 after v1.1 milestone start*

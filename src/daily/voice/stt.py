@@ -38,6 +38,7 @@ _SAMPLE_RATE = 16000
 _CHANNELS = 1
 _DTYPE = "int16"
 _BLOCKSIZE = 1024  # ~64ms at 16kHz — low latency without excessive callback overhead
+_SILENT_CHUNK = bytes(_BLOCKSIZE * 2)  # Zero-filled PCM block sent to Deepgram when mic is muted
 
 
 class STTPipeline:
@@ -159,6 +160,22 @@ class STTPipeline:
         sys.stdout.flush()
 
     # ------------------------------------------------------------------
+    # Echo suppression helper
+    # ------------------------------------------------------------------
+
+    def _select_chunk(self, indata_bytes: bytes) -> bytes:
+        """Return _SILENT_CHUNK if muted, otherwise return real mic audio.
+
+        Called from _sd_callback to suppress TTS echo from reaching Deepgram.
+        A silent chunk keeps the Deepgram WebSocket stream alive without feeding
+        TTS playback audio back as speech input.
+
+        Thread safety: boolean read under Python GIL is atomic — safe to call
+        from the PortAudio callback thread.
+        """
+        return _SILENT_CHUNK if self.muted else indata_bytes
+
+    # ------------------------------------------------------------------
     # Main async entry point
     # ------------------------------------------------------------------
 
@@ -190,7 +207,8 @@ class STTPipeline:
             """
             if status:
                 logger.warning("sounddevice status: %s", status)
-            loop.call_soon_threadsafe(audio_queue.put_nowait, indata.tobytes())
+            chunk = self._select_chunk(indata.tobytes())
+            loop.call_soon_threadsafe(audio_queue.put_nowait, chunk)
 
         async with client.listen.v1.connect(
             model="nova-3",
@@ -223,10 +241,9 @@ class STTPipeline:
                 while not stop_event.is_set():
                     try:
                         chunk = await asyncio.wait_for(audio_queue.get(), timeout=0.1)
-                        if not self.muted:
-                            await socket.send_media(chunk)
-                        # When muted: drain queue but don't send — prevents
-                        # TTS audio from being transcribed as user speech
+                        # _select_chunk already replaced real mic audio with _SILENT_CHUNK
+                        # when muted — always send to keep the Deepgram stream alive.
+                        await socket.send_media(chunk)
                     except asyncio.TimeoutError:
                         # No audio in queue — check stop_event and loop
                         continue

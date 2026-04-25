@@ -21,6 +21,7 @@ Signal/action capture:
 
 import asyncio
 import json
+import logging
 import re
 from datetime import datetime, timedelta
 
@@ -28,17 +29,14 @@ from langchain_core.messages import AIMessage
 from langgraph.types import interrupt
 from openai import AsyncOpenAI
 
-from daily.actions.base import BLOCKED_ACTION_TYPES, ActionDraft, ActionType
-from daily.logging_config import make_logger
+from daily.actions.base import ActionDraft, ActionType
 from daily.briefing.redactor import summarise_and_redact
 from daily.orchestrator.models import OrchestratorIntent
 from daily.orchestrator.session import get_email_adapters
 from daily.orchestrator.state import SessionState
-from daily.profile.memory import clear_all_memories, delete_memory_fact, list_all_memories
-from daily.profile.service import upsert_preference
 from daily.profile.signals import SignalType
 
-logger = make_logger(__name__, stage="orchestrator")
+logger = logging.getLogger(__name__)
 
 _EMAIL_RE = re.compile(r"[\w.+\-]+@[\w.\-]+")
 
@@ -104,20 +102,6 @@ DRAFT_SYSTEM_PROMPT = (
 # Maximum number of sent emails to use as style examples (D-06)
 _MAX_STYLE_EXAMPLES = 5
 
-# Phase 12 CONV-03: tone compression triggers (D-07)
-COMPRESSION_PHRASES = [
-    "i'm in a rush",
-    "keep it brief",
-    "quick version",
-    "short version",
-    "make it snappy",
-    "i'm busy",
-]
-
-# Implicit trigger threshold: consecutive short messages (D-07)
-_IMPLICIT_TONE_MIN_TURNS = 2
-_IMPLICIT_TONE_MAX_WORDS = 5
-
 
 def _format_email_context(email_context: list[dict]) -> str:
     """Format email metadata list into a compact table for the LLM prompt.
@@ -172,57 +156,11 @@ async def respond_node(state: SessionState) -> dict:
             role = "user"
         conversation.append({"role": role, "content": msg.content})
 
-    # Phase 9 INTEL-02: inject recalled memories into live-session system prompt.
-    memory_preamble = ""
-    if state.user_memories:
-        memory_lines = "\n".join(f"- {m}" for m in state.user_memories)
-        memory_preamble = (
-            "User memories (facts recalled from previous sessions):\n"
-            f"{memory_lines}\n\n"
-            "Incorporate relevant memories naturally when answering. "
-            "Do not invent memories.\n\n"
-        )
-
-    # Phase 12 CONV-03: tone override takes priority over preference (D-09)
-    effective_tone = state.preferences.get("tone", "conversational")
-    effective_length = state.preferences.get("briefing_length", "standard")
-    state_updates: dict = {}
-
-    if state.tone_override == "brief":
-        # Already triggered — keep compressed
-        effective_tone = "brief"
-        effective_length = "short"
-    elif not state.tone_override:
-        # Check explicit triggers (D-07: substring match, D-08: pre-LLM)
-        last_msg_lower = state.messages[-1].content.lower() if state.messages else ""
-        explicit_trigger = any(phrase in last_msg_lower for phrase in COMPRESSION_PHRASES)
-
-        # Check implicit triggers (D-07: < 5 words for 2 consecutive user turns)
-        human_messages = [m for m in state.messages if hasattr(m, "type") and m.type == "human"]
-        implicit_trigger = (
-            len(human_messages) >= _IMPLICIT_TONE_MIN_TURNS
-            and all(
-                len(human_messages[-(i + 1)].content.split()) < _IMPLICIT_TONE_MAX_WORDS
-                for i in range(_IMPLICIT_TONE_MIN_TURNS)
-            )
-        )
-
-        if explicit_trigger or implicit_trigger:
-            state_updates["tone_override"] = "brief"
-            effective_tone = "brief"
-            effective_length = "short"
-
-    system_content = memory_preamble + RESPOND_SYSTEM_PROMPT.format(
+    system_content = RESPOND_SYSTEM_PROMPT.format(
         briefing_narrative=state.briefing_narrative or "(no briefing loaded)",
-        tone=effective_tone,
-        length=effective_length,
+        tone=state.preferences.get("tone", "conversational"),
+        length=state.preferences.get("briefing_length", "standard"),
     )
-
-    if effective_tone == "brief":
-        system_content += (
-            "\n\nIMPORTANT: The user is in a rush. Be compressed and direct. "
-            "Max 2 sentences per response. Skip pleasantries."
-        )
 
     client = _openai_client()
     try:
@@ -248,145 +186,7 @@ async def respond_node(state: SessionState) -> dict:
             _capture_signal(state.active_user_id, SignalType.follow_up)
         )
 
-    return {"messages": [AIMessage(content=narrative)], **state_updates}
-
-
-async def resume_briefing_node(state: SessionState) -> dict:
-    """Resume briefing delivery from the stored cursor position.
-
-    Returns a confirmation message. The voice loop checks briefing_cursor
-    after speaking this message and re-enters the sentence iteration loop.
-    TTS orchestration stays in voice/loop.py — this node only provides
-    the verbal cue (RESEARCH.md Pattern 5, simpler alternative).
-
-    Phase 12 CONV-01/CONV-02: explicit resume path via D-03 keywords.
-
-    Args:
-        state: Current SessionState with briefing_cursor set.
-
-    Returns:
-        State update dict with AIMessage confirmation. briefing_cursor
-        is NOT cleared here — the voice loop clears it after delivery.
-    """
-    if state.briefing_cursor is None:
-        return {"messages": [AIMessage(content="There's no briefing to resume — it was fully delivered.")]}
-
-    return {"messages": [AIMessage(content="Resuming your briefing now.")]}
-
-
-# ---------------------------------------------------------------------------
-# Phase 13 nodes: skip, re_request (signal capture)
-# ---------------------------------------------------------------------------
-
-
-def _get_current_item_sender(state: SessionState) -> str | None:
-    """Extract sender from the current briefing item, or None if unavailable.
-
-    Defensive: returns None if briefing_items is empty or current_item_index
-    is out of range (e.g. old cached briefing from before Phase 13).
-    Per Pitfall 2: signals fire with target_id=None rather than crashing.
-    """
-    if not state.briefing_items:
-        return None
-    idx = min(state.current_item_index, len(state.briefing_items) - 1)
-    item = state.briefing_items[idx]
-    # briefing_items stores dicts (not BriefingItem) for LangGraph serialisation
-    if isinstance(item, dict):
-        return item.get("sender")
-    return getattr(item, "sender", None)
-
-
-async def skip_node(state: SessionState) -> dict:
-    """Handle explicit skip intent — fire skip signal and acknowledge.
-
-    Per D-01: "skip", "next", "move on" route here.
-    Fires SignalType.skip with the current item's sender as target_id
-    (per Pitfall 1/A1: target_id = sender email for ranker aggregation).
-    Uses _capture_signal fire-and-forget pattern (D-08).
-
-    Args:
-        state: Current SessionState with briefing_items and current_item_index.
-
-    Returns:
-        Dict with acknowledgement message.
-    """
-    sender = _get_current_item_sender(state)
-    if state.active_user_id:
-        asyncio.create_task(
-            _capture_signal(state.active_user_id, SignalType.skip, target_id=sender)
-        )
-    return {"messages": [AIMessage(content="Skipping to the next item.")]}
-
-
-async def re_request_node(state: SessionState) -> dict:
-    """Handle re_request intent — fire signal and re-speak current item.
-
-    Per D-04: "repeat that", "say that again" route here.
-    Fires SignalType.re_request with the current item's sender as target_id.
-    Returns the current item's sentences for re-delivery.
-
-    Args:
-        state: Current SessionState with briefing_items and current_item_index.
-
-    Returns:
-        Dict with the current item's narrative content for re-speaking.
-    """
-    sender = _get_current_item_sender(state)
-    if state.active_user_id:
-        asyncio.create_task(
-            _capture_signal(state.active_user_id, SignalType.re_request, target_id=sender)
-        )
-
-    # Re-speak the current item's sentences from the narrative
-    content = "Sure, let me repeat that."
-    if state.briefing_narrative and state.briefing_items:
-        from daily.briefing.items import _split_sentences  # noqa: PLC0415
-        sentences = _split_sentences(state.briefing_narrative)
-        idx = min(state.current_item_index, len(state.briefing_items) - 1)
-        item = state.briefing_items[idx]
-        if isinstance(item, dict):
-            start = item.get("sentence_range_start", 0)
-            end = item.get("sentence_range_end", len(sentences))
-        else:
-            start = getattr(item, "sentence_range_start", 0)
-            end = getattr(item, "sentence_range_end", len(sentences))
-        item_sentences = sentences[start:end]
-        if item_sentences:
-            content = "Sure, let me repeat that. " + " ".join(item_sentences)
-
-    return {"messages": [AIMessage(content=content)]}
-
-
-def _resolve_message_id(user_query: str, email_context: list[dict]) -> str | None:
-    """Match user's natural language query against email_context metadata.
-
-    Searches subject and sender fields (case-insensitive substring match).
-    Returns the message_id of the first matching email, or None if no match.
-
-    Args:
-        user_query: The user's message text describing which email to summarise.
-        email_context: List of email metadata dicts with message_id, subject, sender keys.
-
-    Returns:
-        The message_id string of the best match, or None if no email matches.
-    """
-    query_lower = user_query.lower()
-    for email in email_context:
-        subject = email.get("subject", "").lower()
-        sender = email.get("sender", "").lower()
-        if subject and subject in query_lower:
-            return email["message_id"]
-        if sender and sender in query_lower:
-            return email["message_id"]
-    # Second pass: check if any word from the query appears in subject/sender
-    query_words = [w for w in query_lower.split() if len(w) > 3]
-    for email in email_context:
-        subject = email.get("subject", "").lower()
-        sender = email.get("sender", "").lower()
-        for word in query_words:
-            if word in subject or word in sender:
-                return email["message_id"]
-    return None
+    return {"messages": [AIMessage(content=narrative)]}
 
 
 async def summarise_thread_node(state: SessionState) -> dict:
@@ -420,22 +220,11 @@ async def summarise_thread_node(state: SessionState) -> dict:
             ]
         }
 
-    # Resolve message_id from email_context (D-07, D-09)
+    # Extract target reference from last user message
     last_content = state.messages[-1].content if state.messages else ""
-    message_id = _resolve_message_id(last_content, state.email_context)
-
-    if message_id is None:
-        # D-08: No match found — return clear user-facing error
-        return {
-            "messages": [
-                AIMessage(
-                    content=(
-                        "I can't find that email \u2014 try asking during or right "
-                        "after your briefing when I have context loaded."
-                    )
-                )
-            ]
-        }
+    # Use a placeholder message_id — real extraction depends on briefing context
+    # In Phase 3 this is a best-effort lookup; Phase 5 will wire full context
+    message_id = last_content  # pass through so adapter can match by subject/id
 
     client = _openai_client()
 
@@ -750,28 +539,20 @@ async def draft_node(state: SessionState) -> dict:
 async def approval_node(state: SessionState) -> dict:
     """Human-in-the-loop approval gate using LangGraph interrupt() (T-04-02).
 
-    Phase 11 autonomy pre-check (D-05, D-06):
-      1. If action_type is in BLOCKED_ACTION_TYPES -> always interrupt (never bypass).
-      2. Else if user's autonomy_levels has this type set to "auto" -> skip interrupt,
-         return confirm directly with auto_executed flag.
-      3. Otherwise (approve, suggest, or missing) -> interrupt as before.
-
     CRITICAL: interrupt() must NOT be wrapped in try/except. LangGraph uses
     a special exception mechanism internally — catching it would break the
     human-in-the-loop pattern entirely.
+
+    Builds a preview payload from pending_action and calls interrupt() to
+    pause graph execution. The user's decision string is returned via
+    Command(resume=...) and stored as approval_decision.
+
+    Args:
+        state: Current SessionState with pending_action set.
+
+    Returns:
+        State update dict with approval_decision set to the user's decision string.
     """
-    action_type = state.pending_action.action_type
-
-    # --- Phase 11 autonomy pre-check (D-05, D-06) ---
-    # Blocked types ALWAYS require approval — no config can override this.
-    if action_type not in BLOCKED_ACTION_TYPES:
-        autonomy_levels = state.preferences.get("autonomy_levels", {})
-        level = autonomy_levels.get(action_type.value, "approve")
-        if level == "auto":
-            return {"approval_decision": "confirm", "auto_executed": True}
-        # "suggest" treated as "approve" in Phase 11 (D-09) — fall through to interrupt
-
-    # --- Existing approval gate (unchanged from v1.0) ---
     payload = {
         "preview": state.pending_action.card_text(),
         "action_type": state.pending_action.action_type.value,
@@ -1044,90 +825,6 @@ async def execute_node(state: SessionState) -> dict:
             "pending_action": None,
             "approval_decision": None,
         }
-
-
-async def memory_node(state: SessionState) -> dict:
-    """Handle memory transparency commands: query, delete, clear, disable.
-
-    Sub-intent dispatch via keyword matching on last user message.
-    Priority: clear > delete > query > disable (per Research Pitfall 1 — "forget
-    everything" must not route to single-fact delete).
-    All operations bypass the memory_enabled gate — transparency always works (D-02/D-06).
-    No approval gate — D-06: direct DB execution with verbal confirmation.
-
-    Creates its own DB session (established node pattern via async_session()).
-
-    Args:
-        state: Current SessionState with messages and active_user_id.
-
-    Returns:
-        State update dict with AIMessage containing verbal confirmation.
-    """
-    from daily.db.engine import async_session  # noqa: PLC0415
-
-    user_id = state.active_user_id
-    last_msg = state.messages[-1].content.lower() if state.messages else ""
-
-    try:
-        # Sub-intent keyword sets (must match graph.py D-01 keywords)
-        memory_query_keywords = ["what do you know", "what do you remember",
-                                 "tell me what you know", "what have you learned"]
-        memory_clear_keywords = ["forget everything", "clear my memory", "reset my memory"]
-        memory_delete_keywords = ["forget that", "delete that", "remove that fact"]
-        memory_disable_keywords = ["disable memory", "stop learning",
-                                   "turn off memory", "don't remember"]
-
-        async with async_session() as db_session:
-            # CRITICAL: check clear BEFORE delete — "forget everything" must not route
-            # to single-fact delete (Research Pitfall 1)
-            if any(kw in last_msg for kw in memory_clear_keywords):
-                count = await clear_all_memories(user_id, db_session)
-                if count == 0:
-                    narrative = "I don't have any memories stored about you."
-                else:
-                    narrative = f"Done, I've cleared all {count} things I knew about you."
-
-            elif any(kw in last_msg for kw in memory_delete_keywords):
-                # Extract the description from the message — strip the keyword prefix
-                # to get the user's fact description for cosine matching
-                raw_description = last_msg
-                for kw in memory_delete_keywords:
-                    raw_description = raw_description.replace(kw, "").strip()
-                if not raw_description:
-                    raw_description = last_msg  # fall back to full message if stripping empties it
-
-                deleted_fact = await delete_memory_fact(user_id, raw_description, db_session)
-                if deleted_fact is None:
-                    narrative = "I couldn't find a matching memory to delete."
-                else:
-                    narrative = "Done, I've forgotten that."
-
-            elif any(kw in last_msg for kw in memory_query_keywords):
-                facts = await list_all_memories(user_id, db_session, limit=10)
-                if not facts:
-                    narrative = "I don't know anything about you yet."
-                else:
-                    items = " ".join(f"{i + 1}. {fact}." for i, fact in enumerate(facts))
-                    narrative = f"Here's what I know about you. {items}"
-
-            elif any(kw in last_msg for kw in memory_disable_keywords):
-                await upsert_preference(user_id, "memory_enabled", "false", db_session)
-                narrative = (
-                    "Memory learning disabled. I'll stop extracting new facts. "
-                    "Your existing memories are preserved until you delete them."
-                )
-
-            else:
-                narrative = (
-                    "I'm not sure what memory operation you meant. "
-                    "Try asking 'what do you know about me?'"
-                )
-
-    except Exception as exc:
-        logger.warning("memory_node: unexpected failure: %s", exc)
-        narrative = "I couldn't complete that right now."
-
-    return {"messages": [AIMessage(content=narrative)]}
 
 
 async def _log_action(

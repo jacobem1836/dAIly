@@ -176,3 +176,21 @@ class TestSTTPipelineInterface:
     def test_has_start_listening(self, stt: STTPipeline) -> None:
         """STTPipeline must expose start_listening coroutine."""
         assert asyncio.iscoroutinefunction(stt.start_listening)
+
+
+class TestSelectChunk:
+    """Unit tests for STTPipeline._select_chunk (echo suppression helper)."""
+
+    def test_sd_callback_sends_silent_chunk_when_muted(self, stt: STTPipeline) -> None:
+        """When muted=True, _select_chunk must return _SILENT_CHUNK instead of real audio."""
+        from daily.voice.stt import _SILENT_CHUNK
+
+        real_audio = b"\xAA\xBB"
+
+        # Unmuted: pass through real audio
+        stt.muted = False
+        assert stt._select_chunk(real_audio) == real_audio
+
+        # Muted: return silent chunk
+        stt.muted = True
+        assert stt._select_chunk(real_audio) is _SILENT_CHUNK

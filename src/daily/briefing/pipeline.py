@@ -17,27 +17,19 @@ All pipeline parameters are provided by _build_pipeline_kwargs() in scheduler.py
 when called from the cron job, or passed directly for on-demand generation.
 """
 
-import json
 import logging
-import time
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
 
 from openai import AsyncOpenAI
 from redis.asyncio import Redis
 
-from daily.briefing.cache import CACHE_TTL, cache_briefing, get_briefing
+from daily.briefing.cache import cache_briefing, get_briefing
 from daily.briefing.context_builder import build_context
-from daily.briefing.items import build_briefing_items
 from daily.briefing.models import BriefingOutput
 from daily.briefing.narrator import generate_narrative
 from daily.briefing.redactor import redact_emails, redact_messages
 from daily.integrations.base import CalendarAdapter, EmailAdapter, MessageAdapter
-from daily.profile.memory import retrieve_relevant_memories
 from daily.profile.models import UserPreferences
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +45,6 @@ async def run_briefing_pipeline(
     redis: Redis,
     openai_client: AsyncOpenAI,
     preferences: UserPreferences | None = None,
-    db_session: "AsyncSession | None" = None,
 ) -> BriefingOutput:
     """Full pipeline: ingest -> rank -> fetch bodies -> redact -> narrate -> cache.
 
@@ -80,16 +71,11 @@ async def run_briefing_pipeline(
         openai_client: Async OpenAI client for redaction and narration.
         preferences: Optional user preferences for tone/length/order. If None,
                      narrator uses defaults.
-        db_session: Optional AsyncSession for adaptive ranking (Phase 8) and
-                    cross-session memory retrieval (Phase 9 INTEL-02). When None,
-                    adaptive ranking and memory retrieval are skipped — briefing
-                    always delivers regardless (graceful-degradation contract).
 
     Returns:
         BriefingOutput with narrative, generated_at, and version.
     """
     logger.info("Starting briefing pipeline for user %d", user_id)
-    pipeline_start = time.monotonic()
 
     # Step 1: Build context (ingest + rank + fetch bodies for top-N)
     # build_context populates context.raw_bodies with fetched email/Slack bodies.
@@ -101,7 +87,6 @@ async def run_briefing_pipeline(
         vip_senders=vip_senders,
         user_email=user_email,
         top_n=top_n,
-        db_session=db_session,
     )
 
     # Step 2: Redact -- summarise + credential strip per-item (SEC-02)
@@ -135,48 +120,12 @@ async def run_briefing_pipeline(
     # Clear raw_bodies after redaction -- no longer needed in memory (T-02-11)
     context.raw_bodies.clear()
 
-    # Phase 9 INTEL-02: retrieve cross-session memories for narrator injection (D-06).
-    # Hard-gated on memory_enabled via retrieve_relevant_memories — returns [] when disabled.
-    # db_session is None on on-demand path (get_or_generate_briefing) — skip retrieval.
-    user_memories: list[str] = []
-    if db_session is not None:
-        user_memories = await retrieve_relevant_memories(
-            user_id=user_id,
-            query_text="today's daily briefing",
-            db_session=db_session,
-            top_k=10,
-        )
-
     # Step 3: Generate narrative (BRIEF-06)
     # Narrator receives only pre-summarised metadata -- no raw bodies (D-11/SEC-05)
-    output = await generate_narrative(
-        context, openai_client, preferences=preferences, user_memories=user_memories
-    )
+    output = await generate_narrative(context, openai_client, preferences=preferences)
 
     # Step 4: Cache in Redis (BRIEF-01, D-14)
     await cache_briefing(redis, user_id, output)
-
-    # Phase 13 D-02: Cache structured item list alongside narrative for signal tracking
-    try:
-        briefing_items = build_briefing_items(context, output.narrative)
-        items_key = f"briefing:{user_id}:{output.generated_at.date().isoformat()}_items"
-        items_payload = json.dumps([item.model_dump() for item in briefing_items])
-        await redis.set(items_key, items_payload, ex=CACHE_TTL)
-        logger.info("Cached %d briefing items for user %d", len(briefing_items), user_id)
-    except Exception as exc:
-        # Item cache failure must not block the briefing pipeline (graceful degradation)
-        logger.warning("Failed to cache briefing items: %s", exc)
-
-    # Phase 14 OBS-04: record pipeline latency for /metrics aggregation (D-10)
-    try:
-        latency_s = time.monotonic() - pipeline_start
-        await redis.set(
-            f"briefing:{user_id}:latency_s",
-            str(round(latency_s, 3)),
-            ex=86400,  # 24h TTL, refreshed each precompute
-        )
-    except Exception as exc:
-        logger.warning("Failed to write latency key: %s", exc)
 
     logger.info("Briefing pipeline complete for user %d, cached", user_id)
     return output

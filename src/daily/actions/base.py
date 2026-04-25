@@ -54,23 +54,6 @@ REQUIRED_SCOPES: dict[ActionType, dict[str, list[str]]] = {
 }
 
 
-# Action types that are NEVER auto-executed regardless of user config (per D-01).
-# These always interrupt for approval in approval_node.
-BLOCKED_ACTION_TYPES: frozenset[ActionType] = frozenset({
-    ActionType.compose_email,
-    # create_external_calendar_invite will be added here when the ActionType exists
-})
-
-# Action types the user may configure to "auto" (per D-02).
-# All default to "approve" when not explicitly set.
-CONFIGURABLE_ACTION_TYPES: frozenset[ActionType] = frozenset({
-    ActionType.draft_email,
-    ActionType.draft_message,
-    ActionType.schedule_event,
-    ActionType.reschedule_event,
-})
-
-
 class ActionDraft(BaseModel):
     """Represents a pending action awaiting user approval.
 

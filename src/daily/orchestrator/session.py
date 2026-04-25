@@ -10,7 +10,6 @@ Provides:
 - run_session: Single-turn graph execution via ainvoke (not invoke — Pitfall 2).
 """
 
-import json
 import logging
 import re
 from datetime import date, datetime, timedelta, timezone
@@ -18,7 +17,7 @@ from datetime import date, datetime, timedelta, timezone
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from daily.briefing.cache import _cache_key, get_briefing
+from daily.briefing.cache import get_briefing
 from daily.profile.service import load_profile
 
 logger = logging.getLogger(__name__)
@@ -111,18 +110,6 @@ async def initialize_session_state(
     briefing = await get_briefing(redis, user_id, d)
     preferences = await load_profile(user_id, db_session)
 
-    # Phase 9 INTEL-02: retrieve cross-session memories for live-session injection.
-    # Hard-gated on memory_enabled — retrieve_relevant_memories returns [] when False.
-    user_memories: list[str] = []
-    if preferences.memory_enabled:
-        from daily.profile.memory import retrieve_relevant_memories  # noqa: PLC0415
-        user_memories = await retrieve_relevant_memories(
-            user_id=user_id,
-            query_text="today's briefing context",
-            db_session=db_session,
-            top_k=10,
-        )
-
     email_context: list[dict] = []
     adapters = get_email_adapters()
     if adapters:
@@ -143,25 +130,11 @@ async def initialize_session_state(
         except Exception:
             logger.warning("initialize_session_state: could not load email context")
 
-    # Phase 13 D-03: Load briefing item list from Redis for signal tracking
-    briefing_items: list[dict] = []
-    if briefing:
-        try:
-            items_key = _cache_key(user_id, d) + "_items"
-            items_raw = await redis.get(items_key)
-            if items_raw:
-                briefing_items = json.loads(items_raw)
-        except Exception:
-            logger.warning("initialize_session_state: could not load briefing items")
-
     return {
         "briefing_narrative": briefing.narrative if briefing else "",
         "active_user_id": user_id,
         "preferences": preferences.model_dump(),
         "email_context": email_context,
-        "user_memories": user_memories,
-        "briefing_items": briefing_items,
-        "current_item_index": 0,
     }
 
 

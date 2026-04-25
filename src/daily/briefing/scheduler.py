@@ -30,7 +30,6 @@ from daily.briefing.pipeline import run_briefing_pipeline
 from daily.config import Settings
 from daily.db.engine import async_session
 from daily.db.models import IntegrationToken, VipSender
-from daily.profile.models import UserProfile
 from daily.profile.service import load_profile
 
 logger = logging.getLogger(__name__)
@@ -82,14 +81,7 @@ async def _build_pipeline_kwargs(user_id: int, settings: Settings) -> dict:
     email_adapters = []
     calendar_adapters = []
     message_adapters = []
-
-    # Load user_email from UserProfile (FIX-01: was hardcoded empty string)
-    async with async_session() as session:
-        result = await session.execute(
-            select(UserProfile.email).where(UserProfile.user_id == user_id)
-        )
-        row = result.scalar_one_or_none()
-        user_email = row if row else ""
+    user_email = ""
 
     vault_key = base64.b64decode(settings.vault_key) if settings.vault_key else b""
 

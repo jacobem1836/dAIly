@@ -66,24 +66,6 @@ class TestBuildGraph:
         graph = build_graph(checkpointer=saver)
         assert graph.checkpointer is saver
 
-    def test_build_graph_has_skip_node(self):
-        """Compiled graph has 'skip' node (Phase 13 SIG-01)."""
-        from langgraph.checkpoint.memory import MemorySaver
-
-        from daily.orchestrator.graph import build_graph
-
-        graph = build_graph(checkpointer=MemorySaver())
-        assert "skip" in graph.nodes
-
-    def test_build_graph_has_re_request_node(self):
-        """Compiled graph has 're_request' node (Phase 13 SIG-02)."""
-        from langgraph.checkpoint.memory import MemorySaver
-
-        from daily.orchestrator.graph import build_graph
-
-        graph = build_graph(checkpointer=MemorySaver())
-        assert "re_request" in graph.nodes
-
 
 class TestRouteIntent:
     """Tests for the route_intent conditional edge function."""
@@ -151,35 +133,6 @@ class TestRouteIntent:
         state = SessionState(messages=[HumanMessage(content="SUMMARISE that thread please")])
         result = route_intent(state)
         assert result == "summarise_thread"
-
-    def test_route_intent_returns_skip_for_skip_keyword(self):
-        """route_intent routes to 'skip' for skip/next/move on keywords (Phase 13 D-01)."""
-        from langchain_core.messages import HumanMessage
-
-        from daily.orchestrator.graph import route_intent
-        from daily.orchestrator.state import SessionState
-
-        state = SessionState(messages=[HumanMessage(content="skip this")])
-        assert route_intent(state) == "skip"
-
-        state = SessionState(messages=[HumanMessage(content="next")])
-        assert route_intent(state) == "skip"
-
-        state = SessionState(messages=[HumanMessage(content="move on please")])
-        assert route_intent(state) == "skip"
-
-    def test_route_intent_returns_re_request_for_repeat_that(self):
-        """route_intent routes to 're_request' for repeat/say-again keywords (Phase 13 D-04)."""
-        from langchain_core.messages import HumanMessage
-
-        from daily.orchestrator.graph import route_intent
-        from daily.orchestrator.state import SessionState
-
-        state = SessionState(messages=[HumanMessage(content="repeat that")])
-        assert route_intent(state) == "re_request"
-
-        state = SessionState(messages=[HumanMessage(content="say that again")])
-        assert route_intent(state) == "re_request"
 
     def test_route_intent_returns_summarise_for_thread_keyword(self):
         """route_intent routes to 'summarise_thread' for 'thread'."""
@@ -318,80 +271,3 @@ class TestEmailAdapterRegistry:
         adapters = get_email_adapters()
         assert len(adapters) == 1
         assert adapters[0] is adapter2
-
-
-# ---------------------------------------------------------------------------
-# Phase 10: Memory transparency routing (MEM-01, MEM-02, MEM-03)
-# ---------------------------------------------------------------------------
-
-
-class TestRouteIntentMemory:
-    """Tests for route_intent memory keyword routing (Phase 10)."""
-
-    def test_route_intent_memory_query(self):
-        """'what do you know about me' routes to 'memory'."""
-        from daily.orchestrator.graph import route_intent
-        from daily.orchestrator.state import SessionState
-
-        state = SessionState(messages=[HumanMessage(content="what do you know about me")])
-        assert route_intent(state) == "memory"
-
-    def test_route_intent_memory_delete(self):
-        """'forget that fact about my travel' routes to 'memory'."""
-        from daily.orchestrator.graph import route_intent
-        from daily.orchestrator.state import SessionState
-
-        state = SessionState(messages=[HumanMessage(content="forget that fact about my travel")])
-        assert route_intent(state) == "memory"
-
-    def test_route_intent_memory_clear(self):
-        """'forget everything' routes to 'memory'."""
-        from daily.orchestrator.graph import route_intent
-        from daily.orchestrator.state import SessionState
-
-        state = SessionState(messages=[HumanMessage(content="forget everything")])
-        assert route_intent(state) == "memory"
-
-    def test_route_intent_memory_disable(self):
-        """'disable memory' routes to 'memory'."""
-        from daily.orchestrator.graph import route_intent
-        from daily.orchestrator.state import SessionState
-
-        state = SessionState(messages=[HumanMessage(content="disable memory")])
-        assert route_intent(state) == "memory"
-
-    def test_route_intent_memory_priority_over_summarise(self):
-        """Memory keywords take priority over summarise keywords."""
-        from daily.orchestrator.graph import route_intent
-        from daily.orchestrator.state import SessionState
-
-        # "what do you know" is a memory keyword; message also contains no summarise keyword
-        state = SessionState(messages=[HumanMessage(content="what do you know about that topic")])
-        assert route_intent(state) == "memory"
-
-    def test_route_intent_memory_what_do_you_remember(self):
-        """'what do you remember' routes to 'memory'."""
-        from daily.orchestrator.graph import route_intent
-        from daily.orchestrator.state import SessionState
-
-        state = SessionState(messages=[HumanMessage(content="what do you remember about me")])
-        assert route_intent(state) == "memory"
-
-    def test_route_intent_memory_clear_my_memory(self):
-        """'clear my memory' routes to 'memory'."""
-        from daily.orchestrator.graph import route_intent
-        from daily.orchestrator.state import SessionState
-
-        state = SessionState(messages=[HumanMessage(content="clear my memory please")])
-        assert route_intent(state) == "memory"
-
-
-class TestBuildGraphPhase10:
-    """Tests for Phase 10 graph topology."""
-
-    def test_build_graph_has_memory_node(self):
-        """Compiled graph has 'memory' node registered."""
-        from daily.orchestrator.graph import build_graph
-
-        graph = build_graph()
-        assert "memory" in graph.get_graph().nodes

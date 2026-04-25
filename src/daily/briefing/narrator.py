@@ -61,17 +61,6 @@ PREFERENCE_PREAMBLE = (
 )
 
 # ---------------------------------------------------------------------------
-# Memory preamble (Phase 9 INTEL-02, D-06)
-# ---------------------------------------------------------------------------
-
-MEMORY_PREAMBLE = (
-    "User memories (facts recalled from previous sessions):\n"
-    "{memories}\n\n"
-    "Incorporate relevant memories naturally — do not list them verbatim. "
-    "Do not invent memories; use only what is provided above.\n\n"
-)
-
-# ---------------------------------------------------------------------------
 # Fallback narrative (used when LLM fails twice)
 # ---------------------------------------------------------------------------
 
@@ -85,35 +74,25 @@ FALLBACK_NARRATIVE = (
 # ---------------------------------------------------------------------------
 
 
-def build_narrator_system_prompt(
-    preferences: UserPreferences | None = None,
-    user_memories: list[str] | None = None,
-) -> str:
-    """Build narrator system prompt with optional memory and preference preambles.
+def build_narrator_system_prompt(preferences: UserPreferences | None = None) -> str:
+    """Build narrator system prompt with optional user preference preamble.
 
-    Ordering: MEMORY_PREAMBLE -> PREFERENCE_PREAMBLE -> NARRATOR_SYSTEM_PROMPT
     Per D-05: Preferences injected as system instruction preamble.
-    Per Phase 9 INTEL-02: Memory facts injected before preferences (D-06).
-    Backward-compatible: existing callers passing only preferences continue to work.
+    Returns the base NARRATOR_SYSTEM_PROMPT if no preferences provided.
 
     Args:
-        preferences: Optional UserPreferences — if None, preference preamble is omitted.
-        user_memories: Optional list of fact strings from retrieve_relevant_memories.
-                       If empty or None, memory preamble is omitted.
+        preferences: Optional UserPreferences -- if None, returns base prompt unchanged.
 
     Returns:
-        System prompt string with memory and/or preference preamble prepended.
+        System prompt string with or without preference preamble prepended.
     """
-    preamble = ""
-    if user_memories:
-        memory_lines = "\n".join(f"- {m}" for m in user_memories)
-        preamble += MEMORY_PREAMBLE.format(memories=memory_lines)
-    if preferences is not None:
-        preamble += PREFERENCE_PREAMBLE.format(
-            tone=preferences.tone,
-            length=preferences.briefing_length,
-            order=", ".join(preferences.category_order),
-        )
+    if preferences is None:
+        return NARRATOR_SYSTEM_PROMPT
+    preamble = PREFERENCE_PREAMBLE.format(
+        tone=preferences.tone,
+        length=preferences.briefing_length,
+        order=", ".join(preferences.category_order),
+    )
     return preamble + NARRATOR_SYSTEM_PROMPT
 
 
@@ -126,7 +105,6 @@ async def generate_narrative(
     context: BriefingContext,
     client: AsyncOpenAI,
     preferences: UserPreferences | None = None,
-    user_memories: list[str] | None = None,
 ) -> BriefingOutput:
     """Generate a spoken-English briefing narrative from pre-redacted context.
 
@@ -137,18 +115,15 @@ async def generate_narrative(
     SEC-05: No tools= or function_call= parameters -- LLM is intent-only.
     D-11: LLM receives only pre-summarised metadata, never raw bodies or credentials.
     D-05: If preferences provided, prepends preference preamble to system prompt.
-    Phase 9 INTEL-02: If user_memories provided, prepends MEMORY_PREAMBLE (D-06).
 
     Args:
         context: Pre-redacted briefing context.
         client: AsyncOpenAI client instance.
         preferences: Optional user preferences. If None, uses base system prompt
                      (backward compatible).
-        user_memories: Optional list of fact strings from retrieve_relevant_memories.
-                       If None or empty, memory preamble is omitted (backward compatible).
     """
     user_prompt = context.to_prompt_string()
-    system_prompt = build_narrator_system_prompt(preferences, user_memories)
+    system_prompt = build_narrator_system_prompt(preferences)
 
     # Adjust max_tokens based on preferences (D-05)
     max_tokens = 650  # default (standard length)

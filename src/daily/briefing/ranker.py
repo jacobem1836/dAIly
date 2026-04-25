@@ -13,7 +13,6 @@ Design decisions:
 """
 
 from datetime import datetime, timezone
-from email.utils import parseaddr
 
 from daily.briefing.models import RankedEmail
 from daily.integrations.models import EmailMetadata
@@ -50,27 +49,19 @@ DEADLINE_KEYWORDS = frozenset(
 def _is_direct_recipient(user_email: str, recipient_field: str) -> bool:
     """Check if user_email appears as a complete address in recipient field.
 
-    Normalises both sides using email.utils.parseaddr to handle RFC 2822
-    formatted addresses (e.g., "Display Name <addr@host>"). Splits recipient
-    field by comma and compares each address individually, preventing substring
-    false positives.
+    Splits recipient field by comma, strips whitespace, and compares each
+    address individually. Prevents substring false positives.
 
     Args:
-        user_email: The user's email address (may be bare or RFC 2822 formatted).
+        user_email: The user's email address to look for.
         recipient_field: Comma-separated list of recipient addresses.
 
     Returns:
-        True if the normalised user email matches any normalised recipient.
+        True if user_email is one of the recipient addresses.
     """
-    _, user_bare = parseaddr(user_email)
-    user_lower = user_bare.lower().strip()
-    if not user_lower:
-        return False
-    for r in recipient_field.split(","):
-        _, addr = parseaddr(r.strip())
-        if addr.lower().strip() == user_lower:
-            return True
-    return False
+    user_lower = user_email.lower().strip()
+    recipients = [r.strip().lower() for r in recipient_field.split(",")]
+    return user_lower in recipients
 
 
 def score_email(
@@ -133,33 +124,22 @@ def rank_emails(
     vip_senders: frozenset[str],
     user_email: str,
     top_n: int = 5,
-    sender_multipliers: dict[str, float] | None = None,
 ) -> list[RankedEmail]:
     """Rank all emails by heuristic score and return the top-N.
 
     Per D-02/D-05: ranks all emails in the batch, returns top-N sorted
     by score descending as RankedEmail objects.
 
-    When sender_multipliers is provided, each email's heuristic score is
-    multiplied by the sender's multiplier before ranking. Senders not present
-    in the dict default to a multiplier of 1.0 (no-op). Sender keys are
-    compared after .lower().strip() normalisation to match the format produced
-    by adaptive_ranker.get_sender_multipliers().
-
     Args:
         emails: All email metadata from the current fetch window.
         vip_senders: Set of VIP sender email addresses for override scoring.
         user_email: The user's email address for recipient comparison.
         top_n: Number of top-ranked emails to return (default 5).
-        sender_multipliers: Optional per-sender float multipliers from adaptive
-            ranker. When None or empty, all scores are unchanged (backward
-            compatible). Default None.
 
     Returns:
         List of RankedEmail objects, sorted by score descending, length <= top_n.
     """
     now = datetime.now(tz=timezone.utc)
-    multipliers = sender_multipliers or {}
 
     # Compute thread counts for thread activity weighting
     thread_counts: dict[str, int] = {}
@@ -170,8 +150,7 @@ def rank_emails(
     scored: list[tuple[float, EmailMetadata]] = []
     for email in emails:
         score = score_email(email, vip_senders, user_email, now, thread_counts)
-        multiplier = multipliers.get(email.sender.lower().strip(), 1.0)
-        scored.append((score * multiplier, email))
+        scored.append((score, email))
 
     # Sort by score descending
     scored.sort(key=lambda x: x[0], reverse=True)

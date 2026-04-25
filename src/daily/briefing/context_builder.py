@@ -21,7 +21,6 @@ Design decisions:
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING
 
 from daily.briefing.models import (
     BriefingContext,
@@ -32,9 +31,6 @@ from daily.briefing.models import (
 from daily.briefing.ranker import rank_emails
 from daily.integrations.base import CalendarAdapter, EmailAdapter, MessageAdapter
 from daily.integrations.models import CalendarEvent, EmailMetadata, MessageMetadata
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +127,6 @@ async def build_context(
     vip_senders: frozenset[str],
     user_email: str,
     top_n: int = 5,
-    db_session: "AsyncSession | None" = None,
 ) -> BriefingContext:
     """Assemble a BriefingContext from email, calendar, and Slack data sources.
 
@@ -143,12 +138,6 @@ async def build_context(
     it is never serialised to cache or DB. It travels in-memory to the redactor
     in pipeline.py (Plan 04).
 
-    When db_session is provided, fetches per-sender adaptive multipliers from
-    get_sender_multipliers() and passes them to rank_emails(). If the adaptive
-    ranker fails for any reason, ranking falls back to pure heuristics (BRIEF-01
-    "always delivers" contract preserved). When db_session is None, adaptive
-    ranking is skipped entirely (backward compatible).
-
     Args:
         user_id: ID of the user for whom the briefing is being built.
         email_adapters: List of email adapter instances (Gmail, Outlook, etc).
@@ -157,8 +146,6 @@ async def build_context(
         vip_senders: Set of VIP sender email addresses for priority override.
         user_email: User's email address for recipient comparison in ranker.
         top_n: Number of top-ranked emails to include in the briefing.
-        db_session: Optional AsyncSession for fetching adaptive sender multipliers.
-            When None, adaptive ranking is skipped. Default None.
 
     Returns:
         BriefingContext with emails, calendar, slack, and raw_bodies populated.
@@ -174,20 +161,7 @@ async def build_context(
     ranked_emails: list[RankedEmail] = []
     try:
         all_emails = await _fetch_all_emails(email_adapters, since)
-
-        sender_multipliers: dict[str, float] = {}
-        if db_session is not None:
-            try:
-                from daily.profile.adaptive_ranker import get_sender_multipliers  # noqa: PLC0415
-                sender_multipliers = await get_sender_multipliers(user_id, db_session)
-            except Exception as exc:
-                logger.warning("Adaptive ranking skipped — get_sender_multipliers failed: %s", exc)
-                sender_multipliers = {}
-
-        ranked_emails = rank_emails(
-            all_emails, vip_senders, user_email, top_n=top_n,
-            sender_multipliers=sender_multipliers,
-        )
+        ranked_emails = rank_emails(all_emails, vip_senders, user_email, top_n=top_n)
 
         # Fetch bodies for top-N emails concurrently (asyncio.gather)
         async def _fetch_email_body(

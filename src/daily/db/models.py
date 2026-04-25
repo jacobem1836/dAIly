@@ -1,9 +1,7 @@
 """SQLAlchemy 2.0 ORM models for dAIly."""
-import uuid
 from datetime import datetime
 from typing import Optional
 
-from pgvector.sqlalchemy import Vector
 from sqlalchemy import ARRAY, DateTime, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -66,24 +64,4 @@ class VipSender(Base):
     )
     __table_args__ = (
         UniqueConstraint("user_id", "email", name="uq_vip_user_email"),
-    )
-
-
-class MemoryFact(Base):
-    """Per-user durable facts extracted from voice sessions (INTEL-02).
-
-    Stores semantic embeddings using pgvector VECTOR(1536) for text-embedding-3-small.
-    HNSW index for cosine-distance ANN search is created by Alembic migration 005
-    (not here, per RESEARCH.md Pattern 2 — raw DDL in migration).
-    """
-
-    __tablename__ = "memory_facts"
-
-    id: Mapped[str] = mapped_column(Text, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    fact_text: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding: Mapped[list[float]] = mapped_column(Vector(1536), nullable=False)
-    source_session_id: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
