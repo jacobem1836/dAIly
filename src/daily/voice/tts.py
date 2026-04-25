@@ -3,9 +3,15 @@
 Implements sentence-by-sentence streaming (D-07) to begin playback before the full
 LLM response is generated. Checks stop_event between every audio chunk (D-04) to
 support barge-in without waiting for sentence completion.
+
+Plan 17-04: play_streaming_tokens() streams LLM token deltas to Cartesia by
+accumulating tokens and pushing each completed sentence (`. `, `! `, `? `, `\n`)
+without waiting for the full LLM response — delivering the first spoken word
+noticeably sooner than the non-streaming path.
 """
 import asyncio
 import re
+from collections.abc import AsyncIterator
 
 import sounddevice as sd
 from cartesia import AsyncCartesia
@@ -34,6 +40,35 @@ _ABBREV_PATTERN = re.compile(
 
 # Sentence boundary pattern: sentence-ending punctuation followed by whitespace.
 _BOUNDARY_PATTERN = re.compile(r"(?<=[.!?])\s+")
+
+# Token-stream sentence boundaries for play_streaming_tokens.
+# Two-character markers: ". ", "! ", "? ", and newline (treated as boundary too).
+_SENTENCE_BOUNDARIES: tuple[str, ...] = (". ", "! ", "? ", "\n")
+
+
+def _split_at_boundary(buffer: str) -> tuple[str | None, str]:
+    """Return (sentence, remainder). sentence is None if no boundary found.
+
+    Finds the EARLIEST boundary occurrence in buffer and splits there.
+
+    Args:
+        buffer: Accumulated token text to scan for a sentence boundary.
+
+    Returns:
+        Tuple of (sentence_including_boundary, remaining_buffer) when a boundary
+        is found, or (None, buffer) when no boundary exists yet.
+    """
+    best_idx = -1
+    best_len = 0
+    for marker in _SENTENCE_BOUNDARIES:
+        idx = buffer.find(marker)
+        if idx != -1 and (best_idx == -1 or idx < best_idx):
+            best_idx = idx
+            best_len = len(marker)
+    if best_idx == -1:
+        return None, buffer
+    end = best_idx + best_len
+    return buffer[:end], buffer[end:]
 
 
 # --------------------------------------------------------------------------- #
@@ -163,6 +198,80 @@ class TTSPipeline:
                             output_stream.write(response.audio)
                         if stop_event.is_set():
                             break  # Barge-in detected — finish current chunk, then stop (graceful fade-out)
+                finally:
+                    output_stream.stop()
+                    output_stream.close()
+
+    async def play_streaming_tokens(
+        self,
+        token_stream: AsyncIterator[str],
+        stop_event: asyncio.Event,
+    ) -> None:
+        """Stream LLM token deltas to Cartesia, pushing one sentence at a time.
+
+        Accumulates tokens into a buffer and flushes to Cartesia each time a
+        sentence boundary ('. ', '! ', '? ', '\\n') is detected. Any remaining
+        buffer at stream end is pushed as a final segment.
+
+        Audio playback runs concurrently with token accumulation via
+        asyncio.gather: a producer pushes sentences to Cartesia while a consumer
+        reads audio chunks from ctx.receive() and writes them to sounddevice.
+
+        Respects stop_event between tokens (producer) and between audio chunks
+        (consumer), honouring Plan 01's graceful fade-out ordering — write the
+        chunk first, then check stop_event.
+
+        Args:
+            token_stream: Async iterator of plain-text token delta strings.
+            stop_event: When set, playback stops after the current audio chunk
+                        (barge-in / graceful fade-out).
+        """
+        async with AsyncCartesia(api_key=self._api_key) as client:
+            async with client.tts.websocket_connect() as connection:
+                ctx = connection.context(
+                    model_id="sonic-3",
+                    voice={"mode": "id", "id": self._voice_id},
+                    output_format=CARTESIA_OUTPUT_FORMAT,
+                )
+
+                output_stream = sd.RawOutputStream(
+                    samplerate=CARTESIA_SAMPLE_RATE,
+                    channels=1,
+                    dtype="float32",
+                )
+
+                try:
+                    output_stream.start()
+
+                    async def _produce() -> None:
+                        """Consume token_stream, push completed sentences to ctx."""
+                        buffer = ""
+                        async for delta in token_stream:
+                            if stop_event.is_set():
+                                break
+                            buffer += delta
+                            # Flush all completed sentences from the buffer.
+                            while True:
+                                sentence, remainder = _split_at_boundary(buffer)
+                                if sentence is None:
+                                    break
+                                await ctx.push(sentence)
+                                buffer = remainder
+                        # Push any remaining text at stream end.
+                        if buffer.strip():
+                            await ctx.push(buffer)
+                        await ctx.no_more_inputs()
+
+                    async def _consume() -> None:
+                        """Read Cartesia audio chunks and write to sounddevice."""
+                        async for response in ctx.receive():
+                            if response.type == "chunk" and response.audio:
+                                output_stream.write(response.audio)
+                            if stop_event.is_set():
+                                break  # Graceful fade-out — write chunk first, then check
+
+                    await asyncio.gather(_produce(), _consume())
+
                 finally:
                     output_stream.stop()
                     output_stream.close()
