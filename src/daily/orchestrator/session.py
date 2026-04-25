@@ -8,10 +8,14 @@ Provides:
 - initialize_session_state: Load cached briefing and user preferences into the
   initial state dict. Per D-11: reads from Redis cache only, does NOT re-run pipeline.
 - run_session: Single-turn graph execution via ainvoke (not invoke — Pitfall 2).
+- astream_session: Streaming variant for respond-intent turns using OpenAI SDK
+  stream=True. Yields plain-text token deltas. Raises StreamingNotSupported for
+  non-respond intents so the caller can fall back to run_session.
 """
 
 import logging
 import re
+from collections.abc import AsyncIterator
 from datetime import date, datetime, timedelta, timezone
 
 from redis.asyncio import Redis
@@ -164,3 +168,131 @@ async def run_session(
     if initial_state:
         state_input.update(initial_state)
     return await graph.ainvoke(state_input, config)
+
+
+# ---------------------------------------------------------------------------
+# Streaming session — Plan 17-04 (Improvement 5)
+# ---------------------------------------------------------------------------
+
+class StreamingNotSupported(Exception):
+    """Raised when the streaming path cannot handle the current intent.
+
+    Callers should catch this and fall back to run_session.
+    """
+
+
+# Keywords that indicate a non-respond intent. Mirrors route_intent() in graph.py
+# but kept here as a standalone copy to avoid circular imports. Keep in sync
+# manually if route_intent keyword lists change.
+_NON_RESPOND_KEYWORDS: tuple[str, ...] = (
+    # Memory (Phase 10)
+    "what do you know", "what do you remember", "tell me what you know",
+    "what have you learned", "forget everything", "clear my memory",
+    "reset my memory", "forget that", "delete that", "remove that fact",
+    "disable memory", "stop learning", "turn off memory", "don't remember",
+    # Resume briefing
+    "continue my briefing", "resume briefing", "go back to the briefing",
+    "continue briefing", "pick up the briefing", "where were we",
+    # Skip / re-request (Phase 13)
+    "skip", "next", "move on", "next item", "skip this",
+    "repeat that", "say that again", "what was that", "repeat",
+    "say again", "come again", "pardon",
+    # Summarise
+    "summarise", "summarize", "summary", "thread", "email chain",
+    # Draft / action
+    "draft", "reply", "send", "compose", "write", "schedule",
+    "reschedule", "book", "move", "create event", "cancel meeting",
+    # Exit / quit / approval (handled in loop.py before astream_session is called,
+    # but guard here defensively)
+    "exit", "quit", "yes", "no", "approve", "confirm",
+)
+
+
+def _looks_like_respond_intent(user_input: str) -> bool:
+    """Return True when user_input appears to be a plain respond-intent turn.
+
+    Uses a denylist approach: if any non-respond keyword appears in the
+    normalised input, returns False (caller should use run_session instead).
+
+    Args:
+        user_input: Raw utterance text from the user.
+
+    Returns:
+        True if the input should be handled by the streaming respond path.
+    """
+    normalized = user_input.strip().lower()
+    return not any(kw in normalized for kw in _NON_RESPOND_KEYWORDS)
+
+
+async def astream_session(
+    graph,
+    user_input: str,
+    config: dict,
+    initial_state: dict | None = None,
+) -> AsyncIterator[str]:
+    """Yield plain-text token deltas for respond-intent turns.
+
+    Uses the OpenAI SDK stream=True path (not LangGraph .astream_events())
+    because respond_node uses response_format=json_object which blocks LangGraph
+    from intercepting token-level events (RESEARCH Improvement 5, Option A).
+
+    For non-respond intents (summarise, draft, approval flows, exit/quit, etc.)
+    this raises StreamingNotSupported so the caller can fall back to run_session.
+
+    Args:
+        graph: Compiled LangGraph StateGraph (unused for respond turns but kept
+               for API symmetry with run_session).
+        user_input: The user's text input for this turn.
+        config: LangGraph config dict (unused for respond turns; included for
+                API symmetry with run_session).
+        initial_state: Optional state dict (same semantics as run_session —
+                       checked but not forwarded since streaming bypasses the graph).
+
+    Yields:
+        Plain-text token delta strings from the OpenAI streaming response.
+
+    Raises:
+        StreamingNotSupported: When the intent is not a plain respond turn.
+    """
+    if not _looks_like_respond_intent(user_input):
+        raise StreamingNotSupported(f"non-respond intent: {user_input!r}")
+
+    # Build the OpenAI client the same way nodes.py does.
+    from daily.config import Settings  # noqa: PLC0415
+    from openai import AsyncOpenAI  # noqa: PLC0415
+
+    client = AsyncOpenAI(api_key=Settings().openai_api_key)
+
+    # Mirror respond_node's system prompt but drop response_format=json_object
+    # and request plain narrative text instead.
+    briefing_narrative = "(no briefing loaded)"
+    tone = "conversational"
+    length = "standard"
+    if initial_state:
+        briefing_narrative = initial_state.get("briefing_narrative") or briefing_narrative
+        prefs = initial_state.get("preferences") or {}
+        tone = prefs.get("tone", tone)
+        length = prefs.get("briefing_length", length)
+
+    system_prompt = (
+        "You are a personal briefing assistant. The user is asking about their morning briefing.\n"
+        "Answer based on the briefing context provided. Be concise and conversational.\n\n"
+        f"BRIEFING CONTEXT:\n{briefing_narrative}\n\n"
+        f"USER PREFERENCES: tone={tone}, length={length}\n\n"
+        "Respond with plain narrative text only — no JSON wrapping, no code blocks."
+    )
+
+    stream = await client.chat.completions.create(
+        model="gpt-4.1-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_input},
+        ],
+        stream=True,
+        max_tokens=400,
+    )
+
+    async for chunk in stream:
+        delta = chunk.choices[0].delta.content
+        if delta:
+            yield delta
