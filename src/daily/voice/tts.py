@@ -159,10 +159,10 @@ class TTSPipeline:
                 try:
                     output_stream.start()
                     async for response in ctx.receive():
-                        if stop_event.is_set():
-                            break  # Barge-in detected — stop immediately (D-04)
                         if response.type == "chunk" and response.audio:
                             output_stream.write(response.audio)
+                        if stop_event.is_set():
+                            break  # Barge-in detected — finish current chunk, then stop (graceful fade-out)
                 finally:
                     output_stream.stop()
                     output_stream.close()
