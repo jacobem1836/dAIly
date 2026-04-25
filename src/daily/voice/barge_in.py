@@ -47,6 +47,31 @@ class VoiceTurnManager:
         self._tts_active: bool = False
         self._tts_task: asyncio.Task | None = None
         self._stt_task: asyncio.Task | None = None
+        self._unmute_task: asyncio.Task | None = None
+
+    # ------------------------------------------------------------------
+    # Echo suppression — delayed unmute
+    # ------------------------------------------------------------------
+
+    async def _unmute_after_delay(self) -> None:
+        """Unmute the STT mic after a 500ms delay.
+
+        The delay matches the barge-in safety window: TTS audio takes ~200–400ms
+        to fully leave the speakers before Deepgram could mistakenly detect it as
+        speech. Waiting 500ms ensures any trailing echo has subsided so a genuine
+        user interrupt (barge-in) can still be detected.
+
+        If cancelled before the delay elapses (e.g. TTS finished early and the
+        finally block cancelled this task), unmute immediately so the mic is never
+        left muted on any exit path.
+        """
+        try:
+            await asyncio.sleep(0.5)
+            self._stt.muted = False
+        except asyncio.CancelledError:
+            # Cancelled because TTS finished early — ensure unmute regardless
+            self._stt.muted = False
+            raise
 
     # ------------------------------------------------------------------
     # Barge-in callback
@@ -85,6 +110,7 @@ class VoiceTurnManager:
         self._stop_event.clear()
         self._tts_active = True
         self._stt.muted = True  # Mute mic to prevent echo feedback loop
+        self._unmute_task = asyncio.create_task(self._unmute_after_delay())
         self._stt._transcript_parts.clear()  # Discard any in-flight echo fragments
         interrupted = False
         try:
@@ -100,7 +126,10 @@ class VoiceTurnManager:
                 interrupted = True
         finally:
             self._tts_active = False
-            self._stt.muted = False  # Unmute mic after TTS finishes
+            if self._unmute_task is not None and not self._unmute_task.done():
+                self._unmute_task.cancel()
+            self._unmute_task = None
+            self._stt.muted = False  # Belt and braces: ensure unmuted on every exit
             self._stt._transcript_parts.clear()  # Discard any trailing echo
             self._stop_event.clear()
             self._tts_task = None
@@ -134,6 +163,10 @@ class VoiceTurnManager:
         Cancels in-flight TTS task (triggers barge-in path in speak()).
         Cancels STT listener task.
         """
+        if self._unmute_task is not None and not self._unmute_task.done():
+            self._unmute_task.cancel()
+        self._stt.muted = False
+
         if self._tts_task is not None and not self._tts_task.done():
             self._stop_event.set()
             self._tts_task.cancel()
