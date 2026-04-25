@@ -15,6 +15,7 @@ Threat mitigations:
 """
 import asyncio
 import logging
+import random
 
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from redis.asyncio import Redis
@@ -36,6 +37,7 @@ from daily.voice.tts import TTSPipeline
 logger = logging.getLogger(__name__)
 
 _SEPARATOR = "-" * 40
+_ACKNOWLEDGEMENTS: list[str] = ["Got it.", "One sec.", "Sure.", "On it.", "Mmhm."]
 
 
 async def _handle_voice_approval(
@@ -196,9 +198,23 @@ async def run_voice_session(user_id: int = 1) -> None:
                     # Wait for user utterance from Deepgram STT
                     user_input = await turn_manager.wait_for_utterance()
 
-                    if user_input.lower().strip() in ("exit", "quit"):
+                    # Backchannel filter — swallow "yeah", "ok", etc. during TTS
+                    if not turn_manager.filter_utterance(user_input):
+                        # Backchannel — let TTS continue; do not advance the turn.
+                        continue
+
+                    normalized = user_input.lower().strip()
+                    if normalized in ("exit", "quit"):
                         print("Session ended.")
                         break
+
+                    # Speak a brief acknowledgement while LLM processes (non-first turns only)
+                    if not first_turn:
+                        try:
+                            await turn_manager.speak(random.choice(_ACKNOWLEDGEMENTS))
+                        except Exception as ack_err:
+                            # Non-fatal — log and proceed; user still gets the real response.
+                            logger.debug("Acknowledgement TTS failed: %s", ack_err)
 
                     # Run through orchestrator (same as chat session)
                     try:
