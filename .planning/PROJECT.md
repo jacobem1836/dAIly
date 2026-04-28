@@ -10,33 +10,33 @@ v1.0 shipped a complete backend: OAuth integrations (Gmail, GCal, Outlook, Slack
 
 The briefing always delivers: every morning, the user gets a prioritised, conversational summary of what matters — without touching a single app.
 
-## Current Milestone: v1.4 Mobile Voice
+## Current Milestone: v1.1 Intelligence Layer
 
-**Goal:** Move voice I/O to native mobile clients with OS-level hardware echo cancellation, making the briefing a true pocket companion.
+**Goal:** Transform the briefing from a consistent daily output into a personalised, adaptive system that learns the user over time and earns increasing autonomy.
 
 **Target features:**
-- LiveKit Agents backend integration (livekit-plugins-langchain → LangGraph orchestrator)
-- Native iOS app (Swift, AVAudioEngine AEC, LiveKit SDK)
-- Native Android app (Kotlin, Oboe AEC, LiveKit SDK)
-- Desktop web fallback (LiveKit web SDK)
+- Adaptive prioritisation — learned scoring replaces heuristics
+- Cross-session memory — persistent user profile across days via pgvector
+- Memory transparency — inspect, edit, and delete what the system knows
+- Trusted actions — configurable autonomy levels (suggest / approve / auto)
+- Conversational flow improvements — natural interruption, fluid mode switching, adaptive tone
+- Tech debt fixes — scheduler user_email bug, Slack pagination, thread summarisation stub
 
 ## Milestone Plan
 
 | Milestone | Scope | Status |
 |-----------|-------|--------|
 | **v1.0 — Core Backend** | OAuth integrations, briefing pipeline, orchestrator, action layer, voice interface, preferences | ✅ Shipped 2026-04-14 |
-| **v1.1 — Intelligence Layer** | Adaptive ranker, cross-session memory, memory transparency, trusted actions, conversational flow | ✅ Shipped 2026-04-18 |
-| **v1.2 — Deployability** | Signal capture, JSON observability, Docker/VPS deployment | ✅ Shipped 2026-04-20 |
-| **v1.3 — Voice Polish** | TTS fade-out, mic-mute AEC, barge-in safety, backchannel detection, streaming LLM→TTS | ✅ Shipped 2026-04-28 |
-| **v1.4 — Mobile Voice** | LiveKit Agents, native iOS (Swift), native Android (Kotlin), desktop web fallback | 🔄 In Progress |
+| **v1.1 — Intelligence Layer** | Adaptive prioritisation, deeper memory system, trusted actions, adaptive tone, tech debt fixes | 🔄 In Progress |
+| **v1.2 — Mobile Voice** | LiveKit Agents integration, native iOS (Swift) app, native Android (Kotlin) app, desktop web fallback | Planned |
 | **v2.0 — Ecosystem Expansion** | Travel, finance, health, smart home, document platforms, web dashboard | Planned |
 
 ## Requirements
 
-### Validated
+### Validated (v1.0)
 
 - ✓ BRIEF-01: System precomputes morning briefing overnight, caches for instant delivery — v1.0
-- ✓ BRIEF-02: User can configure briefing precompute schedule time — v1.0
+- ✓ BRIEF-02: User can configure briefing precompute schedule time — v1.0 (Plan 02-05)
 - ✓ BRIEF-03: Email ingestion ranked by heuristic priority (sender weight, deadline keywords, thread recency) — v1.0
 - ✓ BRIEF-04: Calendar events (today + 48h) with conflict detection — v1.0
 - ✓ BRIEF-05: Slack mentions, DMs, priority channels — v1.0
@@ -58,7 +58,7 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 - ✓ ACT-04: All external actions require explicit user approval — no bypass path — v1.0
 - ✓ ACT-05: Every action logged with timestamp, type, target, content summary, approval status, outcome — v1.0
 - ✓ ACT-06: Executor validates recipient, content type, and scope before dispatch — v1.0
-- ✓ PERS-01: User profile stores preferences (tone, briefing length, category order); applied to scheduled briefing — v1.0
+- ✓ PERS-01: User profile stores preferences (tone, briefing length, category order); applied to scheduled briefing — v1.0 (Phase 6)
 - ✓ PERS-02: Interaction signals captured (skips, corrections, re-requests) and stored — v1.0
 - ✓ PERS-03: Heuristic defaults at cold start (sender importance, deadline keywords, thread recency) — v1.0
 - ✓ SEC-01: OAuth tokens encrypted at rest (AES-256-GCM); never exposed to frontend, logs, or LLM — v1.0
@@ -66,34 +66,31 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 - ✓ SEC-03: Each integration requests only minimum required OAuth scopes — v1.0
 - ✓ SEC-04: Raw email/message bodies not stored long-term — only summaries and metadata — v1.0
 - ✓ SEC-05: LLM outputs are intents only; backend orchestrator validates and dispatches — v1.0
-- ✓ INTEL-01: Priority ranking learns from signal data with personalised scoring — v1.1
-- ✓ INTEL-02: Cross-session conversational memory persists context across days (pgvector + mem0) — v1.1
-- ✓ MEM-01: User can inspect what the system knows about them — v1.1
-- ✓ MEM-02: User can edit or delete specific memory entries — v1.1
-- ✓ MEM-03: User can disable learning or reset all memory — v1.1
-- ✓ ACT-07: User can configure autonomy level (suggest-only / approve-per-action / trusted-auto) — v1.1
-- ✓ CONV-01: Natural mid-session interruption — v1.1
-- ✓ CONV-02: Fluid mode switching — v1.1
-- ✓ CONV-03: Adaptive tone — system adjusts formality and verbosity based on context signals — v1.1
-- ✓ FIX-01: RFC 2822 address normalisation — WEIGHT_DIRECT scoring path now fires — v1.1
-- ✓ FIX-02: Slack cursor-based pagination for multi-page workspaces — v1.1
-- ✓ FIX-03: Real message ID extraction in summarise_thread_node — v1.1
-- ✓ SIG-01: Signal capture (skip, re_request, expand) with per-item attribution — v1.2
-- ✓ OBS-01: Structured JSON logging across all hot-path modules — v1.2
-- ✓ DEP-01: Multi-stage Dockerfile with Alembic auto-migrations and docker-compose stack — v1.2
-- ✓ VOICE-06: Graceful TTS fade-out on barge-in — v1.3
-- ✓ VOICE-07: Mic-mute echo suppression during TTS playback — v1.3
-- ✓ VOICE-08: 600ms barge-in safety window — v1.3
-- ✓ VOICE-09: Backchannel detection (swallows affirmations without stopping TTS) — v1.3
-- ✓ VOICE-10: Streaming LLM→TTS bridge with sentence-boundary chunking — v1.3
 
-### Active (v1.4 targets)
+### Active (v1.1 targets)
+
+- [ ] **INTEL-01**: Priority ranking learns from M1 signal data to replace heuristic defaults with personalised scoring
+- [ ] **INTEL-02**: Cross-session conversational memory persists context across days (pgvector + structured user profile extraction)
+- [ ] **MEM-01**: User can inspect what the system knows about them ("What do you know about me?")
+- [ ] **MEM-02**: User can edit or delete specific memory entries
+- [ ] **MEM-03**: User can disable learning or reset all memory
+- [ ] **ACT-07**: User can configure autonomy level (suggest-only / approve-per-action / trusted-auto)
+- ~~CONV-01~~: Moved to v1.2 — solved by LiveKit mobile path
+- ~~CONV-02~~: Moved to v1.2 — solved by LiveKit mobile path
+- [ ] **CONV-03**: Adaptive tone — system adjusts formality and verbosity based on context signals
+- [ ] **FIX-01**: `user_email=""` in scheduler — WEIGHT_DIRECT (10pts) path never fires; direct-to-user emails always scored as WEIGHT_CC (2pts)
+- [ ] **FIX-02**: Slack pagination single-page only — implement cursor-based pagination for multi-page workspaces
+- [ ] **FIX-03**: `message_id = last_content` stub in summarise_thread_node — real message ID extraction from briefing metadata
+
+### Planned (v1.2 targets)
 
 - [ ] **MOB-01**: Native iOS (Swift) client with LiveKit SDK, AVAudioEngine AEC
 - [ ] **MOB-02**: Native Android (Kotlin) client with LiveKit SDK, Oboe AEC
 - [ ] **MOB-03**: LiveKit Agents backend integration with livekit-plugins-langchain
 - [ ] **MOB-04**: Desktop web fallback via LiveKit web SDK
 - [ ] **MOB-05**: Client-direct STT/TTS (Deepgram + Cartesia via LiveKit plugins)
+- [ ] **CONV-01**: Natural mid-session interruption (via LiveKit ML barge-in) — moved from v1.1
+- [ ] **CONV-02**: Fluid mode switching (via LiveKit turn detection) — moved from v1.1
 
 ### Out of Scope
 
@@ -111,8 +108,10 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 **Architecture:** `[Voice/UI] → [Orchestrator] → [Context Builder] → [LLM] → [Action Engine] → [Integrations]`
 
 **Known gaps / tech debt:**
+- Scheduler uses `user_email=""` — WEIGHT_DIRECT scoring path never fires for scheduled runs (tracked as FIX-01)
+- Slack ingestion is single-page; multi-page workspaces miss messages beyond first page (tracked as FIX-02)
+- Thread summarisation uses `message_id = last_content` as approximate stub (tracked as FIX-03)
 - Slack channel whitelist is empty set — all channels pass validation (intentional M1 deferral)
-- macOS AEC structurally unsolvable in software — closed as won't-fix; mobile solves it at OS layer
 
 ## Constraints
 
@@ -157,4 +156,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-28 after milestone v1.4 initialization*
+*Last updated: 2026-04-27 after Phase 17 close and mobile strategy decision*

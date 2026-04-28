@@ -22,5 +22,11 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     deepgram_api_key: str = ""
     cartesia_api_key: str = ""
+
+    # LiveKit (Phase 18 / D-05, D-08, D-09)
+    livekit_url: str = "ws://localhost:7880"
+    livekit_api_key: str = "devkey"
+    livekit_api_secret: str = "secret"
+
     briefing_email_top_n: int = 5  # per D-05
     briefing_schedule_time: str = "05:00"  # per D-13, default precompute time
