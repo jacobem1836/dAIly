@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Intelligence Layer
-status: defining_requirements
-last_updated: "2026-04-15T00:00:00.000Z"
-last_activity: 2026-04-15 -- Milestone v1.1 started
+status: in_progress
+last_updated: "2026-04-27T00:00:00.000Z"
+last_activity: 2026-04-27 -- Phase 17 complete, mobile strategy decided, CONV-01/02 moved to v1.2
 progress:
-  total_phases: 0
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 6
+  completed_phases: 1
+  total_plans: 4
+  completed_plans: 4
+  percent: 17
 ---
 
 # Project State
@@ -20,20 +20,26 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** The briefing always delivers — every morning, the user gets a prioritised, conversational summary of what matters without touching a single app.
-**Current focus:** v1.1 — Intelligence Layer
+**Current focus:** v1.1 — Intelligence Layer (Phase 17 complete; next: Phase 7 tech debt → 8 memory → 9 prioritisation → 10 tone → 11 trusted actions)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Phase 7 — Tech Debt Fixes
 Plan: —
-Status: Defining requirements
-Last activity: 2026-04-15 — Milestone v1.1 started
+Status: Discussing phase context
+Last activity: 2026-04-28 — v1.1 phases 7-11 sequenced, starting Phase 7
 
 ## Accumulated Context
 
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
+
+Recent (2026-04-27):
+- Mobile-first voice architecture — audio I/O moves to native iOS/Android with LiveKit; Python backend becomes orchestration-only
+- Native over cross-platform (Swift + Kotlin, not Flutter/RN) — voice quality is core differentiator
+- CONV-01/02 moved from v1.1 to v1.2 — solved structurally by LiveKit mobile path, not more Python voice fixes
+- Debug session (tts-barge-in) closed as structural — no hardware AEC on macOS, solved by mobile
 
 ### Pending Todos
 
@@ -55,5 +61,5 @@ None — v1.0 shipped clean.
 
 ## Session Continuity
 
-Last session: 2026-04-15
-Milestone v1.0 complete.
+Last session: 2026-04-27
+Phase 17 (voice polish) complete. Mobile strategy decided. Planning files updated.

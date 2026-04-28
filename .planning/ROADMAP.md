@@ -3,7 +3,8 @@
 ## Milestones
 
 - ✅ **v1.0 MVP** — Phases 1–6 (shipped 2026-04-14)
-- 📋 **v1.1 Intelligence Layer** — Phases 7+ (planned)
+- 📋 **v1.1 Intelligence Layer** — Phases 7–11, 17 (in progress)
+- 📋 **v1.2 Mobile Voice** — Phases 18–21 (planned)
 
 ## Phases
 
@@ -21,9 +22,21 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details.
 
 </details>
 
-### 📋 v1.1 Intelligence Layer (Planned)
+### 📋 v1.1 Intelligence Layer (In Progress)
 
-- [ ] Phase 7: TBD — planning via `/gsd-new-milestone`
+- [x] Phase 17: Voice Polish — barge-in reliability (Bugs A-D), streaming TTS, echo suppression (11/12 verified, structural AEC issue closed)
+- [ ] Phase 7: Tech Debt Fixes — fix user_email="" stub (WEIGHT_DIRECT never fires), Slack pagination (single-page only), message_id stub in thread summarisation
+- [ ] Phase 8: Memory System — persistent user memory via mem0 + pgvector; extract facts from interactions, retrieve at briefing/query time for personalisation
+- [ ] Phase 9: Adaptive Prioritisation — context-aware ranking of briefing items using urgency signals, user history, sender importance, and memory
+- [ ] Phase 10: Adaptive Tone — briefing style adjusts based on time of day, user mood signals, content gravity, and learned preferences
+- [ ] Phase 11: Trusted Actions — auto-execute pre-approved action categories without confirmation; user-managed allowlist with audit trail
+
+### 📋 v1.2 Mobile Voice (Planned)
+
+- [ ] Phase 18: LiveKit Agents Backend Integration — wire LangGraph into LiveKit agent framework via livekit-plugins-langchain
+- [ ] Phase 19: Native iOS App — Swift + LiveKit iOS SDK, AVAudioEngine AEC, minimal UI
+- [ ] Phase 20: Native Android App — Kotlin + LiveKit Android SDK, Oboe AEC, minimal UI
+- [ ] Phase 21: Desktop Web Fallback — LiveKit web SDK, replaces current sounddevice voice loop
 
 ## Progress
 
@@ -35,6 +48,12 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details.
 | 4. Action Layer | v1.0 | 3/3 | Complete | 2026-04-12 |
 | 5. Voice Interface | v1.0 | 4/4 | Complete | 2026-04-13 |
 | 6. Wire Preferences | v1.0 | 1/1 | Complete | 2026-04-14 |
+| 17. Voice Polish | v1.1 | 4/4 | Complete | 2026-04-27 |
+| 7. Tech Debt Fixes | v1.1 | 0/0 | Not started | — |
+| 8. Memory System | v1.1 | 0/0 | Not started | — |
+| 9. Adaptive Prioritisation | v1.1 | 0/0 | Not started | — |
+| 10. Adaptive Tone | v1.1 | 0/0 | Not started | — |
+| 11. Trusted Actions | v1.1 | 0/0 | Not started | — |
 
 ## Backlog
 
