@@ -1,487 +1,548 @@
-# Architecture Research
+# Architecture Research — v1.4 Mobile Voice (LiveKit Integration)
 
-**Domain:** Voice-first AI personal assistant (backend-first)
-**Researched:** 2026-04-05
-**Confidence:** HIGH (multiple authoritative sources, 2025-2026 literature, production systems)
+**Domain:** Voice-first AI personal assistant — native mobile client architecture
+**Researched:** 2026-04-28
+**Confidence:** HIGH (official LiveKit docs, verified livekit-plugins-langchain PyPI/GitHub, agent-starter-swift/android repos)
 
-## Standard Architecture
+---
 
-### System Overview
+## Context
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        VOICE INTERFACE LAYER                     │
-│  ┌──────────────┐              ┌──────────────────────────────┐  │
-│  │  STT Engine  │              │       TTS Engine             │  │
-│  │  (Whisper /  │              │  (ElevenLabs / neural TTS)   │  │
-│  │  Deepgram)   │              │  Streaming + phrase cache    │  │
-│  └──────┬───────┘              └──────────────┬───────────────┘  │
-│         │  transcript text                    │ audio chunks     │
-└─────────┼───────────────────────────────────  ┼ ────────────────┘
-          │                                     ↑
-┌─────────┼─────────────────────────────────────┼────────────────┐
-│                        ORCHESTRATOR LAYER                        │
-│         ↓                                     │                  │
-│  ┌─────────────────────────────────────────┐  │                  │
-│  │           Session Manager               │  │                  │
-│  │  • Turn-taking / endpointing            │  │                  │
-│  │  • Interruption detection               │  │                  │
-│  │  • Conversation thread state            │  │                  │
-│  └──────────────────┬──────────────────────┘  │                  │
-│                     ↓                         │                  │
-│  ┌─────────────────────────────────────────┐  │                  │
-│  │           Agent Orchestrator            │──┘                  │
-│  │  • Determines intent (briefing / Q&A /  │                      │
-│  │    action request)                      │                      │
-│  │  • Selects context window contents      │                      │
-│  │  • Routes to LLM with tool schema       │                      │
-│  │  • Receives tool-call intent from LLM   │                      │
-│  │  • Dispatches to Action Executor        │                      │
-│  │  • Enforces approval gate               │                      │
-│  └──────┬──────────────┬───────────────────┘                      │
-│         │              │                                          │
-└─────────┼──────────────┼──────────────────────────────────────────┘
-          │              │
-          ↓              ↓
-┌──────────────┐  ┌─────────────────────────────────────────────┐
-│  CONTEXT     │  │              ACTION LAYER                   │
-│  BUILDER     │  │  ┌────────────────┐  ┌──────────────────┐  │
-│              │  │  │ Approval Gate  │  │ Action Executor  │  │
-│ • Fetches    │  │  │ (HITL queue)   │→ │ (email draft /   │  │
-│   email      │  │  │ • Stores       │  │  cal reschedule / │  │
-│ • Fetches    │  │  │   pending ops  │  │  Slack DM)       │  │
-│   calendar   │  │  │ • User confirm │  └──────┬───────────┘  │
-│ • Fetches    │  │  │ • Idempotency  │         │              │
-│   Slack      │  │  └────────────────┘         ↓              │
-│ • Ranks /    │  │                      ┌──────────────┐      │
-│   filters    │  │                      │ Action Log   │      │
-│ • Summarises │  │                      └──────────────┘      │
-│ • Builds     │  └─────────────────────────────────────────────┘
-│   briefing   │                │
-│   state      │                ↓
-└──────┬───────┘  ┌─────────────────────────────────────────────┐
-       │          │           INTEGRATION LAYER                  │
-       └─────────→│  ┌──────────┐ ┌─────────┐ ┌─────────────┐  │
-                  │  │  Gmail   │ │  GCal   │ │    Slack    │  │
-                  │  │  Reader  │ │  Reader │ │    Reader   │  │
-                  │  └──────────┘ └─────────┘ └─────────────┘  │
-                  │       ↑            ↑             ↑          │
-                  │  ┌────────────────────────────────────────┐ │
-                  │  │        OAuth Token Vault               │ │
-                  │  │  (encrypted at rest, AES-256)          │ │
-                  │  └────────────────────────────────────────┘ │
-                  └─────────────────────────────────────────────┘
+This document supersedes the original ARCHITECTURE.md (2026-04-05) for the v1.4 milestone scope. The original document covered the backend-first v1.0 architecture. This document covers the structural changes needed to add native mobile voice via LiveKit, while leaving the existing backend largely intact.
 
-┌─────────────────────────────────────────────────────────────────┐
-│                         MEMORY LAYER                             │
-│  ┌─────────────────────────┐  ┌────────────────────────────┐    │
-│  │   Short-Term Memory     │  │   Long-Term Memory         │    │
-│  │   (per-session)         │  │   (persistent)             │    │
-│  │  • Conversation thread  │  │  • User profile            │    │
-│  │  • Tool call results    │  │  • Preference signals      │    │
-│  │  • Current briefing ctx │  │  • Briefing personalisation│    │
-│  │  • In-progress actions  │  │  • Historical summaries    │    │
-│  │  [Redis / in-process]   │  │  [PostgreSQL + pgvector]   │    │
-│  └─────────────────────────┘  └────────────────────────────┘    │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐    │
-│  │                Briefing Cache                            │    │
-│  │  • Pre-generated briefing narrative (nightly cron)       │    │
-│  │  • Structured JSON: ranked items, narrative text, TTL    │    │
-│  │  • Invalidated on significant new events                 │    │
-│  │  [Redis with TTL]                                        │    │
-│  └──────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
+The core question: how does the existing Python voice loop (`voice/loop.py`, `voice/stt.py`, `voice/tts.py`, `voice/barge_in.py`) get replaced by LiveKit Agents, and what does the new end-to-end architecture look like?
 
-┌─────────────────────────────────────────────────────────────────┐
-│                         LLM GATEWAY                              │
-│  • Large model (GPT-4-class) for briefing generation & planning │
-│  • Fast model (GPT-4o-mini / Haiku) for conversational Q&A      │
-│  • LLM never holds credentials, never calls APIs directly       │
-│  • Receives tool schemas → returns tool-call intents only       │
-└─────────────────────────────────────────────────────────────────┘
-```
+---
 
-### Component Responsibilities
+## Architecture Shift: What Changes in v1.4
 
-| Component | Responsibility | Typical Implementation |
-|-----------|----------------|------------------------|
-| STT Engine | Audio → transcript, VAD endpointing | Whisper (self-hosted) or Deepgram streaming API |
-| TTS Engine | Text → audio stream, phrase cache | ElevenLabs streaming, or Coqui TTS |
-| Session Manager | Turn-taking, interruption detection, conversation thread | Custom state machine, VAD model |
-| Agent Orchestrator | Intent routing, context assembly, tool dispatch, approval enforcement | LangGraph / custom Python async |
-| Context Builder | Pull + rank + summarise email/cal/slack into briefing state | Async ingestion pipeline (cron + incremental) |
-| LLM Gateway | Reasoning, planning, narrative generation | OpenAI / Anthropic API, model-selected by task |
-| Approval Gate | Durable pending-action store, user confirm/reject, idempotency | PostgreSQL queue or Redis + notification hook |
-| Action Executor | Execute approved actions against external APIs | Service classes per integration |
-| Action Log | Immutable record of every action (type, timestamp, approval, result) | PostgreSQL append-only table |
-| OAuth Token Vault | Encrypted storage and rotation of user OAuth tokens | Encrypted PostgreSQL column (AES-256) |
-| Integration Adapters | Per-service read/write operations | Gmail API, GCal API, Slack API clients |
-| Short-Term Memory | In-session conversation state, tool call results | Redis hash or in-process dict |
-| Long-Term Memory | User profile, preferences, historical summaries | PostgreSQL + pgvector for semantic recall |
-| Briefing Cache | Pre-generated briefing for instant voice delivery | Redis with TTL (~8h), rebuilt nightly |
-
-## Recommended Project Structure
+### Before (v1.3 — CLI voice loop)
 
 ```
-src/
-├── orchestrator/           # Agent orchestrator + session manager
-│   ├── agent.py            # Main orchestration loop
-│   ├── session.py          # Conversation state, turn-taking
-│   ├── intent_router.py    # Classify: briefing / Q&A / action
-│   └── tool_registry.py    # Tool schema definitions for LLM
-├── context/                # Context builder + briefing pipeline
-│   ├── builder.py          # Aggregate sources → briefing state
-│   ├── ranker.py           # Priority scoring for items
-│   ├── summariser.py       # LLM-powered per-source summaries
-│   └── cache.py            # Briefing cache read/write
-├── integrations/           # External data sources
-│   ├── base.py             # Adapter interface
-│   ├── gmail.py            # Gmail ingestion
-│   ├── gcal.py             # Google Calendar ingestion
-│   ├── slack.py            # Slack ingestion
-│   └── oauth/              # Token vault, refresh orchestration
-│       ├── vault.py        # Encrypted token storage
-│       └── flows.py        # OAuth 2.0 consent flows
-├── actions/                # Action execution layer
-│   ├── executor.py         # Dispatches approved actions
-│   ├── approval.py         # Approval gate queue + HITL interface
-│   ├── log.py              # Append-only action log
-│   └── handlers/           # Per-action implementations
-│       ├── email.py
-│       ├── calendar.py
-│       └── slack.py
-├── memory/                 # Memory systems
-│   ├── short_term.py       # Session state (Redis)
-│   ├── long_term.py        # User profile + history (PostgreSQL/pgvector)
-│   └── briefing_cache.py   # Pre-generated briefing store
-├── llm/                    # LLM gateway
-│   ├── gateway.py          # Model selection + request routing
-│   ├── prompts/            # Prompt templates per task type
-│   └── tools.py            # Tool schema builder
-├── voice/                  # STT + TTS pipeline
-│   ├── stt.py              # Speech-to-text adapter
-│   ├── tts.py              # Text-to-speech streaming adapter
-│   └── vad.py              # Voice activity detection
-└── api/                    # Internal API surface
-    ├── voice_endpoint.py   # WebSocket for voice I/O
-    └── approval_endpoint.py # Approval queue interface
+MacBook mic (sounddevice)
+  → STTPipeline (Deepgram WebSocket, stt.py)
+      → VoiceTurnManager (barge_in.py — timer, mute, echo guard)
+          → LangGraph orchestrator (graph.py)
+              → TTSPipeline (Cartesia WebSocket, tts.py)
+                  → sounddevice playback
 ```
 
-### Structure Rationale
+All audio I/O runs inside the Python process. AEC is software-only and structurally fragile on built-in speakers. The `barge_in.py` module accumulated 4 bug fixes and the root cause (no hardware AEC) was never resolved.
 
-- **orchestrator/**: All coordination logic in one place; prevents business logic leaking into integrations or LLM layer
-- **context/**: Decoupled from orchestrator so briefing pipeline can run as a background cron job independently
-- **integrations/**: Adapter pattern — each source behind a common interface so adding M3 sources (travel, finance) is isolated
-- **actions/**: Separating approval gate from executor makes HITL enforceable at the boundary, not by convention
-- **memory/**: Short-term and long-term separated by implementation type; briefing cache is a distinct concern
-- **llm/**: All LLM calls go through one gateway — enables model swapping, cost tracking, and latency monitoring
-
-## Architectural Patterns
-
-### Pattern 1: Plan-then-Execute with Trust Boundary
-
-**What:** The LLM produces a structured plan (tool names + parameters). A non-LLM orchestrator validates and executes each step. The LLM never invokes an API call directly.
-
-**When to use:** Any time agent actions have real-world side effects (email, calendar, messages). Mandatory for this project per PROJECT.md constraint.
-
-**Trade-offs:** Adds a hop between LLM response and execution. Gain: LLM prompt injections cannot hijack API calls; security is structural not prompt-based.
-
-**Flow:**
-```
-LLM returns:
-  { "tool": "draft_email", "to": "alice@...", "subject": "...", "body": "..." }
-                  ↓
-Orchestrator validates: tool exists, parameters schema-valid, user scope allows
-                  ↓
-Approval Gate: store pending action → notify user → await confirm/reject
-                  ↓
-Action Executor: execute with idempotency key, log result
-```
-
-### Pattern 2: Precomputed Briefing Cache
-
-**What:** A background job runs nightly (e.g. 5am) that pulls all integrations, generates the full briefing narrative, and stores it in Redis with a TTL. At voice delivery time, the cache is served instantly — no LLM call at delivery.
-
-**When to use:** Whenever latency at briefing start must feel instant (voice use case). Confirmed practice used by production voice systems (Sierra, Calculus VC 2026 stack article).
-
-**Trade-offs:** Briefing is slightly stale (minutes to hours). Mitigation: run an incremental update pass if cache was built >2h ago and significant new items arrived.
-
-**Flow:**
-```
-Nightly cron (5am):
-  Context Builder → pulls email/cal/slack → ranks → summarises → LLM narrative
-                  ↓
-  Redis: SET briefing:{user_id} {json} EX 28800  (8h TTL)
-
-Voice delivery (7am):
-  Session Manager → GET briefing:{user_id}  (~1ms)
-                  ↓
-  TTS: stream pre-generated narrative immediately
-```
-
-### Pattern 3: Streaming STT/TTS Pipeline
-
-**What:** STT streams transcript chunks as speech is detected. LLM begins generating before full transcript is complete (if confidence is high). TTS begins streaming audio before LLM response is finished. Each stage overlaps rather than waiting for the prior to finish.
-
-**When to use:** All voice interaction paths for natural conversation feel. Target: sub-800ms perceived latency.
-
-**Trade-offs:** Requires careful interrupt handling (user starts speaking mid-response). Need VAD to detect interruption and cancel in-flight TTS.
-
-**Latency budget (target):**
-```
-STT streaming:          ~200ms to first useful transcript chunk
-LLM time-to-first-token: ~200-300ms
-TTS first audio chunk:  ~100-200ms
-─────────────────────────────────────
-Total perceived:         ~500-700ms  (overlapped stages)
-```
-
-### Pattern 4: Dual-Model LLM Strategy
-
-**What:** Route LLM requests to different models by task complexity. Large model (GPT-4-class) for briefing generation and multi-step planning. Fast model (GPT-4o-mini or Claude Haiku) for conversational follow-up questions where speed matters more than depth.
-
-**When to use:** When latency and cost matter. Briefing generation is offline/cached so large model cost is acceptable. Voice Q&A needs fast model.
-
-**Trade-offs:** Two model integrations to maintain. Mitigation: single LLM gateway that selects model based on task type enum.
-
-### Pattern 5: Dual-Layer Memory
-
-**What:** Short-term memory (Redis, in-session) stores conversation thread and tool call results. Long-term memory (PostgreSQL + pgvector) stores user profile, preferences, and historical summaries. Memory extraction runs end-of-session to consolidate relevant signals into long-term.
-
-**When to use:** All stateful agent interactions. Separation prevents short-term session state from polluting long-term profile and keeps latency profile distinct per use.
-
-**Flow:**
-```
-Session start:
-  Load user profile from long-term → inject into system prompt
-
-During session:
-  All turns + tool results → short-term (Redis, keyed by session_id)
-
-Session end:
-  Extraction pipeline: identify preference signals, corrections, skips
-  → write summaries to long-term PostgreSQL
-```
-
-## Data Flow
-
-### Morning Briefing Flow (primary)
+### After (v1.4 — LiveKit mobile architecture)
 
 ```
-[Nightly Cron: 5am]
-  Integration Layer (Gmail + GCal + Slack)
-      ↓ raw items
-  Context Builder
-      ↓ ranked + summarised briefing state
-  LLM Gateway (large model)
-      ↓ briefing narrative (JSON + text)
-  Briefing Cache (Redis, 8h TTL)
-
-[User wakes: 7am voice request]
-  STT Engine
-      ↓ "play my briefing" transcript
-  Session Manager
-      ↓ intent: BRIEFING
-  Agent Orchestrator
-      ↓ cache hit? YES
-  Briefing Cache
-      ↓ pre-generated narrative (~1ms)
-  TTS Engine
-      ↓ streaming audio
-  [User hears briefing instantly]
+iOS/Android mic (hardware AEC via AVAudioEngine / Oboe)
+  → WebRTC audio track
+      → LiveKit SFU (room)
+          → LiveKit Agent Worker (Python process — separate from FastAPI)
+              → AgentSession: Deepgram STT → LangGraphAdapter → LLMAdapter → Cartesia TTS
+                  → WebRTC audio track back to client
 ```
 
-### Conversational Follow-Up Flow
+Audio I/O moves entirely to device hardware. Python backend handles orchestration only — no sounddevice, no PCM queues, no echo suppression code.
+
+---
+
+## Full System Architecture (v1.4)
 
 ```
-[User interrupts or asks follow-up]
-  STT Engine
-      ↓ transcript
-  Session Manager (interruption detected → cancel active TTS)
-      ↓ conversation turn
-  Agent Orchestrator
-      ↓ loads short-term memory (session context)
-  LLM Gateway (fast model + tool schema)
-      ↓ response OR tool-call intent
-      ↓ if tool-call →
-  Approval Gate (if external-facing)
-      ↓ user confirms
-  Action Executor
-      ↓ executes, logs
-  Orchestrator assembles response
-      ↓
-  TTS Engine → streaming audio
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          CLIENT LAYER                                    │
+│                                                                          │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────────┐  │
+│  │   iOS Client     │  │ Android Client   │  │  Web Fallback        │  │
+│  │  (Swift / Xcode) │  │ (Kotlin / AS)    │  │  (LiveKit web SDK)   │  │
+│  │                  │  │                  │  │                      │  │
+│  │ AVAudioEngine    │  │ Oboe AEC         │  │ WebRTC browser AEC   │  │
+│  │ AEC (hardware)   │  │ (hardware)       │  │ (software, limited)  │  │
+│  │                  │  │                  │  │                      │  │
+│  │ LiveKit Swift SDK│  │ LiveKit Android  │  │ LiveKit JS SDK       │  │
+│  │ Session + Local  │  │ SDK (Kotlin)     │  │                      │  │
+│  │ Media objects    │  │ Room + Local-    │  │                      │  │
+│  │                  │  │ Participant      │  │                      │  │
+│  └────────┬─────────┘  └────────┬─────────┘  └─────────┬────────────┘  │
+│           │ WebRTC               │ WebRTC               │ WebRTC         │
+└───────────┼──────────────────────┼──────────────────────┼───────────────┘
+            │                      │                      │
+            ▼                      ▼                      ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        LIVEKIT SERVER (SFU)                              │
+│                                                                          │
+│   • Manages rooms — one room per user session                           │
+│   • Routes WebRTC audio between clients and agent workers               │
+│   • Self-hostable (Apache 2.0) or LiveKit Cloud                         │
+│   • Dispatches jobs to agent workers via authenticated WebSocket         │
+│                                                                          │
+│   docker-compose service: livekit (port 7880 HTTP, 7881 TCP)           │
+└───────────────────────────────────┬─────────────────────────────────────┘
+                                    │ WebSocket (job dispatch)
+            ┌───────────────────────┴────────────────────────┐
+            │                                                │
+            ▼                                                ▼
+┌───────────────────────────┐              ┌──────────────────────────────┐
+│  LIVEKIT AGENT WORKER     │              │     FASTAPI SERVER           │
+│  (separate Python process)│              │  (existing, unchanged)       │
+│                           │              │                              │
+│  livekit/agent.py         │              │  main.py (FastAPI + lifespan)│
+│    entrypoint()           │              │  APScheduler (briefing cron) │
+│    AgentSession(           │              │  /api/token endpoint (NEW)   │
+│      vad=silero,          │              │  /api/* existing endpoints   │
+│      stt=deepgram,        │              │                              │
+│      llm=LLMAdapter(      │              │  Postgres + Redis (shared)   │
+│        graph=build_graph()│              │                              │
+│      ),                   │              └──────────────────────────────┘
+│      tts=cartesia         │
+│    )                      │
+│                           │
+│  Connects to LiveKit SFU  │
+│  via LIVEKIT_URL env var  │
+│  No inbound ports needed  │
+└───────────────────────────┘
 ```
 
-### Integration Ingestion Flow
+---
+
+## Component Map: New vs Modified vs Unchanged
+
+### New Components
+
+| Component | What It Is | Location |
+|-----------|-----------|---------|
+| LiveKit Server | SFU (Selective Forwarding Unit) — routes WebRTC audio. Added to docker-compose. | `docker-compose.yml` (new service) |
+| LiveKit Agent Worker | Separate Python process. Registers with LiveKit server, receives dispatch, runs AgentSession with VAD+STT+LLM+TTS. | `src/daily/livekit/agent.py` (new) |
+| LangGraphAdapter | Bridges LangGraph compiled graph to LiveKit LLMAdapter interface. Converts messages between formats. | `src/daily/livekit/adapter.py` (new) |
+| FastAPI token endpoint | `POST /api/token` — generates LiveKit JWT (room name + participant identity). Clients call this before joining a room. | `src/daily/api/token.py` (new) |
+| iOS Client | Swift/SwiftUI app using LiveKit Swift SDK. `Session` + `LocalMedia` objects. `preConnectAudio` enabled for instant feel. | `clients/ios/` (new Xcode project) |
+| Android Client | Kotlin/Jetpack Compose app using LiveKit Android SDK. `Room` + `LocalParticipant`. Oboe AEC via SDK. | `clients/android/` (new Android project) |
+
+### Modified Components
+
+| Component | What Changes | What Stays |
+|-----------|-------------|-----------|
+| `docker-compose.yml` | Add `livekit` service (LiveKit server container) with `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` env vars. | `app`, `db`, `redis` services unchanged. |
+| `src/daily/main.py` | Add token endpoint router. Add LIVEKIT_* env vars to Settings. | APScheduler, lifespan, all existing routes. |
+| `src/daily/config.py` | Add `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` to Settings. | All existing settings. |
+| `src/daily/orchestrator/graph.py` | No code changes. Graph passes through LangGraphAdapter as-is — adapter handles message format conversion. | All nodes, edges, state, checkpointer logic. |
+
+### Deleted / Retired Components
+
+| Component | Why |
+|-----------|-----|
+| `src/daily/voice/stt.py` | Deepgram STT now runs inside LiveKit AgentSession. sounddevice mic capture removed. |
+| `src/daily/voice/tts.py` | Cartesia TTS now runs inside LiveKit AgentSession. sounddevice playback removed. |
+| `src/daily/voice/barge_in.py` | VoiceTurnManager, timer, echo suppression — all replaced by LiveKit's built-in turn detection + WebRTC AEC. |
+| `src/daily/voice/loop.py` | run_voice_session() replaced by LiveKit Agent entrypoint pattern. |
+| `daily voice` CLI command | Voice sessions now initiated via mobile client joining a room, not CLI. |
+
+Note: `src/daily/voice/utils.py` should be reviewed — any utilities unrelated to sounddevice/PCM can be kept.
+
+### Unchanged Components
+
+Everything in the backend except the voice layer is untouched:
+- `src/daily/orchestrator/` — graph, nodes, session, state, models
+- `src/daily/briefing/` — pipeline, scheduler, cache
+- `src/daily/integrations/` — Gmail, GCal, Outlook, Slack adapters
+- `src/daily/actions/` — approval gate, executor, action log
+- `src/daily/db/` — all models, migrations
+- `src/daily/profile/` — memory, preferences
+- `src/daily/vault/` — token encryption
+
+---
+
+## Data Flow: v1.4 Voice Session
+
+### Session Initiation
 
 ```
-[Cron or incremental trigger]
-  OAuth Token Vault
-      ↓ decrypts + provides token
-  Integration Adapter (Gmail / GCal / Slack)
-      ↓ raw items (emails, events, messages)
-  Context Builder → filter → rank → per-item summaries
-      ↓
-  Long-Term Memory (summaries stored; raw bodies NOT stored)
-      ↓
-  Briefing Cache (invalidated if significant new items)
+Mobile Client
+  1. POST /api/token { room_name, participant_identity }
+       → FastAPI generates LiveKit JWT (livekit-server-sdk-python AccessToken)
+       → Returns { server_url, participant_token }
+  2. Client joins LiveKit room with token
+  3. LiveKit Server dispatches job to Agent Worker
+  4. Agent Worker joins same room as a participant
+  5. AgentSession starts: VAD + STT + LLM + TTS pipeline active
 ```
 
-### Action Execution Flow
+### Voice Turn (conversational follow-up)
 
 ```
-[LLM returns tool-call intent]
-  Orchestrator validates: tool in registry, params schema-valid
-      ↓
-  Approval Gate
-      ↓ stores pending action (PostgreSQL)
-      ↓ notifies user (voice prompt: "Want me to send that reply?")
-  [User: "yes"]
-      ↓
-  Action Executor
-      ↓ calls Integration Adapter (e.g. Gmail send)
-      ↓ idempotency key checked
-  Action Log (immutable append)
-      ↓
-  Orchestrator → confirmation response to user
+User speaks (iOS/Android mic)
+  → AVAudioEngine / Oboe applies hardware AEC
+  → WebRTC audio track → LiveKit SFU → Agent Worker
+      → Silero VAD: detects end of utterance
+      → Deepgram Nova-3 STT: transcript
+      → LangGraphAdapter.chat() called with transcript
+          → Converts to LangGraph message format
+          → build_graph() compiled graph runs (existing orchestrator)
+              → route_intent → respond / draft / summarise_thread nodes
+              → Returns streaming tokens
+      → LangGraphAdapter streams tokens back as LiveKit ChatChunks
+      → Cartesia Sonic-3 TTS: streams audio chunks
+  → WebRTC audio track → LiveKit SFU → mobile client
 ```
 
-## Scaling Considerations
+### Morning Briefing Delivery
 
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| 1 user (MVP) | Single Python process, SQLite or single Postgres, Redis local. Briefing cron is a simple script. |
-| 10-100 users | Postgres on managed host, Redis hosted (Upstash), async task queue (Celery/ARQ) for cron jobs. Separate briefing worker process. |
-| 1k+ users | Per-user briefing workers with scheduled offsets, connection pooling, rate limit management per OAuth app, consider queue-based ingestion (Kafka/SQS). |
+```
+[Nightly: APScheduler, unchanged]
+  → briefing pipeline precomputes → Redis cache (unchanged)
 
-### Scaling Priorities
+[User opens app → joins room]
+  → Agent Worker joins room
+  → AgentSession.say() reads briefing from Redis cache
+      → Cartesia TTS streams precomputed narrative
+  → User hears briefing via device speaker (hardware volume, AEC irrelevant for TTS-out)
+  → User can barge in at any time — LiveKit VAD interrupts TTS naturally
+```
 
-1. **First bottleneck:** OAuth rate limits — Gmail API has per-user per-day quotas. At 100 users all running briefings at 5am, fan-out hits quota. Fix: stagger cron offsets per user (5:00, 5:03, 5:06...).
-2. **Second bottleneck:** LLM cost + latency for briefing generation. Fix: batch summarisation sub-calls, cache summaries separately so only the final narrative needs regeneration on incremental updates.
+### Action Approval Flow
 
-## Anti-Patterns
+The existing LangGraph human-in-the-loop interrupt is preserved. When the graph hits an `interrupt()` at the approval node:
+- LiveKit AgentSession pauses LLM streaming
+- Agent speaks the approval prompt via TTS: "Want me to send that reply?"
+- User responds via voice
+- STT transcript feeds back into the graph's approval decision parser
+- Graph resumes from checkpoint; action executes or cancels
 
-### Anti-Pattern 1: LLM with Direct API Access
+This works because LangGraphAdapter uses `thread_id` from participant metadata for session continuity — the graph state and checkpointer are preserved across turns.
 
-**What people do:** Give the LLM an OAuth token and let it call Gmail/GCal APIs directly via tool calls.
+---
 
-**Why it's wrong:** Prompt injection in an email body can hijack the agent to exfiltrate data, send rogue emails, or delete calendar events. The LLM becomes the trust boundary — which fails in production.
+## LiveKit Agent Worker Architecture
 
-**Do this instead:** All tool calls return to the orchestrator as structured intents. The backend validates and executes with a separate approval gate. LLM never sees credentials.
+### Process Model
 
-### Anti-Pattern 2: Storing Raw Email Bodies
+The Agent Worker is a separate Python process from the FastAPI server. It:
+1. Opens an authenticated WebSocket to the LiveKit server
+2. Registers as available for job dispatch
+3. On dispatch: spawns a job subprocess that joins the room
+4. Each job handles one user session in isolation
 
-**What people do:** Ingest full email bodies into the database for LLM context.
+No inbound ports are needed on the agent worker — it makes outbound connections only.
 
-**Why it's wrong:** GDPR/privacy risk. Long-term storage of sensitive content. LLM context window bloat. Per PROJECT.md constraint: raw bodies must not be stored long-term.
+### Agent Entrypoint Pattern
 
-**Do this instead:** Extract summaries and metadata at ingestion time. Pass only summaries to LLM. Discard raw bodies after summarisation pass.
+```python
+# src/daily/livekit/agent.py (pseudocode — not implementation)
 
-### Anti-Pattern 3: Synchronous Briefing Generation at Delivery Time
+async def entrypoint(ctx: JobContext):
+    await ctx.connect()
+    thread_id = ctx.room.metadata or ctx.participant.identity  # session continuity
+    
+    graph = build_graph(checkpointer=AsyncPostgresSaver(...))
+    
+    session = AgentSession(
+        vad=silero.VAD.load(),
+        stt=deepgram.STT(model="nova-3"),
+        llm=langchain.LLMAdapter(
+            graph=graph,
+            config={"configurable": {"thread_id": thread_id}}
+        ),
+        tts=cartesia.TTS(model="sonic-3"),
+    )
+    
+    # Play briefing from cache if morning session
+    briefing = await redis.get(f"briefing:{user_id}")
+    if briefing:
+        await session.say(briefing.narrative)
+    
+    await session.start(ctx.room)
 
-**What people do:** When user asks for briefing, trigger the full pipeline: fetch → summarise → generate → speak.
+cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
+```
 
-**Why it's wrong:** End-to-end latency is 30-60 seconds. Voice interaction feels broken. User is left waiting in silence.
+### LangGraphAdapter Role
 
-**Do this instead:** Precompute and cache. Briefing pipeline runs nightly. At delivery, serve from cache in milliseconds.
+`langchain.LLMAdapter` (from `livekit-plugins-langchain`) wraps the compiled LangGraph graph. It:
+- Converts LiveKit's `ChatContext` (list of messages) → LangGraph `HumanMessage` / `AIMessage` / `SystemMessage`
+- Runs `graph.astream()` in `messages` stream mode
+- Yields streamed tokens back to LiveKit as `ChatChunk` objects
+- Passes `config` with `thread_id` for graph state persistence
 
-### Anti-Pattern 4: Single-Model for All LLM Tasks
+The existing graph requires no modification. The adapter is a translation shim only.
 
-**What people do:** Route all LLM requests to GPT-4 for quality uniformity.
+---
 
-**Why it's wrong:** Simple conversational Q&A during a briefing does not need a frontier model. Latency is 2-5x higher and cost is 10-20x higher than necessary for fast-response tasks.
+## iOS Client Architecture
 
-**Do this instead:** Dual-model strategy. Large model for offline briefing generation (cost/latency acceptable). Fast model for voice turn-around where sub-300ms TTFT is required.
+### SDK Components Used
 
-### Anti-Pattern 5: Blocking Approval on Voice-Only Channel
+| Component | Purpose |
+|-----------|---------|
+| `LiveKit` (Swift Package) | Core SDK — WebRTC transport, room management |
+| `Session` observable | Manages connection to LiveKit room, agent interaction, local state, text messages |
+| `LocalMedia` observable | Manages microphone track lifecycle |
+| `preConnectAudio` | Captures and buffers mic audio before room connection completes — creates instant-feeling join |
+| AVAudioEngine (via SDK) | Hardware AEC — applied automatically when using device speaker + mic |
 
-**What people do:** Approval gate delivered only via voice ("Say yes to confirm").
+### Connection Flow
 
-**Why it's wrong:** Voice-only approval fails when the user is in a meeting, driving, or hands-free. Approval for irreversible actions needs a durable async channel.
+```
+VoiceAgentApp.swift:
+  1. Fetch token from dAIly backend: POST /api/token
+  2. Create Session with server_url + participant_token
+  3. Enable LocalMedia.voice (mic)
+  4. Session.connect() → joins LiveKit room
+  5. Agent joins room → AgentSession starts on backend
+  6. UI shows: "Listening..." / "Speaking..." based on session state
+```
 
-**Do this instead:** Approval gate uses a push notification or accessible UI (later milestones). For M1 backend-only, approve via CLI/API hook; voice confirmation is an enhancement not a hard dependency.
+### Project Structure (Xcode)
 
-## Integration Points
+```
+clients/ios/dAIly/
+├── dAIlyApp.swift           # App entry, environment setup
+├── ContentView.swift        # Root UI — voice button, status
+├── VoiceSession.swift       # Session + LocalMedia wiring
+├── TokenService.swift       # POST /api/token network call
+└── Assets.xcassets/
+```
 
-### External Services
+---
 
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| Gmail | OAuth 2.0 + Gmail API (users.messages.list, users.messages.get, users.messages.send) | 25K quota units/user/day; batch read requests |
-| Google Calendar | OAuth 2.0 + GCal API (events.list) | Shared OAuth consent with Gmail if using same Google app |
-| Slack | OAuth 2.0 + Slack Web API (conversations.history, chat.postMessage) | Bot token scoped to specific channels |
-| OpenAI / Anthropic | API key (server-side only) | Never expose to frontend or LLM context |
-| STT provider | Streaming WebSocket (Deepgram) or local Whisper | Deepgram for low-latency streaming; Whisper for privacy/offline |
-| TTS provider | Streaming HTTP (ElevenLabs) or local neural TTS | ElevenLabs for quality; local Coqui for cost/privacy |
+## Android Client Architecture
 
-### Internal Boundaries
+### SDK Components Used
 
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| Orchestrator ↔ LLM Gateway | Async function call, returns tool-call intents | Gateway handles model selection, retries |
-| Orchestrator ↔ Context Builder | Read from cache / trigger rebuild | Cache is the contract; builder is fire-and-forget |
-| Orchestrator ↔ Approval Gate | Write pending action, poll or await callback | Durable queue — survives process restart |
-| Orchestrator ↔ Short-Term Memory | Direct read/write (Redis in-session) | Keyed by session_id, cleared on session end |
-| Context Builder ↔ Integration Adapters | Async pull, returns structured item list | Adapter interface: `fetch(since: datetime) → List[Item]` |
-| Action Executor ↔ Integration Adapters | Write operations (send, create, update) | Same adapter, write path — uses same OAuth token |
-| Context Builder ↔ Long-Term Memory | Write summaries + metadata | Raw bodies never written |
+| Component | Purpose |
+|-----------|---------|
+| `io.livekit:livekit-android` | Core SDK — WebRTC, Kotlin coroutines API |
+| `Room` | Manages connection, participant events |
+| `LocalParticipant` | `setMicrophoneEnabled()` / `setCameraEnabled()` |
+| Oboe (via SDK) | Android audio engine — hardware AEC when device supports it |
+| Kotlin Flows | `room.events.collect()` for reactive UI updates |
+
+### Connection Flow
+
+```
+MainActivity.kt / VoiceViewModel.kt:
+  1. POST /api/token → get server_url + participant_token
+  2. LiveKit.create(applicationContext) → Room
+  3. room.connect(server_url, token)
+  4. localParticipant.setMicrophoneEnabled(true)
+  5. Collect room events → update UI composables
+```
+
+### Project Structure (Android Studio)
+
+```
+clients/android/app/src/main/java/ai/daily/
+├── MainActivity.kt           # Entry point
+├── ui/
+│   ├── VoiceScreen.kt        # Jetpack Compose UI
+│   └── VoiceViewModel.kt     # Room connection + state
+├── data/
+│   └── TokenRepository.kt    # /api/token network call
+└── di/
+    └── AppModule.kt          # Hilt DI (optional)
+```
+
+---
+
+## FastAPI Token Endpoint
+
+The existing FastAPI server gains one new route. This is the only required backend addition beyond the agent worker.
+
+```python
+# src/daily/api/token.py (pseudocode)
+
+from livekit import api as livekit_api
+
+@router.post("/api/token")
+async def get_token(request: TokenRequest, user=Depends(get_current_user)):
+    token = livekit_api.AccessToken(
+        api_key=settings.livekit_api_key,
+        api_secret=settings.livekit_api_secret
+    )
+    token.with_identity(user.id).with_name(user.name)
+    token.with_grants(livekit_api.VideoGrants(room_join=True, room=request.room_name))
+    
+    return {
+        "server_url": settings.livekit_url,
+        "participant_token": token.to_jwt()
+    }
+```
+
+---
+
+## Docker Compose Changes
+
+```yaml
+# New service added to docker-compose.yml
+livekit:
+  image: livekit/livekit-server:latest
+  ports:
+    - "7880:7880"   # HTTP (health check, API)
+    - "7881:7881"   # TCP (WebRTC signaling)
+    - "50000-60000:50000-60000/udp"  # WebRTC media (dev only)
+  environment:
+    - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+    - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+
+# New: agent worker service
+agent:
+  build: .
+  command: python -m daily.livekit.agent start
+  environment:
+    - LIVEKIT_URL=ws://livekit:7880
+    - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+    - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+    - DATABASE_URL=${DATABASE_URL}
+    - REDIS_URL=${REDIS_URL}
+    - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+    - CARTESIA_API_KEY=${CARTESIA_API_KEY}
+    - OPENAI_API_KEY=${OPENAI_API_KEY}
+  depends_on:
+    - db
+    - redis
+    - livekit
+```
+
+The FastAPI `app` service is unchanged. The agent worker runs as a separate service in the same compose stack, sharing Postgres and Redis.
+
+---
 
 ## Suggested Build Order
 
-Dependencies determine build order. Each layer depends on the layer below it.
+Dependencies determine order. Each step builds on the previous.
 
-```
-1. OAuth Token Vault + Integration Adapters (read-only)
-   → Nothing works without authenticated data access
+### Step 1 — Backend: LiveKit Server + Token Endpoint
 
-2. Context Builder (fetch → rank → summarise)
-   → Depends on: adapters
-   → Produces: briefing state / cache
+**What:** Add LiveKit server to docker-compose. Add `POST /api/token` to FastAPI. Add `LIVEKIT_*` to Settings.
 
-3. Briefing Cache + Long-Term Memory (PostgreSQL + Redis)
-   → Depends on: context builder output
-   → Produces: instant briefing retrieval
+**Why first:** All clients need a token endpoint. The LiveKit server must be running before the agent worker can register. No new Python dependencies on the core orchestrator — just `livekit-server-sdk-python` for token generation.
 
-4. LLM Gateway (model routing, tool schema, prompt templates)
-   → Depends on: context builder output (for context injection)
-   → Produces: reasoning, narrative, tool-call intents
+**Validation:** `POST /api/token` returns a valid JWT. LiveKit server health check passes.
 
-5. Agent Orchestrator (intent routing, tool dispatch)
-   → Depends on: LLM gateway, memory layers, briefing cache
-   → Produces: coordinated session flow
+---
 
-6. Approval Gate + Action Executor + Action Log
-   → Depends on: orchestrator (receives tool-call intents)
-   → Produces: safe external-facing actions
+### Step 2 — Backend: LiveKit Agent Worker
 
-7. Voice Layer (STT + TTS + Session Manager)
-   → Depends on: orchestrator (consumes/produces text)
-   → Produces: voice I/O loop
-```
+**What:** Create `src/daily/livekit/agent.py`. Install `livekit-agents`, `livekit-plugins-deepgram`, `livekit-plugins-cartesia`, `livekit-plugins-langchain`. Wire `LLMAdapter(graph=build_graph())`. Add agent service to docker-compose.
 
-**Implication for M1 phase structure:**
-- **Phase 1 (Foundation):** Token vault, integration adapters, database schema
-- **Phase 2 (Data pipeline):** Context builder, briefing cache, ranking
-- **Phase 3 (Reasoning):** LLM gateway, orchestrator, basic conversational Q&A
-- **Phase 4 (Actions):** Approval gate, action executor, action log
-- **Phase 5 (Voice):** STT, TTS, session manager, voice interaction loop
-- **Phase 6 (Personalisation):** Long-term memory, preference signals, user profile
+**Why second:** Agent worker is the critical path — without it, mobile clients connect to a room but no AI responds. This step proves the LangGraph integration works end-to-end before any mobile client exists.
+
+**Validation:** Start agent worker locally. Use LiveKit CLI (`lk room join`) or LiveKit Playground web client to connect to a test room and confirm the agent responds conversationally.
+
+**Key decisions at this step:**
+- Thread ID strategy: use `participant.identity` (= user ID) for persistent cross-session state via AsyncPostgresSaver
+- Briefing delivery: check Redis cache in `entrypoint()`, call `session.say()` if cache hit
+- Approval prompts: the graph's `interrupt()` pauses the agent; re-enter with user's transcript
+
+---
+
+### Step 3 — iOS Client (Swift)
+
+**What:** Create Xcode project. Integrate LiveKit Swift SDK via Swift Package Manager. Wire `Session` + `LocalMedia`. Implement `TokenService` to call `POST /api/token`. Build minimal UI: connect button, speaking/listening state indicator.
+
+**Why third:** iOS is the primary target platform. Completing it validates the full round-trip: device mic → LiveKit → agent → device speaker with hardware AEC.
+
+**Validation:** iPhone connects to a room via real device (not simulator — simulator has no mic). Agent responds. Barge-in works on built-in speaker without echo. Hardware AEC confirmed.
+
+---
+
+### Step 4 — Android Client (Kotlin)
+
+**What:** Create Android Studio project. Add `io.livekit:livekit-android` dependency. Wire `Room` + `LocalParticipant`. Implement `TokenRepository`. Build minimal Compose UI matching iOS.
+
+**Why fourth:** Android follows the same pattern as iOS. By this point the backend and agent are proven — Android is purely a client implementation.
+
+**Validation:** Android device connects to same backend. Voice session works. Oboe AEC confirmed on a device with hardware support.
+
+---
+
+### Step 5 — Web Fallback (Next.js or plain HTML)
+
+**What:** Minimal web page using `@livekit/components-react` or raw `livekit-client` JS SDK. Fetches token from `/api/token`. Connects to room. Microphone via browser WebRTC.
+
+**Why last:** Web AEC is browser-managed (software) and less reliable than native. This is explicitly a fallback, not the primary surface.
+
+**Validation:** Chrome on desktop connects. Agent responds. Acceptable for users without mobile device.
+
+---
+
+## Integration Points Summary
+
+| Boundary | Protocol | Notes |
+|----------|----------|-------|
+| Mobile client → LiveKit Server | WebRTC (SRTP audio) | Via LiveKit Swift/Android SDK |
+| Mobile client → FastAPI | HTTPS REST | Token fetch only (`POST /api/token`) |
+| LiveKit Server → Agent Worker | WebSocket (authenticated) | Agent registers and receives job dispatch |
+| Agent Worker → Deepgram | WebSocket | STT — same service as before, different invocation |
+| Agent Worker → Cartesia | WebSocket | TTS — same service as before, different invocation |
+| Agent Worker → LangGraph | In-process function call | `LLMAdapter` wraps `build_graph()` |
+| Agent Worker → Postgres | asyncpg | AsyncPostgresSaver for graph checkpoints |
+| Agent Worker → Redis | aioredis | Briefing cache reads |
+| FastAPI → Postgres | asyncpg | Unchanged |
+| FastAPI → Redis | aioredis | Unchanged |
+
+---
+
+## Anti-Patterns to Avoid
+
+### Sharing the Agent Worker Process with FastAPI
+
+**Trap:** Run `agent.py` inside the FastAPI process using background tasks or lifespan hooks.
+
+**Why wrong:** LiveKit agents run a long-lived `cli.run_app()` event loop that conflicts with Uvicorn's loop. Agent state isolation (one job subprocess per session) requires process-level separation.
+
+**Do this instead:** Separate docker-compose service. Shared Postgres + Redis via environment variables.
+
+### Using Room Metadata for Sensitive State
+
+**Trap:** Inject user preferences, OAuth tokens, or briefing content into LiveKit room metadata.
+
+**Why wrong:** Room metadata is visible to all room participants and to the LiveKit server. The backend already has all context via Postgres + Redis keyed on user ID.
+
+**Do this instead:** Pass only `participant_identity` (= user ID) via the token. Agent worker looks up all context from Postgres/Redis on job start.
+
+### Keeping the Old Voice CLI as a Fallback
+
+**Trap:** Leave `daily voice` CLI active "just in case" while shipping the LiveKit path.
+
+**Why wrong:** The old voice loop uses sounddevice, which grabs the audio device. Running both creates device conflicts and a maintenance burden. The structural AEC problem is the reason we're switching — keeping the old path keeps the problem alive.
+
+**Do this instead:** Delete `voice/stt.py`, `voice/tts.py`, `voice/barge_in.py`, `voice/loop.py` at the start of v1.4. Retire `daily voice` CLI subcommand. All voice sessions go through LiveKit from this point forward.
+
+### Building Mobile Clients Before the Agent Worker
+
+**Trap:** Start iOS development before the agent is working.
+
+**Why wrong:** The iOS client has nothing to connect to without an agent. Debugging a broken experience is harder when it's split across two untested surfaces simultaneously.
+
+**Do this instead:** Validate the full backend round-trip first using LiveKit CLI or Playground. Then build iOS. Then Android.
+
+---
+
+## Confidence Assessment
+
+| Area | Confidence | Notes |
+|------|-----------|-------|
+| LangGraph/LLMAdapter integration | HIGH | `livekit-plugins-langchain` 0.1.0 shipped 2026-04-08. Official docs confirmed LLMAdapter wraps compiled graph. `langgraph-livekit-agents` community adapter also confirmed this pattern. |
+| iOS client pattern | HIGH | Official `agent-starter-swift` repo. `Session` + `LocalMedia` pattern documented. AVAudioEngine AEC confirmed via SDK. |
+| Android client pattern | HIGH | Official `agent-starter-android` repo. `Room` + `LocalParticipant` Kotlin API confirmed. |
+| Token endpoint pattern | HIGH | Official LiveKit docs at `/frontends/authentication/tokens/endpoint/`. FastAPI example provided directly. |
+| Agent worker deployment (separate process) | HIGH | Worker model confirmed via `livekit/agents` source and deployment docs. WebSocket-out registration confirmed. No inbound ports needed. |
+| docker-compose LiveKit service | MEDIUM | Self-hosted LiveKit well-documented. UDP port range for dev confirmed. Production networking (TURN, STUN) requires additional config — not in scope for local dev. |
+| Briefing delivery via `session.say()` | MEDIUM | `say()` method confirmed in `langgraph-livekit-agents` README. Verify actual API surface against installed `livekit-agents` version. |
+
+---
 
 ## Sources
 
-- [The 2026 Voice AI Stack: Every Layer Explained — Calculus VC](https://calculusvc.com/the-2026-voice-ai-stack-every-layer-explained/)
-- [The Voice AI Stack for Building Agents — AssemblyAI](https://www.assemblyai.com/blog/the-voice-ai-stack-for-building-agents)
-- [Engineering Low-Latency Voice Agents — Sierra AI](https://sierra.ai/blog/voice-latency)
-- [How to Optimise Latency for Voice Agents — Nikhil R (2025)](https://rnikhil.com/2025/05/18/how-to-reduce-latency-voice-agents)
-- [AI Agent Memory: Types, Architecture & Implementation — Redis](https://redis.io/blog/ai-agent-memory-stateful-systems/)
-- [Human-in-the-Loop Architecture: When Humans Approve Agent Decisions — Agent Patterns](https://www.agentpatterns.tech/en/architecture/human-in-the-loop-architecture)
-- [LLM Orchestration Architecture — DEV Community](https://dev.to/prince_d02d8ea487b1268cb5/llm-orchestration-architecture-10mj)
-- [OAuth for AI Agents: Production Architecture — Scalekit](https://www.scalekit.com/blog/oauth-ai-agents-architecture)
-- [Architecting Resilient LLM Agents: Secure Plan-then-Execute — arXiv](https://arxiv.org/pdf/2509.08646)
-- [Context Engineering for Reliable AI Agents — Kubiya (2025)](https://www.kubiya.ai/blog/context-engineering-ai-agents)
+- [LiveKit Agents — LangChain integration guide](https://docs.livekit.io/agents/models/llm/plugins/langchain/) — HIGH confidence (official docs)
+- [livekit-plugins-langchain on PyPI](https://pypi.org/project/livekit-plugins-langchain/) — HIGH confidence (released 2026-04-08)
+- [langgraph-livekit-agents (dqbd/langgraph-livekit-agents)](https://github.com/dqbd/langgraph-livekit-agents/blob/main/python/README.md) — HIGH confidence (adapter pattern confirmed)
+- [langgraph-voice-call-agent (ahmad2b)](https://github.com/ahmad2b/langgraph-voice-call-agent) — MEDIUM confidence (community implementation, architecture confirmed)
+- [LiveKit agent-starter-swift](https://github.com/livekit-examples/agent-starter-swift) — HIGH confidence (official LiveKit examples)
+- [LiveKit agent-starter-android](https://github.com/livekit-examples/agent-starter-android) — HIGH confidence (official LiveKit examples)
+- [LiveKit token endpoint docs](https://docs.livekit.io/frontends/authentication/tokens/endpoint/) — HIGH confidence (official docs with FastAPI example)
+- [LiveKit voice agent architecture blog](https://livekit.com/blog/voice-agent-architecture-stt-llm-tts-pipelines-explained) — HIGH confidence (official LiveKit)
+- [LiveKit agent deployment docs](https://docs.livekit.io/deploy/agents/) — HIGH confidence (official docs)
+- [livekit/agents GitHub — worker.py](https://github.com/livekit/agents/blob/main/livekit-agents/livekit/agents/worker.py) — HIGH confidence (source)
 
 ---
-*Architecture research for: voice-first AI personal assistant (dAIly)*
-*Researched: 2026-04-05*
+*Architecture research for: dAIly v1.4 Mobile Voice milestone*
+*Researched: 2026-04-28*
