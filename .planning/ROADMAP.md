@@ -88,7 +88,10 @@ See `.planning/milestones/v1.2-ROADMAP.md` for full phase details.
   2. User receives a short-lived JWT from `POST /livekit/token` using their existing authenticated session — no separate login
   3. The token endpoint rejects unauthenticated requests with a 401
   4. The LiveKit server and TURN relay are reachable from outside localhost (staging or VPS)
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 18-01-PLAN.md — LiveKit Docker (dev + prod with Coturn) + livekit-api dep + Settings extension
+- [ ] 18-02-PLAN.md — Device pairing + JWT auth foundation (DB models, migration, /auth router, get_current_user dep)
+- [ ] 18-03-PLAN.md — POST /livekit/token endpoint with auth gate + LiveKit JWT minting
 
 ### Phase 19: LiveKit Agent Worker
 **Goal**: User's voice session is handled end-to-end by a LiveKit Agent that drives the existing LangGraph orchestrator — old voice/ module is gone
