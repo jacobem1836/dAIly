@@ -150,8 +150,8 @@ class TestTTSPipeline:
             pipeline = TTSPipeline(api_key="test-key")
             await pipeline.play_streaming("Hello world.", stop_event)
 
-        # Assert: playback stopped before consuming all 5 chunks
-        assert len(chunks_written) < 5, "Expected stop before all chunks were played"
+        # Graceful fade-out: current chunk completes before break (Improvement 3)
+        assert len(chunks_written) == 3  # stop_event set at index 2 → chunks 0,1,2 written
         assert stop_event.is_set()
 
     @pytest.mark.asyncio

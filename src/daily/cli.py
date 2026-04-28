@@ -790,5 +790,28 @@ def voice():
     asyncio.run(run_voice_session(user_id=1))
 
 
+@app.command()
+def briefing():
+    """Force-generate a briefing now and cache it in Redis.
+
+    Runs the full briefing pipeline immediately (fetch emails/calendar,
+    summarise, render TTS audio) and stores the result in Redis so that
+    'daily voice' and 'daily chat' can load it.
+
+    Example:
+      daily briefing
+    """
+    async def _run():
+        from daily.briefing.scheduler import _build_pipeline_kwargs, Settings
+        from daily.briefing.pipeline import run_briefing_pipeline
+        settings = Settings()
+        typer.echo("Generating briefing…")
+        kwargs = await _build_pipeline_kwargs(user_id=1, settings=settings)
+        await run_briefing_pipeline(user_id=1, **kwargs)
+        typer.echo("Briefing cached. Run 'daily voice' or 'daily chat'.")
+
+    asyncio.run(_run())
+
+
 if __name__ == "__main__":
     app()

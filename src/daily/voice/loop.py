@@ -15,6 +15,8 @@ Threat mitigations:
 """
 import asyncio
 import logging
+import random
+from typing import AsyncIterator
 
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from redis.asyncio import Redis
@@ -24,6 +26,8 @@ from daily.config import Settings
 from daily.db.engine import async_session
 from daily.orchestrator.graph import build_graph
 from daily.orchestrator.session import (
+    StreamingNotSupported,
+    astream_session,
     create_session_config,
     initialize_session_state,
     run_session,
@@ -36,6 +40,7 @@ from daily.voice.tts import TTSPipeline
 logger = logging.getLogger(__name__)
 
 _SEPARATOR = "-" * 40
+_ACKNOWLEDGEMENTS: list[str] = ["Got it.", "One sec.", "Sure.", "On it.", "Mmhm."]
 
 
 async def _handle_voice_approval(
@@ -196,18 +201,83 @@ async def run_voice_session(user_id: int = 1) -> None:
                     # Wait for user utterance from Deepgram STT
                     user_input = await turn_manager.wait_for_utterance()
 
-                    if user_input.lower().strip() in ("exit", "quit"):
+                    # Backchannel filter — swallow "yeah", "ok", etc. during TTS
+                    if not turn_manager.filter_utterance(user_input):
+                        # Backchannel — let TTS continue; do not advance the turn.
+                        continue
+
+                    normalized = user_input.lower().strip()
+                    if normalized in ("exit", "quit"):
                         print("Session ended.")
                         break
 
-                    # Run through orchestrator (same as chat session)
+                    # Speak a brief acknowledgement while LLM processes (non-first turns only)
+                    if not first_turn:
+                        try:
+                            await turn_manager.speak(random.choice(_ACKNOWLEDGEMENTS))
+                        except Exception as ack_err:
+                            # Non-fatal — log and proceed; user still gets the real response.
+                            logger.debug("Acknowledgement TTS failed: %s", ack_err)
+
+                    # Run through orchestrator — attempt streaming first, fall back to ainvoke.
+                    streamed_text = ""
+                    used_streaming = False
                     try:
-                        result = await run_session(
+                        token_iter = astream_session(
                             graph,
                             user_input,
                             config,
                             initial_state=initial_state if first_turn else None,
                         )
+
+                        # Producer/consumer bridge: tee the LLM token stream to both
+                        # (a) TTS playback and (b) an accumulator for downstream state.
+                        token_queue: asyncio.Queue[str | None] = asyncio.Queue(maxsize=64)
+
+                        async def _produce() -> None:
+                            nonlocal streamed_text
+                            try:
+                                async for delta in token_iter:
+                                    streamed_text += delta
+                                    await token_queue.put(delta)
+                            finally:
+                                await token_queue.put(None)  # sentinel
+
+                        async def _tts_iter() -> AsyncIterator[str]:
+                            while True:
+                                item = await token_queue.get()
+                                if item is None:
+                                    return
+                                yield item
+
+                        await asyncio.gather(
+                            _produce(),
+                            turn_manager._tts.play_streaming_tokens(
+                                _tts_iter(), turn_manager._stop_event
+                            ),
+                        )
+                        used_streaming = True
+                        result = None  # Streaming path bypasses graph state for respond turns
+                        logger.debug("Streamed respond turn: %d chars", len(streamed_text))
+
+                    except StreamingNotSupported:
+                        logger.debug("Streaming not supported, fell back to run_session")
+                        try:
+                            result = await run_session(
+                                graph,
+                                user_input,
+                                config,
+                                initial_state=initial_state if first_turn else None,
+                            )
+                        except Exception as exc:
+                            from openai import OpenAIError  # noqa: PLC0415
+                            if isinstance(exc, OpenAIError):
+                                error_msg = f"Sorry, there was an error: {exc}"
+                                print(f"Error: {error_msg}")
+                                await turn_manager.speak("Sorry, there was an API error. Please try again.")
+                                break
+                            raise
+
                     except Exception as exc:
                         from openai import OpenAIError  # noqa: PLC0415
                         if isinstance(exc, OpenAIError):
@@ -216,50 +286,53 @@ async def run_voice_session(user_id: int = 1) -> None:
                             await turn_manager.speak("Sorry, there was an API error. Please try again.")
                             break
                         raise
+
                     first_turn = False
 
                     # Check for approval interrupt (T-05-10: same gate as CLI)
-                    graph_state = await graph.aget_state(config)
-                    if graph_state.next:
-                        # Voice approval flow: unlimited edit rounds (D-01)
-                        while True:
-                            approval_result = await _handle_voice_approval(
-                                turn_manager=turn_manager,
-                                graph=graph,
-                                graph_state=graph_state,
-                                config=config,
-                            )
+                    # Only applicable on the non-streaming path (result is None for streamed turns).
+                    if result is not None:
+                        graph_state = await graph.aget_state(config)
+                        if graph_state.next:
+                            # Voice approval flow: unlimited edit rounds (D-01)
+                            while True:
+                                approval_result = await _handle_voice_approval(
+                                    turn_manager=turn_manager,
+                                    graph=graph,
+                                    graph_state=graph_state,
+                                    config=config,
+                                )
 
-                            edit_instruction = approval_result.get("edit_instruction")
-                            if not edit_instruction:
-                                # Confirm or reject — speak result and break
-                                ap_messages = approval_result.get("messages", [])
-                                if ap_messages:
-                                    last_msg = ap_messages[-1]
-                                    content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-                                    print(f"dAIly: {content}")
-                                    await turn_manager.speak(content)
-                                break
+                                edit_instruction = approval_result.get("edit_instruction")
+                                if not edit_instruction:
+                                    # Confirm or reject — speak result and break
+                                    ap_messages = approval_result.get("messages", [])
+                                    if ap_messages:
+                                        last_msg = ap_messages[-1]
+                                        content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+                                        print(f"dAIly: {content}")
+                                        await turn_manager.speak(content)
+                                    break
 
-                            # Edit decision: check if graph interrupted again at approval
-                            graph_state = await graph.aget_state(config)
-                            if not graph_state.next:
-                                # Graph completed without re-interrupting
-                                ap_messages = approval_result.get("messages", [])
-                                if ap_messages:
-                                    last_msg = ap_messages[-1]
-                                    content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-                                    print(f"dAIly: {content}")
-                                    await turn_manager.speak(content)
-                                break
-                    else:
-                        # Normal (non-interrupted) response — speak it
-                        messages = result.get("messages", [])
-                        if messages:
-                            last_msg = messages[-1]
-                            content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-                            print(f"dAIly: {content}")
-                            await turn_manager.speak(content)
+                                # Edit decision: check if graph interrupted again at approval
+                                graph_state = await graph.aget_state(config)
+                                if not graph_state.next:
+                                    # Graph completed without re-interrupting
+                                    ap_messages = approval_result.get("messages", [])
+                                    if ap_messages:
+                                        last_msg = ap_messages[-1]
+                                        content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+                                        print(f"dAIly: {content}")
+                                        await turn_manager.speak(content)
+                                    break
+                        else:
+                            # Normal (non-interrupted) response — speak it
+                            messages = result.get("messages", [])
+                            if messages:
+                                last_msg = messages[-1]
+                                content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+                                print(f"dAIly: {content}")
+                                await turn_manager.speak(content)
 
             finally:
                 # 8. Clean shutdown

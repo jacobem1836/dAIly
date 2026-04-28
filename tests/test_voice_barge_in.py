@@ -3,8 +3,9 @@
 Tests cover:
 - Normal TTS completion (speak returns True)
 - Barge-in cancellation (speak returns False when stop_event set)
-- Echo suppression (speech_started during TTS does NOT set stop_event)
-- Real barge-in (speech_started when TTS inactive DOES set stop_event)
+- Backchannel suppression: filter_utterance("yeah") returns False and timer is cancelled
+- Real barge-in: non-backchannel utterance causes stop_event to be set after 600ms
+- Barge-in when TTS inactive: timer still fires after 600ms
 - stop_event cleared after speak()
 - wait_for_utterance returns text from utterance_queue
 """
@@ -73,7 +74,7 @@ def _make_manager(tts=None, stt=None) -> VoiceTurnManager:
 
 
 # ---------------------------------------------------------------------------
-# Tests
+# Tests — basic speak/stop flow
 # ---------------------------------------------------------------------------
 
 
@@ -124,24 +125,6 @@ async def test_tts_active_false_after_barge_in() -> None:
 
 
 @pytest.mark.asyncio
-async def test_echo_suppression_during_tts() -> None:
-    """_on_speech_started does NOT set stop_event when _tts_active is True."""
-    manager = _make_manager()
-    manager._tts_active = True
-    manager._on_speech_started()
-    assert not manager._stop_event.is_set()
-
-
-@pytest.mark.asyncio
-async def test_real_barge_in_when_tts_inactive() -> None:
-    """_on_speech_started DOES set stop_event when _tts_active is False."""
-    manager = _make_manager()
-    manager._tts_active = False
-    manager._on_speech_started()
-    assert manager._stop_event.is_set()
-
-
-@pytest.mark.asyncio
 async def test_stop_event_cleared_after_speak_normal() -> None:
     """stop_event is cleared after speak() completes normally."""
     manager = _make_manager(tts=_FakeTTSInstant())
@@ -189,11 +172,6 @@ async def test_start_stt_wires_speech_started_callback() -> None:
     assert fake_stt._on_speech_started is not None
     assert callable(fake_stt._on_speech_started)
 
-    # Calling the wired callback when tts_active=False should set stop_event
-    manager._tts_active = False
-    fake_stt._on_speech_started()
-    assert manager._stop_event.is_set()
-
 
 @pytest.mark.asyncio
 async def test_stop_cancels_tts_task() -> None:
@@ -209,3 +187,63 @@ async def test_stop_cancels_tts_task() -> None:
     # speak_task should resolve (False) since TTS was cancelled
     result = await asyncio.wait_for(speak_task, timeout=1.0)
     assert result is False
+
+
+# ---------------------------------------------------------------------------
+# Tests — 600ms timer + backchannel filter (Plan 17-03 replacements)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_backchannel_does_not_set_stop_event_during_tts() -> None:
+    """filter_utterance('yeah') suppresses barge-in when TTS was active at speech onset.
+
+    Case A: backchannel utterance during TTS — timer cancelled, stop_event NOT set.
+    """
+    manager = _make_manager()
+    # Simulate TTS active when speech started
+    manager._tts_active = True
+    manager._on_speech_started()
+
+    # Backchannel utterance: filter returns False and cancels timer
+    result = manager.filter_utterance("yeah")
+    assert result is False
+
+    # Wait past the 600ms window — stop_event must NOT be set
+    await asyncio.sleep(0.75)
+    assert not manager._stop_event.is_set()
+
+
+@pytest.mark.asyncio
+async def test_real_barge_in_non_backchannel_during_tts() -> None:
+    """filter_utterance('schedule a meeting') allows barge-in; timer fires after 600ms.
+
+    Case B: real utterance during TTS — filter returns True; wait 700ms; stop_event IS set.
+    """
+    manager = _make_manager()
+    # Simulate TTS active when speech started
+    manager._tts_active = True
+    manager._on_speech_started()
+
+    # Real utterance: filter passes it through
+    result = manager.filter_utterance("schedule a meeting")
+    assert result is True
+
+    # Wait past the 600ms window — stop_event MUST be set
+    await asyncio.sleep(0.75)
+    assert manager._stop_event.is_set()
+
+
+@pytest.mark.asyncio
+async def test_real_barge_in_when_tts_inactive() -> None:
+    """When TTS was not active at speech onset, timer fires and sets stop_event.
+
+    New behavior (Plan 17-03): barge-in via 600ms timer even when TTS inactive.
+    """
+    manager = _make_manager()
+    manager._tts_active = False
+    manager._on_speech_started()
+
+    # Wait past the 600ms window — stop_event MUST be set (real barge-in)
+    await asyncio.sleep(0.75)
+    assert manager._stop_event.is_set()
