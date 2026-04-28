@@ -1,12 +1,12 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
+milestone: v1.4
 milestone_name: Mobile Voice
 status: planning
 last_updated: "2026-04-28T00:00:00Z"
-last_activity: 2026-04-28 -- Phase 17 complete, planning docs reconstructed
+last_activity: 2026-04-28 -- Milestone v1.4 started
 progress:
-  total_phases: 4
+  total_phases: 0
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,17 +17,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-15)
+See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** The briefing always delivers — every morning, the user gets a prioritised, conversational summary of what matters without touching a single app.
-**Current focus:** v2.0 — Mobile Voice. Phase 17 (Voice Polish) complete. Next: Phase 18 LiveKit Backend Integration.
+**Current focus:** v1.4 — Mobile Voice
 
 ## Current Position
 
-Phase: Phase 18 — LiveKit Backend Integration
+Phase: Not started (defining requirements)
 Plan: —
-Status: Ready to plan
-Last activity: 2026-04-28 — Phase 17 complete; v1.x history reconstructed in planning docs
+Status: Defining requirements
+Last activity: 2026-04-28 — Milestone v1.4 started
 
 ## Completed Milestones
 
@@ -52,22 +52,6 @@ Last activity: 2026-04-28 — Phase 17 complete; v1.x history reconstructed in p
 
 See `KEY_DECISIONS` in PROJECT.md and `.planning/research/voice-strategy-decision.md` for full rationale.
 
-### What Phase 17 Built (and Closed)
-
-- `barge_in.py` — 600ms timer replaces immediate stop_event; `_pending_barge_in_cancelled` flag for backchannel suppression
-- `voice/utils.py` — `_is_backchannel()` + `_BACKCHANNEL_PHRASES` list
-- `stt.py` — `_select_chunk()` returns silent audio during TTS (mic mute)
-- `tts.py` — `play_streaming_tokens()` with sentence-boundary chunking for streaming LLM→TTS
-- `loop.py` — `astream_session()` + streaming bridge wired into main turn
-
-**Structural AEC on macOS closed as won't-fix.** Mobile solves it at the OS layer. Desktop becomes secondary platform (web fallback via LiveKit SDK).
-
-### Pending Decisions for Phase 18
-
-- LiveKit Cloud vs self-hosted — Cloud is simpler for dev/testing (~$4.50/user/month transport); self-host (Apache 2.0) saves cost at scale (~$50-100/mo VPS)
-- Prompt caching strategy for Realtime API — mandatory if that path is used ($6-8/user/month with caching vs $18-40 without)
-- Whether to keep Python voice loop alive as desktop fallback during Phase 18, or stub it out immediately
-
 ### Blockers/Concerns
 
 None active.
@@ -82,6 +66,4 @@ None active.
 ## Session Continuity
 
 Last session: 2026-04-28
-Phase 17 (voice polish) complete. Planning docs reconstructed to reflect full v1.0–v1.3 history — the phase-17 branch had branched from phase-06 and the ROADMAP/STATE/MILESTONES had overwritten all intermediate milestone history. Now corrected.
-
-Next session: plan Phase 18 (LiveKit Backend Integration) via `/gsd-plan-phase 18`.
+Milestone v1.4 (Mobile Voice) initialized. Next: define requirements and create roadmap.
