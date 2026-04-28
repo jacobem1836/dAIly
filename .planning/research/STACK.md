@@ -1,185 +1,202 @@
-# Stack Research — v1.4 Mobile Voice Additions
+# Stack Research
 
-**Domain:** Native mobile voice (LiveKit transport + iOS + Android + web fallback)
-**Researched:** 2026-04-28
-**Confidence:** HIGH (LiveKit Python/JS confirmed via PyPI/npm; iOS/Android versions confirmed via release pages; integration pattern confirmed via official docs)
-
-> This document covers ONLY the net-new stack additions for v1.4 Mobile Voice.
-> The existing backend stack (FastAPI, PostgreSQL, Redis, Deepgram, Cartesia, LangGraph, mem0, etc.)
-> is validated and documented in prior milestones — do not re-add those packages.
+**Domain:** Voice-first AI personal assistant (backend-first)
+**Researched:** 2026-04-05
+**Confidence:** MEDIUM-HIGH (core stack HIGH; memory/scheduling MEDIUM)
 
 ---
 
-## Net-New Stack Additions
+## Recommended Stack
 
-### Python Backend Additions
+### Core Technologies
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| livekit-agents | 1.5.6 | LiveKit Agents framework — runs agent process that joins rooms, orchestrates STT→LLM→TTS pipeline | Only official Python framework for LiveKit Agents; replaces custom barge-in/STT/TTS coordination code |
-| livekit-plugins-langchain | 1.5.6 | `LLMAdapter` wraps compiled LangGraph StateGraph as the LLM backend inside an AgentSession | Direct bridge from existing LangGraph orchestrator to LiveKit voice pipeline; no rewrite needed |
-| livekit-plugins-deepgram | 1.4.2 | Routes Deepgram Nova-3 as the STT provider inside LiveKit Agents | Reuses existing Deepgram account/keys; Nova-3 already validated in v1.0–v1.3 |
-| livekit-plugins-cartesia | 1.4.3 | Routes Cartesia Sonic-3 as the TTS provider inside LiveKit Agents | Reuses existing Cartesia account/keys; Sonic-3 already validated |
-| livekit-api | 1.1.0 | Token server: generates signed JWT access tokens for client SDK room joins | Required for all client connections; FastAPI exposes `POST /livekit/token` endpoint using this library |
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| Python | 3.11+ | Primary language | Async-native, dominates AI/ML ecosystem, all relevant SDKs are Python-first. 3.11+ required for modern typing. |
+| FastAPI | 0.115+ | HTTP API + WebSocket server | Async-first, native Pydantic v2, handles 3000+ req/s, excellent for streaming voice audio. Standard for Python AI backends in 2025. |
+| Pydantic | 2.x | Data validation & settings | v2 is 50x faster than v1; FastAPI requires it; models every request/response and settings boundary. |
+| PostgreSQL | 15+ | Primary persistent store | Supports pgvector extension for semantic memory, JSONB for flexible profile storage, mature, self-hostable. |
+| pgvector | 0.7+ | Vector similarity search | Turns Postgres into a memory retrieval store — no separate vector DB needed for M1 scale. |
+| Redis | 7.x | Briefing cache + session state | In-memory TTL cache for precomputed briefings; semantic audio cache (AUDIO_CACHE_TTL=86400). Sub-millisecond reads. |
+| SQLAlchemy | 2.0.x | Async ORM | 2.0 rewrites async properly — use `create_async_engine` + `asyncpg` driver. Only choice for async Postgres in Python. |
+| Alembic | 1.13+ | Database migrations | Pairs with SQLAlchemy 2.0; async migration support. Manages schema evolution safely. |
+| asyncpg | 0.29+ | PostgreSQL async driver | Fastest Python Postgres driver; required backend for SQLAlchemy async engine. |
 
-### iOS Client (Swift)
+### STT — Speech to Text
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| LiveKit Swift SDK | 2.13.0 (April 2026) | WebRTC transport, AVAudioEngine management, AEC, VAD, barge-in | Official SDK; manages AVAudioSession automatically; built-in Voice Processing I/O for hardware AEC; minimum iOS 14 |
-| Swift Package Manager | — | Dependency management | SPM is the only distribution channel; no CocoaPods alternative needed |
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| Deepgram Nova-3 | API (current) | Real-time STT | Sub-300ms streaming latency, $0.0077/min, best real-time latency of any hosted STT. $200 free credits for new accounts. |
+| Deepgram Python SDK | 3.x | SDK | Official, maintained, WebSocket streaming built-in. |
 
-### Android Client (Kotlin)
+**Rationale:** Deepgram Nova-3 consistently benchmarks fastest for conversational STT (real-time factor 0.2–0.3x vs Whisper's 0.5x+). OpenAI Whisper has no native real-time streaming — requires custom chunking or the Realtime API which bundles LLM (not desired here). AssemblyAI Universal-2 is competitive but priced higher for streaming.
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| livekit-android | 2.24.1 | WebRTC transport, audio capture, WebRTC AEC3, barge-in | Official SDK; wraps WebRTC AEC3 (software); hardware AEC should be disabled (see Pitfalls) |
-| livekit-android-camerax | 2.24.1 | Optional video track support (audio-only for v1.4 — include for forward compatibility) | Same version as core; needed if video briefing summaries are added in v2.0 |
+### TTS — Text to Speech
 
-### Web Frontend (Desktop Fallback)
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| Cartesia Sonic-3 | API (current) | Real-time TTS streaming | 40–90ms TTFB — industry-leading latency. WebSocket streaming. 73% cheaper than ElevenLabs. Built for voice agents. |
+| cartesia | 2.x (Python SDK) | SDK | Official, WebSocket streaming, multi-concurrent streams on single socket. |
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| livekit-client | 2.18.1 (npm) | Browser WebRTC transport connecting to LiveKit room | Official JS client SDK; web fallback for users without mobile app |
-| @livekit/components-react | latest | React components (VoiceActivityIndicator, ControlBar) | Optional but provides speech visualizer out of the box; reduces UI build time for fallback |
-| @livekit/components-styles | latest | CSS for LiveKit React components | Companion to components-react |
+**Rationale:** For a briefing assistant where the precomputed audio is cached, raw latency matters less — but for interruption/follow-up responses, TTFB is critical. Cartesia Sonic-3 is the fastest at 40–90ms TTFB, cheaper than ElevenLabs, and purpose-built for real-time agents. ElevenLabs is reserved for M2+ if voice cloning or emotional expressiveness becomes a product requirement.
 
-### Infrastructure Addition
+### LLM Orchestration
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| livekit/livekit-server (Docker) | latest | WebRTC signalling + TURN server; mediates audio transport between clients and the agent process | Self-hostable (Apache 2.0); adds to existing docker-compose stack; alternative is LiveKit Cloud but self-hosted keeps data on-prem and cost predictable |
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| LangGraph | 0.2+ | Agent orchestration | Stateful graph execution with human-in-the-loop interrupts (required for M1 approval flow). Better than LangChain for cyclic agent workflows. |
+| OpenAI Python SDK | 1.x | LLM API access | Direct SDK for GPT-4.1 and GPT-4.1 mini; streaming responses. |
+| GPT-4.1 | API (current) | Briefing generation + reasoning | 1M token context, better instruction following than GPT-4o, $2/M input tokens. Ideal for multi-email/calendar summarisation. |
+| GPT-4.1 mini | API (current) | Quick responses + follow-ups | $0.40/M input tokens, low latency, good instruction following. Use for conversational follow-ups after briefing. |
 
----
+**Rationale:** LangGraph wins over raw LangChain for this use case because the approval flow requires stateful human-in-the-loop interrupts — LangGraph has this built-in. GPT-4.1 (not GPT-4o) is the correct primary model: it has 8x the context of GPT-4o, better instruction following for structured briefings, and competitive pricing. Multi-model: GPT-4.1 for briefing generation, GPT-4.1 mini for real-time follow-up responses.
 
-## Architecture Integration Points
+### Memory & Personalisation
 
-### How LiveKit Agents Connects to Existing LangGraph
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| mem0 | 0.1+ (mem0ai PyPI) | User memory layer | Extracts facts from interactions, stores in pgvector, retrieves at query time. ~50K GitHub stars. Works with LangGraph and OpenAI. |
+| pgvector (via SQLAlchemy) | — | Semantic memory retrieval | Embeddings stored in same Postgres instance — no separate Chroma/Pinecone. Keeps architecture simple for M1. |
 
-The existing LangGraph orchestrator (in `src/daily/orchestrator/`) becomes the LLM backend inside LiveKit's `AgentSession` via `langchain.LLMAdapter`. The adapter:
+**Rationale:** mem0 wraps the extract-embed-retrieve pattern so you don't build it from scratch. It supports pgvector as its vector backend, meaning one Postgres instance handles both structured data and semantic memory. This satisfies the "local-first" memory constraint from PROJECT.md.
 
-1. Takes a compiled `StateGraph` instance
-2. Converts LiveKit `ChatContext` → LangChain `HumanMessage`/`SystemMessage`/`AIMessage`
-3. Streams tokens back to LiveKit's TTS pipeline
+### Integrations
 
-**The entire `src/daily/voice/` module (`stt.py`, `tts.py`, `barge_in.py`, `loop.py`) is superseded by LiveKit Agents.** These files can be removed after v1.4 stabilises.
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| google-api-python-client | 2.x | Gmail + Google Calendar API | Official Google client. Required since March 2025 when Google mandated OAuth for all third-party Gmail/Calendar access. |
+| google-auth-oauthlib | 1.x | OAuth 2.0 flow for Google | Handles token refresh, scope incrementalism, secure storage. |
+| slack-sdk | 3.x | Slack messaging ingestion | Official Slack Python SDK. WebSocket for real-time events, REST for history ingestion. |
+| msgraph-sdk | 1.x | Microsoft Graph (Outlook/Teams) | Official Microsoft Graph Python SDK. Replaces older MSAL-only patterns. Covers Outlook mail + calendar. |
+| msal | 1.x | Microsoft OAuth 2.0 | Microsoft Authentication Library — token acquisition for Graph API scopes. |
+| authlib | 1.x | OAuth token storage + encryption | Replaces python-jose for token handling (python-jose is nearly unmaintained as of 2025). Handles JWT + AES-256 token encryption at rest. |
 
-**What remains untouched:** All integrations (`gmail.py`, `gcal.py`, `outlook.py`, `slack.py`), action engine, briefing pipeline, memory layer, APScheduler jobs, and PostgreSQL/Redis infrastructure.
+**Rationale:** Google's March 2025 mandate means OAuth is now non-negotiable for Gmail/Calendar. Microsoft Graph SDK (not just MSAL) provides cleaner Python bindings than raw requests. authlib is the actively maintained replacement for python-jose — the FastAPI community has flagged python-jose as near-abandoned in 2025 (FastAPI discussion #9587).
 
-### Token Endpoint (New FastAPI Route)
+### Scheduling (Briefing Pipeline)
 
-FastAPI gets one new endpoint:
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| APScheduler | 4.x (AsyncIOScheduler) | Cron-scheduled briefing precompute | In-process async scheduler; integrates with FastAPI's asyncio loop. No broker dependency. Right scale for M1 single-process deployment. |
 
-```
-POST /livekit/token
-  Body: { room_name: str, participant_name: str }
-  Returns: { token: str, ws_url: str }
-```
+**Rationale:** Celery is overkill for M1 — it requires a broker (Redis or RabbitMQ) and worker processes. APScheduler's `AsyncIOScheduler` runs inside FastAPI's event loop and handles the nightly briefing cron and token-refresh jobs without external dependencies. Migrate to Celery in M2 only if multi-worker horizontal scaling is needed.
 
-Uses `livekit-api`'s `AccessToken` class with `LIVEKIT_API_KEY` + `LIVEKIT_API_SECRET` env vars. Clients present this token to the LiveKit server to join a room. This keeps credentials server-side — consistent with existing SEC-01 constraint.
+### Security
 
-### Agent Process Deployment
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| cryptography | 42+ | AES-256-GCM encryption | Industry standard for Python crypto. Encrypt OAuth tokens at rest before writing to DB. |
+| passlib[bcrypt] | 1.7+ | Password hashing (if local auth needed) | Standard bcrypt wrapper. |
+| python-dotenv | 1.x | Secrets loading from .env | Keep credentials out of code; load at startup. |
 
-The LiveKit agent process is a separate Python process registered with the LiveKit server. It does NOT run inside FastAPI — it runs alongside it and communicates with the LiveKit server over WebSocket. In docker-compose:
+### Development Tools
 
-- `livekit-server` service — WebRTC signalling
-- `livekit-agent` service — the new agent process (runs `livekit-agents` entrypoint, connects to livekit-server, uses existing LangGraph)
-- `api` service — existing FastAPI (adds `/livekit/token` endpoint)
-
-### Audio Flow with Mobile (Resolves AEC Problem)
-
-```
-Mobile mic → OS hardware AEC → WebRTC encoded audio → LiveKit server → Agent process
-Agent process → Deepgram STT → LangGraph → Cartesia TTS → WebRTC audio → LiveKit server → Mobile speaker
-```
-
-The OS hardware AEC (AVAudioEngine/Voice Processing IO on iOS, WebRTC AEC3 on Android) runs on the device before audio is encoded and transmitted. The Python backend never touches raw audio — it only receives transcripts from Deepgram and sends TTS bytes to Cartesia. This is why mobile solves the AEC problem that `barge_in.py` could not.
+| Tool | Purpose | Notes |
+|------|---------|-------|
+| uv | Package/venv management | Replaces pip + virtualenv; 10–100x faster. Standard in 2025 Python projects. |
+| pytest + pytest-asyncio | Async test suite | Required for testing FastAPI async endpoints and pipeline stages. |
+| httpx | Async HTTP client (tests + integration calls) | Drop-in async requests replacement; used by FastAPI's TestClient. |
+| docker compose | Local dev orchestration | Spin up Postgres + Redis locally without cloud dependency. |
+| Alembic | Migration management | Already listed above — mention here as the dev workflow tool. |
 
 ---
 
 ## Installation
 
 ```bash
-# Python backend additions (add to existing requirements or pyproject.toml)
-uv add livekit-agents==1.5.6
-uv add livekit-plugins-langchain==1.5.6
-uv add livekit-plugins-deepgram==1.4.2
-uv add livekit-plugins-cartesia==1.4.3
-uv add livekit-api==1.1.0
+# Core runtime
+uv add fastapi uvicorn[standard] pydantic pydantic-settings
 
-# Web frontend (new package.json in web/ or apps/web/)
-npm install livekit-client@2.18.1
-npm install @livekit/components-react @livekit/components-styles
+# Database
+uv add sqlalchemy asyncpg alembic psycopg2-binary
+
+# Vector / memory
+uv add pgvector mem0ai
+
+# Cache
+uv add redis
+
+# STT
+uv add deepgram-sdk
+
+# TTS
+uv add cartesia
+
+# LLM / orchestration
+uv add langchain-core langgraph openai
+
+# Integrations — Google
+uv add google-api-python-client google-auth-oauthlib google-auth-httplib2
+
+# Integrations — Slack
+uv add slack-sdk
+
+# Integrations — Microsoft
+uv add msgraph-sdk msal
+
+# Security
+uv add authlib cryptography passlib[bcrypt] python-dotenv
+
+# Scheduler
+uv add apscheduler
+
+# Dev dependencies
+uv add --dev pytest pytest-asyncio httpx ruff
 ```
-
-**iOS (Xcode > Project Settings > Package Dependencies):**
-```
-https://github.com/livekit/client-sdk-swift  — version 2.13.0 or .upToNextMajor(from: "2.13.0")
-```
-
-**Android (build.gradle):**
-```gradle
-implementation "io.livekit:livekit-android:2.24.1"
-implementation "io.livekit:livekit-android-camerax:2.24.1"  // optional, forward compat
-```
-
-**docker-compose addition:**
-```yaml
-livekit-server:
-  image: livekit/livekit-server:latest
-  command: --config /etc/livekit.yaml
-  network_mode: host  # required for WebRTC UDP
-  volumes:
-    - ./livekit.yaml:/etc/livekit.yaml
-
-livekit-agent:
-  build: .
-  command: python -m daily.voice.agent start  # new entrypoint
-  depends_on: [livekit-server, postgres, redis]
-  environment:
-    - LIVEKIT_URL=ws://livekit-server:7880
-    - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
-    - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
-```
-
----
-
-## New Environment Variables Required
-
-| Variable | Purpose | Where Set |
-|----------|---------|-----------|
-| `LIVEKIT_URL` | WebSocket URL of LiveKit server (`ws://host:7880` or `wss://` in prod) | Agent process + API token endpoint |
-| `LIVEKIT_API_KEY` | LiveKit server API key (generated on first run) | Agent process + API token endpoint |
-| `LIVEKIT_API_SECRET` | LiveKit server API secret | Agent process + API token endpoint |
-
-Add to `.env` alongside existing `OPENAI_API_KEY`, `DEEPGRAM_API_KEY`, `CARTESIA_API_KEY`.
 
 ---
 
 ## Alternatives Considered
 
-| Recommended | Alternative | Why Not |
-|-------------|-------------|---------|
-| livekit-agents (self-hosted) | LiveKit Cloud | Self-hosted keeps audio data on-prem; predictable cost; project already runs on VPS with docker-compose |
-| livekit-plugins-langchain LLMAdapter | Rewrite orchestrator as native LiveKit Agent | LLMAdapter wraps existing compiled StateGraph directly — no rewrite, no regression risk to approved action flows |
-| livekit-plugins-deepgram | livekit-plugins-openai STT | We already have Deepgram API key and Nova-3 is validated; no reason to switch STT vendors at this point |
-| livekit-plugins-cartesia | livekit-plugins-elevenlabs | Cartesia Sonic-3 validated; 40–90ms TTFB; no reason to switch |
-| Native Swift (iOS) | React Native + @livekit/react-native | Voice quality is the core differentiator; cross-platform adds audio abstraction layer; AVAudioEngine Voice Processing IO requires native access |
-| Native Kotlin (Android) | React Native + @livekit/react-native | Same rationale; WebRTC AEC3 configuration (disabling hardware AEC on fragmented Android devices) requires native SDK access |
-| livekit/livekit-server Docker | LiveKit Cloud | Cost control and data sovereignty; no audio leaves the VPS |
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| Deepgram Nova-3 | AssemblyAI Universal-2 | If you need automatic speaker diarisation or chapter detection out of the box |
+| Deepgram Nova-3 | OpenAI Realtime API | If you want STT + LLM bundled in one hop (but you lose model control — LLM is locked to GPT-4o) |
+| Cartesia Sonic-3 | ElevenLabs Flash 2.5 | If voice cloning from the user's own voice becomes a product requirement (M2+) |
+| Cartesia Sonic-3 | OpenAI TTS-1 | If you want a single vendor (OpenAI) for simplicity — but TTS-1 has 200ms TTFB vs Cartesia's 40ms |
+| LangGraph | Custom state machine | If LangGraph's abstraction cost (debugging multi-layer indirection) becomes a bottleneck in M2+ |
+| GPT-4.1 | Claude 3.5 Sonnet | If instruction-following on very long structured outputs degrades — Anthropic excels at structured output |
+| GPT-4.1 mini | Gemini 2.5 Flash-Lite | If you need sub-100ms LLM TTFB for real-time interrupts — Flash-Lite is faster than GPT-4.1 mini |
+| PostgreSQL + pgvector | Pinecone / Weaviate | Only if vector queries exceed ~1M embeddings and Postgres query performance degrades |
+| APScheduler | Celery Beat | If M2 requires multiple workers, distributed task queuing, or retry-with-backoff job pipelines |
+| mem0 | Custom vector memory | If you need tighter control over the extraction prompts or memory graph structure (M2 consideration) |
+| authlib | python-jose | Do not use python-jose — near-abandoned in 2025, flagged by FastAPI maintainers |
 
 ---
 
-## What NOT to Add
+## What NOT to Use
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| OpenAI Realtime API | Superseded by LiveKit mobile path; locks LLM to OpenAI for voice; voice-strategy-decision.md documents this as the "former" plan | LiveKit Agents + livekit-plugins-langchain |
-| `livekit-plugins-openai` for STT | Bundles STT into OpenAI — breaks independent Deepgram usage, adds cost per voice input | livekit-plugins-deepgram |
-| Flutter / React Native for mobile clients | Cannot access AVAudioEngine Voice Processing IO or configure Android WebRTC AEC3 at the required level; audio abstraction is incompatible with voice-first quality bar | Native Swift (iOS), Native Kotlin (Android) |
-| ElevenLabs Conversational AI platform | Managed platform that replaces your orchestrator — incompatible with custom LangGraph approval-gated action flow; $0.08/min adds up fast | LiveKit Agents (self-hosted) |
-| Additional vector DB (Pinecone, Weaviate) | pgvector on existing Postgres handles M1 scale; no audio embeddings needed in v1.4 | pgvector (already deployed) |
-| LCEL chains via livekit-plugins-langchain | LLMAdapter only supports compiled `StateGraph` — LCEL chains (`prompt | llm`) are explicitly NOT supported | Pass a compiled `StateGraph` to `LLMAdapter` |
+| python-jose | Near-abandoned as of 2025 (no active maintenance, flagged in FastAPI's own issue tracker #9587). Security library requiring active maintenance. | authlib |
+| OpenAI Realtime API (for STT) | Bundles STT + LLM in one pipeline — removes ability to swap models, adds LLM cost to every voice input, breaks the orchestrator-controls-execution constraint in PROJECT.md | Deepgram Nova-3 (STT) + OpenAI (LLM) separately |
+| LangChain (chains, not LangGraph) | Sequential chain API doesn't support human-in-the-loop interrupts or state persistence — needed for M1 approval flow | LangGraph (which supersedes LangChain chains for agent use cases) |
+| On-device STT (Whisper.cpp) | High setup complexity, no streaming support out of the box, CPU latency unacceptable for voice loop. Explicitly out of scope per PROJECT.md. | Deepgram Nova-3 |
+| Celery for M1 | Requires Redis broker + separate worker processes — infrastructure overhead before any value is proven | APScheduler (AsyncIOScheduler) |
+| Chroma / Pinecone as separate vector DB | Adds an external service dependency. pgvector on the existing Postgres instance handles M1 scale with zero additional infra. | pgvector extension on PostgreSQL |
+| Flask | Synchronous-first; requires WSGI workarounds for async voice streaming. No native WebSocket or streaming response. | FastAPI |
+
+---
+
+## Stack Patterns by Variant
+
+**For the nightly briefing precompute pipeline (precomputed cache strategy):**
+- APScheduler cron at 05:30 local time triggers the pipeline
+- Pipeline: Google/Microsoft/Slack ingestion → LLM summarisation (GPT-4.1) → TTS render (Cartesia) → write audio bytes + transcript to Redis with TTL=24h
+- On wake, briefing plays from cache — zero LLM or TTS latency
+
+**For real-time follow-up conversation after briefing:**
+- Deepgram Nova-3 WebSocket STT → LangGraph agent → GPT-4.1 mini (fast, cheap) → Cartesia Sonic-3 WebSocket TTS
+- Target: sub-500ms end-to-end for follow-up turns
+
+**For action execution (draft email, schedule event):**
+- LangGraph human-in-the-loop interrupt holds execution pending user approval
+- User approval triggers integration module (Google/Microsoft APIs) — LLM never touches credentials
+- All actions logged to Postgres action_log table with timestamp, type, approval_status
+
+**For OAuth token storage:**
+- Tokens encrypted with AES-256-GCM (cryptography library) before writing to Postgres
+- Decrypted in-memory only at API call time — never logged, never passed to LLM layer
 
 ---
 
@@ -187,60 +204,31 @@ Add to `.env` alongside existing `OPENAI_API_KEY`, `DEEPGRAM_API_KEY`, `CARTESIA
 
 | Package | Compatible With | Notes |
 |---------|-----------------|-------|
-| livekit-agents 1.5.6 | Python 3.10–3.14 | Project uses 3.11+ — compatible |
-| livekit-plugins-langchain 1.5.6 | livekit-agents 1.5.x, Python ≥3.10 | Pin minor versions to match agents version |
-| livekit-plugins-deepgram 1.4.2 | livekit-agents 1.5.x | Verify with `pip install livekit-agents[deepgram]` |
-| livekit-plugins-cartesia 1.4.3 | livekit-agents 1.5.x | Verify with `pip install livekit-agents[cartesia]` |
-| livekit-api 1.1.0 | Python ≥3.9 | Independent of livekit-agents; used only for token generation |
-| LiveKit Swift SDK 2.13.0 | iOS 14+ | Swift 5.9+ assumed by SPM package; Xcode 15+ |
-| livekit-android 2.24.1 | Android API level 21+ (Android 5.0) | Kotlin 1.8+ recommended; Gradle 8.x |
-| livekit-client 2.18.1 (JS) | Modern browsers (Chrome 80+, Firefox 78+, Safari 14+) | Check `isBrowserSupported()` at runtime |
-| livekit-plugins-langchain LLMAdapter | LangGraph compiled StateGraph only | Does NOT support LCEL chains or bare chat models |
-
----
-
-## iOS AEC Detail
-
-LiveKit Swift SDK manages `AVAudioSession` automatically. When the local mic track is published, the session switches to `.playAndRecord` category. Voice Processing I/O is enabled by default — this is the AVAudioEngine hardware AEC path. Do not disable it (`isVoiceProcessingEnabled = true` is the default). For CallKit flows (future v2.0 phone integration), use `setEngineAvailability(.enabled)` to defer audio device activation until the call is accepted.
-
-## Android AEC Detail
-
-LiveKit Android wraps WebRTC's audio stack. Hardware AEC on Android is unreliable across the device ecosystem (fragmented OEM implementations). Disable hardware AEC and use WebRTC AEC3 (software) instead via `javaAudioDeviceModuleCustomizer`:
-
-```kotlin
-// In LiveKit room setup
-val options = RoomOptions(
-    audioTrackCaptureDefaults = LocalAudioTrackOptions(
-        noiseSuppression = true,
-        echoCancellation = true,  // WebRTC AEC3
-        autoGainControl = true
-    )
-)
-```
-
-If echo persists on a specific device, disable hardware AEC explicitly:
-```kotlin
-setUseHardwareAcousticEchoCanceler(false)
-```
+| SQLAlchemy 2.0.x | asyncpg 0.29+ | SQLAlchemy 2.0 async engine requires asyncpg as the driver backend |
+| FastAPI 0.115+ | Pydantic 2.x | FastAPI 0.100+ migrated to Pydantic v2 — do not pin Pydantic 1.x |
+| LangGraph 0.2+ | LangChain-core (not langchain full package) | Only need langchain-core for LangGraph; avoid installing full langchain to reduce dep conflicts |
+| APScheduler 4.x | asyncio / FastAPI | APScheduler 4.x (pre-release as of 2025) has breaking changes from 3.x — verify 4.x stability or pin 3.10.x AsyncIOScheduler |
+| mem0ai | OpenAI SDK 1.x, pgvector | mem0 uses OpenAI embeddings by default — pin openai>=1.0.0 |
+| Python 3.11+ | FastAPI 0.115+ | FastAPI dropped Python 3.9 support in Feb 2026 (0.130.0); use 3.11 minimum today |
 
 ---
 
 ## Sources
 
-- [livekit-agents PyPI](https://pypi.org/project/livekit-agents/) — v1.5.6, released April 22, 2026 — HIGH confidence
-- [livekit-plugins-langchain PyPI](https://pypi.org/project/livekit-plugins-langchain/) — v1.5.6, April 22, 2026 — HIGH confidence
-- [livekit-plugins-deepgram PyPI](https://pypi.org/project/livekit-plugins-deepgram/) — v1.4.2, March 23, 2026 — HIGH confidence
-- [livekit-plugins-cartesia PyPI](https://pypi.org/project/livekit-plugins-cartesia/) — v1.4.3, March 23, 2026 — HIGH confidence
-- [livekit-api PyPI](https://pypi.org/project/livekit-api/) — v1.1.0, December 2025 — HIGH confidence
-- [LiveKit LangChain integration guide](https://docs.livekit.io/agents/models/llm/plugins/langchain/) — LLMAdapter pattern, limitations — HIGH confidence (official docs)
-- [LiveKit Swift SDK releases](https://github.com/livekit/client-sdk-swift/releases) — v2.13.0, April 10, 2026 — HIGH confidence
-- [livekit-client npm](https://www.npmjs.com/package/livekit-client) — v2.18.1, April 2026 — HIGH confidence
-- livekit-android search (MVN) — v2.24.1, last updated April 26, 2026 — MEDIUM confidence (via search result summary; could not fetch MVN directly due to 403)
-- [LiveKit Android SDK GitHub](https://github.com/livekit/client-sdk-android) — AEC configuration, Gradle setup — MEDIUM confidence
-- [LiveKit noise & echo cancellation docs](https://docs.livekit.io/transport/media/noise-cancellation/) — AEC capabilities — HIGH confidence
-- [LiveKit self-hosting docs](https://docs.livekit.io/deploy/custom/deployments/) — docker-compose, port requirements — HIGH confidence
-- [Cartesia + LiveKit voice agent example](https://github.com/cartesia-ai/cartesia-livekit-voice-agent) — confirmed Deepgram + Cartesia + LiveKit stack pattern — MEDIUM confidence
+- AssemblyAI — [The voice AI stack for building agents (2026)](https://www.assemblyai.com/blog/the-voice-ai-stack-for-building-agents) — HIGH confidence (vendor docs, current)
+- Deepgram — [Nova-3 pricing and Python SDK](https://deepgram.com/pricing) — HIGH confidence (official pricing page)
+- Cartesia — [Sonic-3 docs](https://docs.cartesia.ai/build-with-cartesia/tts-models/latest) — HIGH confidence (official docs)
+- Cartesia — [Python SDK v2](https://cartesia.ai/blog/python-sdk) — HIGH confidence
+- OpenAI — [GPT-4.1 model comparison](https://platform.openai.com/docs/models/compare) — HIGH confidence (official)
+- LangChain — [LangGraph overview](https://www.langchain.com/langgraph) — HIGH confidence (official)
+- FastAPI — [FastAPI discussion #9587 on python-jose](https://github.com/fastapi/fastapi/discussions/9587) — HIGH confidence (maintainer-flagged)
+- Google — [OAuth 2.0 for Google APIs](https://developers.google.com/identity/protocols/oauth2) — HIGH confidence (official, March 2025 mandate confirmed)
+- mem0 — [GitHub repo ~50K stars](https://github.com/mem0ai/mem0) — MEDIUM confidence (community adoption signal)
+- ZenML — [LangGraph alternatives + criticism](https://www.zenml.io/blog/langgraph-alternatives) — MEDIUM confidence (engineering blog)
+- Layercode — [TTS Voice AI Model Guide 2025](https://layercode.com/blog/tts-voice-ai-model-guide) — MEDIUM confidence (vendor-adjacent)
+- Deepgram — [STT API comparison 2025](https://deepgram.com/learn/best-speech-to-text-apis-2026) — MEDIUM confidence (vendor-authored comparison)
 
 ---
-*Stack research for: dAIly v1.4 Mobile Voice (net-new additions only)*
-*Researched: 2026-04-28*
+
+*Stack research for: voice-first AI personal assistant (dAIly)*
+*Researched: 2026-04-05*

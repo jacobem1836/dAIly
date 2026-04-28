@@ -76,9 +76,9 @@
 
 ---
 
-## v1.4 Mobile Voice (In Progress)
+## v2.0 Mobile Voice (Planned)
 
-**Phases:** 18–22 | **Estimated timeline:** 4–6 weeks
+**Phases:** 18–21 | **Estimated timeline:** 4–6 weeks
 
 **Goal:** Move voice I/O to native mobile clients with OS-level hardware echo cancellation. Python backend becomes orchestration-only. LiveKit handles WebRTC transport, ML-based barge-in, and turn detection — eliminating `barge_in.py`, `stt.py`, `tts.py`, and `loop.py` from the critical path.
 
@@ -104,25 +104,24 @@ Mobile client (iOS/Android)
 
 **Target:** Sub-800ms conversational latency on mobile; barge-in reliable without headphones.
 
-**Phases:**
-- Phase 18: LiveKit Infrastructure + Token Endpoint (INFRA-01, INFRA-02)
-- Phase 19: LiveKit Agent Worker (INFRA-03, INFRA-04, INFRA-05, INFRA-06)
-- Phase 20: iOS Native Client (IOS-01, IOS-02, IOS-03, IOS-04, IOS-05)
-- Phase 21: Android Native Client (AND-01, AND-02, AND-03, AND-04, AND-05)
-- Phase 22: Desktop Web Fallback + Push Notifications (WEB-01, PUSH-01)
+**Planned phases:**
+- Phase 18: LiveKit Backend Integration
+- Phase 19: Native iOS App
+- Phase 20: Native Android App
+- Phase 21: Desktop Web Fallback
 
 ---
 
-## v2.0 Ecosystem Expansion (Planned)
+## v2.1 Ecosystem Expansion (Planned)
 
-**Phases:** 23–26 | **Estimated timeline:** 6–8 weeks
+**Phases:** 22–25 | **Estimated timeline:** 6–8 weeks
 
 **Goal:** Extend the briefing's data surface beyond email/calendar/Slack. Each phase adds a thematic pack of integrations with briefing synthesis and action support.
 
 **Planned phases:**
-- Phase 23: Developer Pack (GitHub, Linear, Hacker News)
-- Phase 24: Knowledge Pack (Notion, Google Maps Routes)
-- Phase 25: Operator Pack (WhatsApp Business, PagerDuty, Vercel)
-- Phase 26: Finance Pack (Stripe, Brex/Mercury)
+- Phase 22: Developer Pack (GitHub, Linear, Hacker News)
+- Phase 23: Knowledge Pack (Notion, Google Maps Routes)
+- Phase 24: Operator Pack (WhatsApp Business, PagerDuty, Vercel)
+- Phase 25: Finance Pack (Stripe, Brex/Mercury)
 
 See `integrations-roadmap.md` for full integration analysis and prioritisation.
