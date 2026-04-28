@@ -21,6 +21,7 @@ from typing import Any
 import uvicorn
 from fastapi import FastAPI, Request
 from google_auth_oauthlib.flow import Flow
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from daily.db.models import IntegrationToken
@@ -171,5 +172,11 @@ async def store_google_tokens(
     )
 
     async with session_factory() as session:
+        await session.execute(
+            delete(IntegrationToken).where(
+                IntegrationToken.user_id == user_id,
+                IntegrationToken.provider == "google",
+            )
+        )
         session.add(token_row)
         await session.commit()

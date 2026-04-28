@@ -11,6 +11,7 @@ Design decisions:
 - T-05-08: Echo suppression flag prevents self-triggering DoS from rapid speech_started
 """
 import asyncio
+from collections.abc import AsyncIterator
 
 from daily.voice.stt import STTPipeline
 from daily.voice.tts import TTSPipeline
@@ -60,19 +61,21 @@ class VoiceTurnManager:
     # ------------------------------------------------------------------
 
     async def _unmute_after_delay(self) -> None:
-        """Unmute the STT mic after a 500ms delay.
+        """Unmute the STT mic after a 150ms delay.
 
-        The delay matches the barge-in safety window: TTS audio takes ~200–400ms
-        to fully leave the speakers before Deepgram could mistakenly detect it as
-        speech. Waiting 500ms ensures any trailing echo has subsided so a genuine
-        user interrupt (barge-in) can still be detected.
+        The delay covers the initial TTS speaker-startup echo window — enough for
+        the sounddevice output buffer to start draining before Deepgram could
+        mistake early TTS audio as user speech. 150ms is sufficient for buffer
+        startup; the _on_speech_started_event mute-guard handles any residual echo
+        after unmute. A shorter window (was 500ms) means barge-in is detectable
+        much earlier in the TTS turn (Bug A fix).
 
         If cancelled before the delay elapses (e.g. TTS finished early and the
         finally block cancelled this task), unmute immediately so the mic is never
         left muted on any exit path.
         """
         try:
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.15)
             self._stt.muted = False
         except asyncio.CancelledError:
             # Cancelled because TTS finished early — ensure unmute regardless
@@ -95,6 +98,7 @@ class VoiceTurnManager:
         """
         # Capture TTS state at the moment speech started — UtteranceEnd will not
         # arrive for ~1000ms, by which time _tts_active may already be False.
+        print(f"[barge-in] SpeechStarted — tts_active={self._tts_active}")
         self._was_tts_active_at_speech_start = self._tts_active
         self._pending_barge_in_cancelled = False
         # Cancel any prior pending timer (defensive — should not happen in practice)
@@ -105,12 +109,36 @@ class VoiceTurnManager:
         )
 
     async def _commit_barge_in_after_window(self) -> None:
-        """Fire stop_event after a 600ms safety window, unless cancelled."""
+        """Fire stop_event after a 900ms safety window, unless cancelled.
+
+        900ms gives Deepgram enough time to return any transcript result —
+        interim or final — from real speech. Only fires if _stt._has_speech_transcript
+        is True, meaning Deepgram produced a recognisable word (ambient noise that
+        crosses the VAD threshold but produces no transcript leaves this flag False).
+
+        Using _has_speech_transcript (set on ANY non-empty transcript) rather than
+        _transcript_parts (set only on is_final=True) is critical: with endpointing=300ms,
+        final transcripts only arrive after 300ms of intra-utterance silence. Continuous
+        real speech has no such gaps, so _transcript_parts stays empty throughout the 900ms
+        window. Interim transcripts (is_final=False) arrive within ~200-400ms of onset even
+        for continuous speech, making _has_speech_transcript the correct gate.
+
+        Without this guard: any SpeechStarted from ambient noise fires stop_event
+        at 600ms — BEFORE UtteranceEnd (1000ms silence window) can arrive and let
+        filter_utterance() cancel the timer. This was Bug C: spurious barge-in from
+        room noise with no actual speech.
+        """
         try:
-            await asyncio.sleep(0.6)
+            await asyncio.sleep(0.9)
         except asyncio.CancelledError:
             return
-        if not self._pending_barge_in_cancelled:
+        print(f"[barge-in] timer fired: cancelled={self._pending_barge_in_cancelled} tts_active={self._tts_active} has_transcript={self._stt._has_speech_transcript}")
+        if (
+            not self._pending_barge_in_cancelled
+            and self._tts_active
+            and self._stt._has_speech_transcript
+        ):
+            print("[barge-in] FIRING stop_event")
             self._stop_event.set()
 
     # ------------------------------------------------------------------
@@ -167,6 +195,7 @@ class VoiceTurnManager:
         self._stt.muted = True  # Mute mic to prevent echo feedback loop
         self._unmute_task = asyncio.create_task(self._unmute_after_delay())
         self._stt._transcript_parts.clear()  # Discard any in-flight echo fragments
+        self._stt._has_speech_transcript = False  # Reset barge-in transcript signal
         interrupted = False
         try:
             self._tts_task = asyncio.create_task(
@@ -186,6 +215,64 @@ class VoiceTurnManager:
             self._unmute_task = None
             self._stt.muted = False  # Belt and braces: ensure unmuted on every exit
             self._stt._transcript_parts.clear()  # Discard any trailing echo
+            self._stt._has_speech_transcript = False  # Reset for next turn
+            self._was_tts_active_at_speech_start = False
+            self._stop_event.clear()
+            self._tts_task = None
+
+        return not interrupted
+
+    async def speak_streaming(self, token_stream: AsyncIterator[str]) -> bool:
+        """Play streaming LLM token deltas as TTS with barge-in support.
+
+        Wraps TTSPipeline.play_streaming_tokens() the same way speak() wraps
+        play_streaming() — sets _tts_active, mutes STT, clears stop_event, and
+        restores state in finally. Without this wrapper the streaming path has no
+        echo suppression and no _tts_active flag, causing spurious barge-in from
+        ambient noise or TTS bleed-through (Bug B).
+
+        Args:
+            token_stream: Async iterator of plain-text token delta strings from LLM.
+
+        Returns:
+            True if playback completed normally.
+            False if interrupted by barge-in (stop_event was set).
+        """
+        # Cancel any in-flight barge-in timer left from a previous turn
+        if self._barge_in_timer_task is not None and not self._barge_in_timer_task.done():
+            self._barge_in_timer_task.cancel()
+        self._barge_in_timer_task = None
+        self._pending_barge_in_cancelled = False
+        self._was_tts_active_at_speech_start = False
+
+        self._stop_event.clear()
+        self._tts_active = True
+        self._stt.muted = True  # Mute mic to prevent echo feedback loop
+        self._unmute_task = asyncio.create_task(self._unmute_after_delay())
+        self._stt._transcript_parts.clear()  # Discard any in-flight echo fragments
+        self._stt._has_speech_transcript = False  # Reset barge-in transcript signal
+        interrupted = False
+        try:
+            self._tts_task = asyncio.create_task(
+                self._tts.play_streaming_tokens(token_stream, self._stop_event)
+            )
+            await self._tts_task
+        except asyncio.CancelledError:
+            # speak_streaming itself was cancelled — cancel inner task too
+            if self._tts_task is not None and not self._tts_task.done():
+                self._tts_task.cancel()
+            interrupted = True
+        else:
+            if self._stop_event.is_set():
+                interrupted = True
+        finally:
+            self._tts_active = False
+            if self._unmute_task is not None and not self._unmute_task.done():
+                self._unmute_task.cancel()
+            self._unmute_task = None
+            self._stt.muted = False  # Belt and braces: ensure unmuted on every exit
+            self._stt._transcript_parts.clear()  # Discard any trailing echo
+            self._stt._has_speech_transcript = False  # Reset for next turn
             self._was_tts_active_at_speech_start = False
             self._stop_event.clear()
             self._tts_task = None

@@ -10,11 +10,14 @@ without waiting for the full LLM response — delivering the first spoken word
 noticeably sooner than the non-streaming path.
 """
 import asyncio
+import logging
 import re
 from collections.abc import AsyncIterator
 
 import sounddevice as sd
 from cartesia import AsyncCartesia
+
+logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------- #
 # Constants
@@ -190,17 +193,26 @@ class TTSPipeline:
                     samplerate=CARTESIA_SAMPLE_RATE,
                     channels=1,
                     dtype="float32",
+                    device=sd.default.device[1],  # explicit default output
                 )
+                chunk_count = 0
+                response_types: list[str] = []
                 try:
                     output_stream.start()
                     async for response in ctx.receive():
+                        response_types.append(response.type)
                         if response.type == "chunk" and response.audio:
                             output_stream.write(response.audio)
+                            chunk_count += 1
+                        elif response.type == "error":
+                            logger.error("TTS Cartesia error: %s", response)
                         if stop_event.is_set():
                             break  # Barge-in detected — finish current chunk, then stop (graceful fade-out)
                 finally:
                     output_stream.stop()
                     output_stream.close()
+                    if chunk_count == 0:
+                        logger.warning("TTS play_streaming: 0 audio chunks. response_types=%s", response_types)
 
     async def play_streaming_tokens(
         self,

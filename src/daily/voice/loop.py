@@ -252,9 +252,7 @@ async def run_voice_session(user_id: int = 1) -> None:
 
                         await asyncio.gather(
                             _produce(),
-                            turn_manager._tts.play_streaming_tokens(
-                                _tts_iter(), turn_manager._stop_event
-                            ),
+                            turn_manager.speak_streaming(_tts_iter()),
                         )
                         used_streaming = True
                         result = None  # Streaming path bypasses graph state for respond turns

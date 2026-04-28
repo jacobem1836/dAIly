@@ -91,9 +91,23 @@ async def _build_pipeline_kwargs(user_id: int, settings: Settings) -> dict:
         provider = token.provider  # "google", "microsoft", "slack"
 
         if provider == "google":
-            gmail = GmailAdapter(credentials=decrypted)
+            from google.oauth2.credentials import Credentials
+            decrypted_refresh = (
+                decrypt_token(token.encrypted_refresh_token, vault_key)
+                if token.encrypted_refresh_token
+                else None
+            )
+            google_creds = Credentials(
+                token=decrypted,
+                refresh_token=decrypted_refresh,
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id=settings.google_client_id,
+                client_secret=settings.google_client_secret,
+                scopes=token.scopes.split() if token.scopes else None,
+            )
+            gmail = GmailAdapter(credentials=google_creds)
             email_adapters.append(gmail)
-            cal = GoogleCalendarAdapter(credentials=decrypted)
+            cal = GoogleCalendarAdapter(credentials=google_creds)
             calendar_adapters.append(cal)
         elif provider == "microsoft":
             outlook = OutlookAdapter(credentials=decrypted)

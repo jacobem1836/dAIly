@@ -37,6 +37,7 @@ class GmailAdapter(EmailAdapter):
         Args:
             credentials: google.oauth2.credentials.Credentials (already decrypted).
         """
+        self._credentials = credentials
         self._service = build("gmail", "v1", credentials=credentials)
 
     async def list_emails(
@@ -133,8 +134,10 @@ class GmailAdapter(EmailAdapter):
         import base64
 
         def _fetch() -> str:
+            # Build a fresh service per thread to avoid httplib2 shared-connection races
+            svc = build("gmail", "v1", credentials=self._credentials)
             msg = (
-                self._service.users()
+                svc.users()
                 .messages()
                 .get(userId="me", id=message_id, format="full")
                 .execute()
@@ -188,8 +191,8 @@ class GoogleCalendarAdapter(CalendarAdapter):
                 self._service.events()
                 .list(
                     calendarId="primary",
-                    timeMin=since.isoformat() + "Z",
-                    timeMax=until.isoformat() + "Z",
+                    timeMin=since.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    timeMax=until.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                     singleEvents=True,
                     orderBy="startTime",
                 )

@@ -76,6 +76,7 @@ class STTPipeline:
         self._api_key = api_key
         self._on_speech_started = on_speech_started
         self._transcript_parts: list[str] = []
+        self._has_speech_transcript: bool = False  # True when any non-empty transcript (interim or final) arrives
         self.utterance_queue: asyncio.Queue[str] = asyncio.Queue()
         self.connected: asyncio.Event = asyncio.Event()
         self.muted: bool = False  # Set True during TTS to suppress echo feedback
@@ -118,6 +119,11 @@ class STTPipeline:
         if not text:
             return
 
+        # Mark that real speech transcript has arrived (interim or final).
+        # Used by barge-in timer to distinguish continuous speech (no finals yet)
+        # from ambient noise (VAD fires, but Deepgram produces no recognisable words).
+        self._has_speech_transcript = True
+
         if result.is_final:
             self._transcript_parts.append(text)
         else:
@@ -139,7 +145,13 @@ class STTPipeline:
         self.utterance_queue.put_nowait(joined)
 
     def _on_speech_started_event(self, _event: ListenV1SpeechStarted) -> None:
-        """Handle SpeechStarted — invoke barge-in callback if registered."""
+        """Handle SpeechStarted — invoke barge-in callback if registered.
+
+        Dropped when muted: stale events queued by Deepgram just before mute
+        takes effect would otherwise start the barge-in timer during TTS.
+        """
+        if self.muted:
+            return
         if self._on_speech_started is not None:
             self._on_speech_started()
 
@@ -229,6 +241,18 @@ class STTPipeline:
             # Start background listener task (emits EventType.MESSAGE for each frame)
             listen_task = asyncio.create_task(socket.start_listening())
 
+            # Periodic keepalive to prevent Deepgram 1011 timeout during long TTS silence
+            async def _keepalive_loop() -> None:
+                while not stop_event.is_set():
+                    await asyncio.sleep(8)
+                    if not stop_event.is_set():
+                        try:
+                            await socket.send_keep_alive()
+                        except Exception:
+                            break
+
+            keepalive_task = asyncio.create_task(_keepalive_loop())
+
             # Open mic input stream (sounddevice) and stream audio to Deepgram
             stream = sd.InputStream(
                 samplerate=_SAMPLE_RATE,
@@ -247,9 +271,22 @@ class STTPipeline:
                     except asyncio.TimeoutError:
                         # No audio in queue — check stop_event and loop
                         continue
+                    except Exception as send_err:
+                        # WebSocket closed unexpectedly — exit loop cleanly rather than
+                        # letting the exception propagate and kill the stt_task.
+                        logger.warning("STT send_media failed (WebSocket closed?): %s", send_err)
+                        break
+            keepalive_task.cancel()
+            try:
+                await keepalive_task
+            except asyncio.CancelledError:
+                pass
 
             # Stop Deepgram connection gracefully
-            await socket.send_close_stream()
+            try:
+                await socket.send_close_stream()
+            except Exception:
+                pass  # Already closed — ignore
             listen_task.cancel()
             try:
                 await listen_task

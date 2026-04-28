@@ -8,3 +8,20 @@ alembic/versions/__pycache__/
 dist/
 build/
 .DS_Store
+
+# Generated outputs
+graphify-out/
+
+# Brand assets (tracked separately)
+*.png
+*.pem
+
+# Root-level scratch files
+/*.md
+!/CLAUDE.md
+!/README.md
+
+# Marketing / landing (separate repo)
+landing/
+marketing/
+scripts/
