@@ -27,7 +27,8 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 | Milestone | Scope | Status |
 |-----------|-------|--------|
 | **v1.0 — Core Backend** | OAuth integrations, briefing pipeline, orchestrator, action layer, voice interface, preferences | ✅ Shipped 2026-04-14 |
-| **v1.1 — Intelligence Layer** | Adaptive prioritisation, deeper memory system, trusted actions, improved conversation flow | 🔄 In Progress |
+| **v1.1 — Intelligence Layer** | Adaptive prioritisation, deeper memory system, trusted actions, adaptive tone, tech debt fixes | 🔄 In Progress |
+| **v1.2 — Mobile Voice** | LiveKit Agents integration, native iOS (Swift) app, native Android (Kotlin) app, desktop web fallback | Planned |
 | **v2.0 — Ecosystem Expansion** | Travel, finance, health, smart home, document platforms, web dashboard | Planned |
 
 ## Requirements
@@ -74,16 +75,25 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 - [ ] **MEM-02**: User can edit or delete specific memory entries
 - [ ] **MEM-03**: User can disable learning or reset all memory
 - [ ] **ACT-07**: User can configure autonomy level (suggest-only / approve-per-action / trusted-auto)
-- [ ] **CONV-01**: Briefing supports natural mid-session interruption without breaking conversation state
-- [ ] **CONV-02**: Fluid switching between briefing, discussion, and action modes
+- ~~CONV-01~~: Moved to v1.2 — solved by LiveKit mobile path
+- ~~CONV-02~~: Moved to v1.2 — solved by LiveKit mobile path
 - [ ] **CONV-03**: Adaptive tone — system adjusts formality and verbosity based on context signals
 - [ ] **FIX-01**: `user_email=""` in scheduler — WEIGHT_DIRECT (10pts) path never fires; direct-to-user emails always scored as WEIGHT_CC (2pts)
 - [ ] **FIX-02**: Slack pagination single-page only — implement cursor-based pagination for multi-page workspaces
 - [ ] **FIX-03**: `message_id = last_content` stub in summarise_thread_node — real message ID extraction from briefing metadata
 
+### Planned (v1.2 targets)
+
+- [ ] **MOB-01**: Native iOS (Swift) client with LiveKit SDK, AVAudioEngine AEC
+- [ ] **MOB-02**: Native Android (Kotlin) client with LiveKit SDK, Oboe AEC
+- [ ] **MOB-03**: LiveKit Agents backend integration with livekit-plugins-langchain
+- [ ] **MOB-04**: Desktop web fallback via LiveKit web SDK
+- [ ] **MOB-05**: Client-direct STT/TTS (Deepgram + Cartesia via LiveKit plugins)
+- [ ] **CONV-01**: Natural mid-session interruption (via LiveKit ML barge-in) — moved from v1.1
+- [ ] **CONV-02**: Fluid mode switching (via LiveKit turn detection) — moved from v1.1
+
 ### Out of Scope
 
-- Mobile/iOS app — backend-first; UI comes in v2.0+
 - Web dashboard — deferred to v2.0 (DASH-01, DASH-02, DASH-03)
 - News integration — not in v1 integrations
 - Travel, finance, health, smart home — v2.0+
@@ -93,7 +103,7 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 
 ## Context
 
-**Current state (v1.0):** 7,049 Python LOC, FastAPI backend, PostgreSQL + pgvector + Redis, LangGraph orchestrator. Full voice pipeline operational. CLI-driven (`daily briefing`, `daily chat`, `daily voice`, `daily config`).
+**Current state (post-Phase 17):** 7,049+ Python LOC, FastAPI backend, PostgreSQL + pgvector + Redis, LangGraph orchestrator. Voice pipeline operational with 4-fix barge-in system (Bugs A-D resolved). CLI-driven (`daily briefing`, `daily chat`, `daily voice`, `daily config`). Mobile-first voice architecture decided — audio I/O moves to native iOS/Android clients via LiveKit; Python backend becomes orchestration-only.
 
 **Architecture:** `[Voice/UI] → [Orchestrator] → [Context Builder] → [LLM] → [Action Engine] → [Integrations]`
 
@@ -124,6 +134,9 @@ The briefing always delivers: every morning, the user gets a prioritised, conver
 | APScheduler 4.x in-process | No broker dependency for M1 single-process | ✓ Good — zero infra overhead; revisit if v1.1 requires distributed workers |
 | Cartesia Sonic-3 for TTS | 40–90ms TTFB, WebSocket streaming | ✓ Good — latency target met |
 | Deepgram Nova-3 for STT | Sub-300ms streaming, $0.0077/min | ✓ Good — real-time performance confirmed |
+| Native iOS + Android over Flutter/RN | Voice quality is core differentiator; no cross-platform abstraction on audio path | Pending |
+| LiveKit Agents for voice transport | ML-based barge-in, WebRTC AEC, mobile SDKs; self-hostable Apache 2.0 | Pending |
+| Mobile-first voice architecture | Echo cancellation is a device-layer problem; macOS Python DSP cannot solve it reliably | Pending |
 
 ## Evolution
 
@@ -143,4 +156,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-15 after v1.1 milestone start*
+*Last updated: 2026-04-27 after Phase 17 close and mobile strategy decision*
