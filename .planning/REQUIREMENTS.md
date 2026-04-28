@@ -73,30 +73,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | — | Pending |
-| INFRA-02 | — | Pending |
-| INFRA-03 | — | Pending |
-| INFRA-04 | — | Pending |
-| INFRA-05 | — | Pending |
-| INFRA-06 | — | Pending |
-| IOS-01 | — | Pending |
-| IOS-02 | — | Pending |
-| IOS-03 | — | Pending |
-| IOS-04 | — | Pending |
-| IOS-05 | — | Pending |
-| AND-01 | — | Pending |
-| AND-02 | — | Pending |
-| AND-03 | — | Pending |
-| AND-04 | — | Pending |
-| AND-05 | — | Pending |
-| WEB-01 | — | Pending |
-| PUSH-01 | — | Pending |
+| INFRA-01 | Phase 18 | Pending |
+| INFRA-02 | Phase 18 | Pending |
+| INFRA-03 | Phase 19 | Pending |
+| INFRA-04 | Phase 19 | Pending |
+| INFRA-05 | Phase 19 | Pending |
+| INFRA-06 | Phase 19 | Pending |
+| IOS-01 | Phase 20 | Pending |
+| IOS-02 | Phase 20 | Pending |
+| IOS-03 | Phase 20 | Pending |
+| IOS-04 | Phase 20 | Pending |
+| IOS-05 | Phase 20 | Pending |
+| AND-01 | Phase 21 | Pending |
+| AND-02 | Phase 21 | Pending |
+| AND-03 | Phase 21 | Pending |
+| AND-04 | Phase 21 | Pending |
+| AND-05 | Phase 21 | Pending |
+| WEB-01 | Phase 22 | Pending |
+| PUSH-01 | Phase 22 | Pending |
 
 **Coverage:**
 - v1.4 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18
+- Mapped to phases: 18
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-28*
-*Last updated: 2026-04-28 after initial definition*
+*Last updated: 2026-04-28 after roadmap creation — all 18 requirements mapped*
