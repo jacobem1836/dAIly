@@ -11,10 +11,23 @@ struct VoiceView: View {
         VStack(spacing: 32) {
             Spacer()
             ConnectionIndicator(state: session.state)
+            if case .error(let msg) = session.state {
+                errorMessage(msg)
+            }
             actionButton
             Spacer()
         }
         .padding()
+    }
+
+    // MARK: - Error Message
+
+    private func errorMessage(_ msg: String) -> some View {
+        Text(String(msg.prefix(60)))
+            .font(.caption)
+            .foregroundColor(.red)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 280)
     }
 
     // MARK: - Action Button

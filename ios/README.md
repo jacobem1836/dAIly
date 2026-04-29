@@ -108,19 +108,59 @@ iOS App                         Backend (FastAPI)
 - The Resend API key lives only in the backend `.env` — never in the iOS bundle
 - Universal Links (HTTPS-based) are used for magic link handling — custom URL schemes are explicitly rejected
 
+## Local Dev with ngrok / Cloudflare Tunnel
+
+The iOS app requires HTTPS even during local development. Use a tunnel to expose your local backend:
+
+### Option A: Cloudflare Tunnel (recommended — no account needed for one-time URLs)
+
+```bash
+cloudflared tunnel --url http://localhost:8000
+# Note the printed HTTPS URL, e.g. https://abcd-1234.trycloudflare.com
+```
+
+### Option B: ngrok
+
+```bash
+ngrok http 8000
+# Note the Forwarding HTTPS URL, e.g. https://abcd1234.ngrok.io
+```
+
+### Wire the tunnel URL into the app
+
+1. Open `ios/dAIly/Config.swift` and replace the `backendBaseURL` value:
+
+   ```swift
+   public static let backendBaseURL: URL = URL(string: "https://abcd-1234.trycloudflare.com")!
+   ```
+
+2. Update the `applinks:` entry in `ios/dAIly/dAIly.entitlements` to match the tunnel host:
+
+   ```xml
+   <string>applinks:abcd-1234.trycloudflare.com</string>
+   ```
+
+3. Re-run `xcodegen generate` if `project.yml` changed, then rebuild.
+
+4. Verify AASA is reachable from the tunnel:
+
+   ```bash
+   curl https://abcd-1234.trycloudflare.com/.well-known/apple-app-site-association
+   ```
+
+> **Note:** Tunnel URLs rotate on each restart. Update `Config.swift` and `dAIly.entitlements` each time.
+
 ## Backend URL Configuration
 
-`ios/dAIly/dAIlyApp.swift` contains a placeholder backend URL:
+`ios/dAIly/Config.swift` is the single source of truth for the backend URL:
 
 ```swift
-private let auth = AuthService(baseURL: URL(string: "https://app.example.com")!)
+public static let backendBaseURL: URL = URL(string: "https://app.example.com")!
 ```
 
 Replace `https://app.example.com` with your actual backend URL:
-- **Local development:** Use an HTTPS tunnel URL (e.g. `ngrok http 8000` or Cloudflare Tunnel) — the iOS app requires HTTPS even on simulator
+- **Local development:** Use an HTTPS tunnel URL (see "Local Dev with ngrok" above)
 - **Production/TestFlight:** Use your deployed FastAPI backend URL
-
-A `Config.swift` constant (Plan 05) will replace this hardcoded string before TestFlight.
 
 ## Entitlements Checklist
 

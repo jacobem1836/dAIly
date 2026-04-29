@@ -29,6 +29,8 @@ public enum VoiceSessionError: Error, Equatable {
 ///   3. On 401: calls auth.refresh() once and retries; second 401 surfaces .error
 ///   4. Connects to LiveKit room with mic enabled (ConnectOptions.enableMicrophone: true)
 ///   5. An 8-second timeout fires if the room never reaches .listening state (T-19-22)
+///   6. A 30-second timeout fires if reconnecting does not recover (T-19-28)
+///   7. roomDidDisconnect with non-nil error surfaces .error("disconnected: …") (T-19-29)
 ///
 /// IMPORTANT: Do NOT disable AudioManager's automatic audio session configuration.
 /// The LiveKit SDK auto-configures AVAudioSession to .playAndRecord + .voiceChat, activating
@@ -43,6 +45,7 @@ public final class VoiceSession: ObservableObject {
     private var room: Room?
     private var roomDelegate: SessionRoomDelegate?
     private var listeningTimeoutTask: Task<Void, Never>?
+    private var reconnectTimeoutTask: Task<Void, Never>?
 
     public init(tokenSource: LiveKitTokenSource,
                 auth: AuthService,
@@ -114,8 +117,6 @@ public final class VoiceSession: ObservableObject {
                 guard let self else { return }
                 if case .connecting = self.state {
                     self.state = .error("agent_unreachable")
-                } else if case .reconnecting = self.state {
-                    self.state = .error("agent_unreachable")
                 }
             }
         }
@@ -124,6 +125,8 @@ public final class VoiceSession: ObservableObject {
     public func disconnect() async {
         listeningTimeoutTask?.cancel()
         listeningTimeoutTask = nil
+        reconnectTimeoutTask?.cancel()
+        reconnectTimeoutTask = nil
         await room?.disconnect()
         room = nil
         roomDelegate = nil
@@ -145,11 +148,35 @@ public final class VoiceSession: ObservableObject {
     fileprivate func handleConnectionState(_ newState: ConnectionState) {
         switch newState {
         case .connected:
+            reconnectTimeoutTask?.cancel()
+            reconnectTimeoutTask = nil
             state = .listening
         case .reconnecting:
             state = .reconnecting
+            // 30-second reconnect timeout — if state hasn't recovered, surface error (T-19-28)
+            reconnectTimeoutTask?.cancel()
+            reconnectTimeoutTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    if case .reconnecting = self.state {
+                        self.state = .error("reconnect_timeout")
+                    }
+                }
+            }
         case .disconnected:
-            state = .idle
+            reconnectTimeoutTask?.cancel()
+            reconnectTimeoutTask = nil
+            // Only reset to idle on clean disconnect; error disconnects are handled by handleDisconnect
+            if case .reconnecting = state {
+                // Reconnect gave up — keep existing error or set disconnected error
+                state = .error("disconnected")
+            } else if case .error = state {
+                // Already in error state — leave it
+                break
+            } else {
+                state = .idle
+            }
         case .connecting:
             state = .connecting
         @unknown default:
@@ -165,6 +192,21 @@ public final class VoiceSession: ObservableObject {
         }
     }
 
+    /// Called when the room disconnects with a non-nil error (unexpected disconnect).
+    /// Clean user-initiated disconnects go through disconnect() which sets .idle directly.
+    fileprivate func handleDisconnect(error: Error?) {
+        reconnectTimeoutTask?.cancel()
+        reconnectTimeoutTask = nil
+        listeningTimeoutTask?.cancel()
+        listeningTimeoutTask = nil
+        if let error = error {
+            let msg = String(error.localizedDescription.prefix(60))
+            state = .error("disconnected: \(msg)")
+        }
+        // No else: clean disconnects arrive via didUpdateConnectionState(.disconnected)
+        // which already transitions to .idle via handleConnectionState
+    }
+
     // MARK: - Test hooks (DEBUG only)
 
     #if DEBUG
@@ -176,6 +218,9 @@ public final class VoiceSession: ObservableObject {
 
     /// Trigger handleAgentSpeaking — for unit tests only.
     public func _testHandleAgentSpeaking(_ speaking: Bool) { handleAgentSpeaking(speaking) }
+
+    /// Trigger handleDisconnect with an error — for unit tests only.
+    public func _testHandleDisconnect(error: Error?) { handleDisconnect(error: error) }
     #endif
 }
 
@@ -207,6 +252,16 @@ private final class SessionRoomDelegate: NSObject, RoomDelegate {
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didUpdateIsSpeaking speaking: Bool) {
         Task { @MainActor [weak self] in
             self?.owner?.handleAgentSpeaking(speaking)
+        }
+    }
+
+    /// Called when the room disconnects unexpectedly (error != nil) or cleanly (error == nil).
+    /// The clean path is already handled by didUpdateConnectionState(.disconnected).
+    /// Here we forward only unexpected disconnects (non-nil error) to surface user-visible feedback.
+    nonisolated func room(_ room: Room, didDisconnectWithError error: LiveKitError?) {
+        guard let error = error else { return }
+        Task { @MainActor [weak self] in
+            self?.owner?.handleDisconnect(error: error)
         }
     }
 }

@@ -5,10 +5,7 @@ import LiveKit
 struct dAIlyApp: App {
     @StateObject private var appState = AppState()
 
-    // NOTE: Replace this placeholder with your actual backend URL before TestFlight.
-    // For local development, use an HTTPS tunnel URL (e.g. ngrok or Cloudflare Tunnel).
-    // See ios/README.md for setup instructions.
-    private let auth = AuthService(baseURL: URL(string: "https://app.example.com")!)
+    private let auth = AuthService(baseURL: Config.backendBaseURL)
 
     init() {
         FirstLaunchCleanup.runIfNeeded()
@@ -19,9 +16,7 @@ struct dAIlyApp: App {
             Group {
                 if appState.hasAccessToken {
                     VoiceView(session: VoiceSession(
-                        tokenSource: LiveKitTokenSource(
-                            baseURL: URL(string: "https://app.example.com")!
-                        ),
+                        tokenSource: LiveKitTokenSource(baseURL: Config.backendBaseURL),
                         auth: auth
                     ))
                 } else {
