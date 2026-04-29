@@ -35,3 +35,12 @@ class Settings(BaseSettings):
     jwt_secret: str = ""
     jwt_access_ttl_minutes: int = 15
     jwt_refresh_ttl_days: int = 90
+
+    # Magic-link email delivery via Resend (Phase 19 / D-02)
+    resend_api_key: str = ""
+    resend_from_email: str = "dAIly <noreply@example.com>"
+    magic_link_base_url: str = "https://app.example.com"
+
+    # Universal Links (Phase 19 / D-03)
+    apple_team_id: str = ""
+    apple_bundle_id: str = "com.daily.ios"
