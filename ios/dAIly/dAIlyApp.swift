@@ -5,18 +5,37 @@ import LiveKit
 struct dAIlyApp: App {
     @StateObject private var appState = AppState()
 
+    // NOTE: Replace this placeholder with your actual backend URL before TestFlight.
+    // For local development, use an HTTPS tunnel URL (e.g. ngrok or Cloudflare Tunnel).
+    // See ios/README.md for setup instructions.
+    private let auth = AuthService(baseURL: URL(string: "https://app.example.com")!)
+
     init() {
         FirstLaunchCleanup.runIfNeeded()
     }
 
     var body: some Scene {
         WindowGroup {
-            Text("dAIly")
-                .environmentObject(appState)
-                .onOpenURL { url in
-                    // Universal Link handler implemented in Task 3 (Plan 03)
-                    print("[dAIly] received URL: \(url)")
+            Group {
+                if appState.hasAccessToken {
+                    Text("Voice screen — Plan 04")  // wired in Plan 04
+                } else {
+                    PairingView(auth: auth)
                 }
+            }
+            .environmentObject(appState)
+            .onOpenURL { url in
+                guard let code = PairCodeURLParser.extractPairCode(from: url) else { return }
+                Task { @MainActor in
+                    do {
+                        _ = try await auth.completePairing(code: code)
+                        appState.hasAccessToken = true
+                    } catch {
+                        // Plan 05 wires a user-visible error alert; for now log only
+                        print("[dAIly] pair complete failed: \(error)")
+                    }
+                }
+            }
         }
     }
 }

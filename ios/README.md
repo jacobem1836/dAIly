@@ -108,11 +108,26 @@ iOS App                         Backend (FastAPI)
 - The Resend API key lives only in the backend `.env` — never in the iOS bundle
 - Universal Links (HTTPS-based) are used for magic link handling — custom URL schemes are explicitly rejected
 
+## Backend URL Configuration
+
+`ios/dAIly/dAIlyApp.swift` contains a placeholder backend URL:
+
+```swift
+private let auth = AuthService(baseURL: URL(string: "https://app.example.com")!)
+```
+
+Replace `https://app.example.com` with your actual backend URL:
+- **Local development:** Use an HTTPS tunnel URL (e.g. `ngrok http 8000` or Cloudflare Tunnel) — the iOS app requires HTTPS even on simulator
+- **Production/TestFlight:** Use your deployed FastAPI backend URL
+
+A `Config.swift` constant (Plan 05) will replace this hardcoded string before TestFlight.
+
 ## Entitlements Checklist
 
 Before shipping to TestFlight:
 
 - [ ] Replace `app.example.com` with your production domain in `dAIly.entitlements`
+- [ ] Replace `https://app.example.com` baseURL in `dAIlyApp.swift` with real backend URL
 - [ ] Set correct Apple Team ID in Xcode Signing & Capabilities
 - [ ] Verify `/.well-known/apple-app-site-association` is live on your domain
 - [ ] Verify AASA contains correct `TEAMID.com.your.bundleid` format
