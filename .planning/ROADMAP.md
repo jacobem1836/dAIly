@@ -86,6 +86,15 @@ See `.planning/milestones/v1.2-ROADMAP.md` for full phase details.
 - `.planning/phases/18-livekit-infrastructure/18-CONTEXT.md` — LiveKit token endpoint, room naming
 - `.planning/PROJECT.md` — MOB-01 requirement, mobile-first architecture decision
 
+**Plans:** 5 plans
+
+Plans:
+- [ ] 19-01-PLAN.md — Backend prerequisites: POST /auth/pair/send-link (Resend) + AASA endpoint
+- [ ] 19-02-PLAN.md — Xcode project scaffold + LiveKit SPM dep + KeychainStore
+- [ ] 19-03-PLAN.md — Magic link pairing flow: AuthService, PairingView, Universal Link, TokenRefresher
+- [ ] 19-04-PLAN.md — LiveKit voice session, VoiceView UI (auto VAD; PTT debug-only)
+- [ ] 19-05-PLAN.md — Integration polish + VALIDATION.md + manual device test checkpoint
+
 ---
 
 ### Phase 20: Native Android App
@@ -145,7 +154,7 @@ See `.planning/milestones/v1.2-ROADMAP.md` for full phase details.
 | 16. Milestone Closeout | v1.2 | 1/1 | ✅ Complete | 2026-04-19 |
 | 17. Voice Polish | v1.3 | 4/4 | ✅ Complete | 2026-04-28 |
 | 18. LiveKit Backend | v2.0 | 3/2 | Complete    | 2026-04-29 |
-| 19. Native iOS App | v2.0 | — | ○ Not started | — |
+| 19. Native iOS App | v2.0 | 0/5 | Planned | — |
 | 20. Native Android App | v2.0 | — | ○ Not started | — |
 | 21. Desktop Web Fallback | v2.0 | — | ○ Not started | — |
 | 22. Developer Pack | v2.1 | — | ○ Not started | — |
