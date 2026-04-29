@@ -23,6 +23,7 @@ from sqlalchemy import select
 from daily.auth.router import router as auth_router
 from daily.briefing.scheduler import scheduler, setup_scheduler
 from daily.config import Settings
+from daily.livekit.router import router as livekit_router
 from daily.db.engine import async_session
 from daily.db.models import BriefingConfig
 
@@ -92,6 +93,7 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
+app.include_router(livekit_router)
 
 
 @app.get("/health")
