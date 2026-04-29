@@ -69,6 +69,53 @@ See `.planning/milestones/v1.2-ROADMAP.md` for full phase details.
 - [ ] Phase 20: Native Android App — Kotlin + LiveKit Android SDK, Oboe hardware AEC, minimal voice UI matching iOS
 - [ ] Phase 21: Desktop Web Fallback — LiveKit web SDK in a minimal web app; replaces current Python sounddevice loop for macOS users; WebRTC AEC handles echo
 
+### Phase 19: Native iOS App
+
+**Goal:** Build a native iOS app in Swift using the LiveKit iOS SDK with AVAudioEngine/AUVoiceIO hardware AEC, providing push-to-talk and auto VAD voice modes for the dAIly briefing experience.
+
+**Requirements:** MOB-01
+
+**Success Criteria:**
+1. iOS app connects to LiveKit room and authenticates via token endpoint
+2. Push-to-talk and auto VAD voice modes both functional
+3. AVAudioEngine/AUVoiceIO hardware AEC eliminates echo without software DSP
+4. Daily briefing playback works end-to-end on device
+5. App launches and connects reliably in under 3 seconds
+
+**Canonical refs:**
+- `.planning/phases/18-livekit-infrastructure/18-CONTEXT.md` — LiveKit token endpoint, room naming
+- `.planning/PROJECT.md` — MOB-01 requirement, mobile-first architecture decision
+
+---
+
+### Phase 20: Native Android App
+
+**Goal:** Build a native Android app in Kotlin using the LiveKit Android SDK with Oboe hardware AEC, matching the iOS voice UI.
+
+**Requirements:** MOB-02
+
+**Success Criteria:**
+1. Android app connects to LiveKit room with token authentication
+2. Push-to-talk and auto VAD voice modes functional
+3. Oboe hardware AEC eliminates echo
+4. Daily briefing playback works end-to-end on device
+
+---
+
+### Phase 21: Desktop Web Fallback
+
+**Goal:** Minimal web app using LiveKit web SDK to replace the Python sounddevice voice loop for macOS users; WebRTC AEC handles echo.
+
+**Requirements:** MOB-04
+
+**Success Criteria:**
+1. Web app connects to LiveKit room via browser WebRTC
+2. Briefing plays back correctly
+3. Voice input (VAD) functional in browser
+4. WebRTC AEC handles echo without additional DSP
+
+---
+
 ### 📋 v2.1 Ecosystem Expansion (Planned)
 
 - [ ] Phase 22: Developer Pack — GitHub (PRs, issues, CI status), Linear (tasks/issues), Hacker News (top stories); briefing gains a "work tools" section
