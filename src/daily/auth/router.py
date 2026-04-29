@@ -1,8 +1,9 @@
 """Auth endpoints: pairing + token refresh (Phase 18, D-01..D-04)."""
+import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,7 +17,10 @@ from daily.auth.pairing import (
 from daily.config import Settings
 from daily.db.engine import async_session
 from daily.db.models import DeviceToken, PairingCode, User
+from daily.email.resend_client import ResendError, send_magic_link
 from daily.vault.crypto import decrypt_token, encrypt_token
+
+_logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -28,6 +32,10 @@ async def _get_db() -> AsyncSession:
 
 def _get_settings() -> Settings:
     return Settings()
+
+
+class SendLinkRequest(BaseModel):
+    email: EmailStr
 
 
 class InitiateRequest(BaseModel):
@@ -57,6 +65,37 @@ class RefreshRequest(BaseModel):
 class RefreshResponse(BaseModel):
     access_token: str
     expires_in: int
+
+
+@router.post("/pair/send-link", status_code=204)
+async def pair_send_link(
+    req: SendLinkRequest,
+    session: AsyncSession = Depends(_get_db),
+    settings: Settings = Depends(_get_settings),
+) -> None:
+    """Generate a pairing code and send a magic-link email via Resend.
+
+    Always returns 204 — never confirms whether the email is registered or
+    whether Resend delivery succeeded (prevents email enumeration, T-19-01).
+    """
+    code = generate_pairing_code()
+    pc = PairingCode(
+        code=code,
+        expires_at=code_expiry(),
+        email=str(req.email),
+        user_id=None,
+    )
+    session.add(pc)
+    await session.commit()
+    try:
+        await send_magic_link(str(req.email), code, settings=settings)
+    except ResendError as exc:
+        _logger.error(
+            "magic_link_send_failed email_hash=%s error=%s",
+            hash(str(req.email)),
+            str(exc),
+        )
+    return None
 
 
 @router.post("/pair/initiate", response_model=InitiateResponse)

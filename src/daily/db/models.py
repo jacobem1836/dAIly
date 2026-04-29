@@ -71,7 +71,11 @@ class PairingCode(Base):
     __tablename__ = "pairing_codes"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    # user_id is nullable for magic-link flow (Phase 19): a code is issued before
+    # we know which user will redeem it. pair/complete resolves/creates the user.
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    # email stored for magic-link pairing (Phase 19 / D-02); null for QR/initiate flow
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     code: Mapped[str] = mapped_column(String(6), index=True)
     used: Mapped[bool] = mapped_column(Boolean, default=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
