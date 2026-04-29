@@ -1,0 +1,15 @@
+{
+  "originHash" : "placeholder-resolved-by-xcode-on-first-build",
+  "pins" : [
+    {
+      "identity" : "client-sdk-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/livekit/client-sdk-swift.git",
+      "state" : {
+        "revision" : "placeholder-resolved-by-xcode",
+        "version" : "2.13.0"
+      }
+    }
+  ],
+  "version" : 3
+}
