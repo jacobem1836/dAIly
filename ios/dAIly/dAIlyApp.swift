@@ -18,7 +18,12 @@ struct dAIlyApp: App {
         WindowGroup {
             Group {
                 if appState.hasAccessToken {
-                    Text("Voice screen — Plan 04")  // wired in Plan 04
+                    VoiceView(session: VoiceSession(
+                        tokenSource: LiveKitTokenSource(
+                            baseURL: URL(string: "https://app.example.com")!
+                        ),
+                        auth: auth
+                    ))
                 } else {
                     PairingView(auth: auth)
                 }
