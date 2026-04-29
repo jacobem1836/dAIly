@@ -6,7 +6,6 @@ rtc:
   port_range_end: 60000
   use_external_ip: true
 keys:
-  # Replace placeholders at deploy time. Format: <api_key>: <api_secret>
-  REPLACE_API_KEY: REPLACE_API_SECRET
+  devkey: devsecret1234567890123456789012
 turn:
   enabled: false

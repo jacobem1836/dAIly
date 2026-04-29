@@ -64,7 +64,7 @@ See `.planning/milestones/v1.2-ROADMAP.md` for full phase details.
 
 ### 📋 v2.0 Mobile Voice (Next)
 
-- [ ] Phase 18: LiveKit Backend Integration — wire LangGraph orchestrator into LiveKit Agents framework via livekit-plugins-langchain; replace Python sounddevice voice loop with LiveKit room-based transport
+- [x] Phase 18: LiveKit Backend Integration — wire LangGraph orchestrator into LiveKit Agents framework via livekit-plugins-langchain; replace Python sounddevice voice loop with LiveKit room-based transport (completed 2026-04-29)
 - [ ] Phase 19: Native iOS App — Swift + LiveKit iOS SDK, AVAudioEngine/AUVoiceIO hardware AEC, minimal voice UI (push-to-talk + auto VAD modes)
 - [ ] Phase 20: Native Android App — Kotlin + LiveKit Android SDK, Oboe hardware AEC, minimal voice UI matching iOS
 - [ ] Phase 21: Desktop Web Fallback — LiveKit web SDK in a minimal web app; replaces current Python sounddevice loop for macOS users; WebRTC AEC handles echo
@@ -97,7 +97,7 @@ See `.planning/milestones/v1.2-ROADMAP.md` for full phase details.
 | 15. Deployment | v1.2 | 3/3 | ✅ Complete | 2026-04-19 |
 | 16. Milestone Closeout | v1.2 | 1/1 | ✅ Complete | 2026-04-19 |
 | 17. Voice Polish | v1.3 | 4/4 | ✅ Complete | 2026-04-28 |
-| 18. LiveKit Backend | v2.0 | — | ○ Not started | — |
+| 18. LiveKit Backend | v2.0 | 3/2 | Complete    | 2026-04-29 |
 | 19. Native iOS App | v2.0 | — | ○ Not started | — |
 | 20. Native Android App | v2.0 | — | ○ Not started | — |
 | 21. Desktop Web Fallback | v2.0 | — | ○ Not started | — |
