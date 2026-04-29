@@ -20,6 +20,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy import select
 
+from daily.auth.router import router as auth_router
 from daily.briefing.scheduler import scheduler, setup_scheduler
 from daily.config import Settings
 from daily.db.engine import async_session
@@ -89,6 +90,8 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.include_router(auth_router)
 
 
 @app.get("/health")

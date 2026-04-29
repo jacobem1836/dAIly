@@ -60,6 +60,7 @@ pythonpath = ["src"]
 
 [dependency-groups]
 dev = [
+    "aiosqlite>=0.22.1",
     "fakeredis>=2.34.1",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
