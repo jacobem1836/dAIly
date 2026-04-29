@@ -30,3 +30,8 @@ class Settings(BaseSettings):
 
     briefing_email_top_n: int = 5  # per D-05
     briefing_schedule_time: str = "05:00"  # per D-13, default precompute time
+
+    # App JWT auth (Phase 18 / D-01..D-04)
+    jwt_secret: str = ""
+    jwt_access_ttl_minutes: int = 15
+    jwt_refresh_ttl_days: int = 90
