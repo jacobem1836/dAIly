@@ -25,13 +25,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var auth: AuthService
     private val appState = AppState()
 
-    // BASE_URL replaced by Config.kt in Plan 20-05
-    private val backendBaseURL: String = "https://app.example.com"
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         tokenStore = TokenStore(applicationContext)
-        auth = AuthService(backendBaseURL, tokenStore)
+        auth = AuthService(Config.backendBaseURL, tokenStore)
 
         lifecycleScope.launch {
             FirstLaunchCleanup.runIfNeeded(applicationContext, tokenStore)
@@ -46,7 +43,7 @@ class MainActivity : ComponentActivity() {
                         val session = remember {
                             VoiceSession(
                                 application = application,
-                                tokenSource = LiveKitTokenSource(backendBaseURL),
+                                tokenSource = LiveKitTokenSource(Config.backendBaseURL),
                                 auth = auth,
                                 tokenStore = tokenStore,
                             )

@@ -73,6 +73,33 @@ android/
                     └── TokenStoreTest.kt  # 6 unit tests (Robolectric)
 ```
 
+## Configuration
+
+All backend wiring lives in `Config.kt`. Edit `backendBaseURL` for tunnel/prod; edit `Config.appLinksHost` AND `AndroidManifest.xml`'s `<data android:host=...>` together.
+
+> **Warning:** When changing the backend host, you MUST update `Config.appLinksHost` AND the
+> `android:host` literal in `AndroidManifest.xml` together — Android's manifest does not
+> interpolate Kotlin constants. If they drift, App Links verification fails silently and the
+> magic link opens in a browser instead of the app.
+
+## Local dev with cloudflared
+
+1. `cloudflared tunnel --url http://localhost:8000`
+2. Paste the HTTPS URL into `Config.backendBaseURL` (e.g. `"https://abc123.trycloudflare.com"`)
+3. Paste the host (without scheme) into `Config.appLinksHost` (e.g. `"abc123.trycloudflare.com"`) AND into `AndroidManifest.xml`'s `<data android:host="..."/>` literal
+4. `curl https://<tunnel>/.well-known/assetlinks.json` to verify the Plan 20-01 endpoint is reachable
+5. Reinstall the debug APK so Android re-runs App Links verification: `adb uninstall com.daily.android && ./gradlew installDebug`
+
+## App Links debug verification
+
+After installing, verify App Links are working:
+
+```bash
+adb shell pm verify-app-links --re-verify com.daily.android
+adb shell pm get-app-links com.daily.android
+# Look for: 1024:com.daily.android (verified)
+```
+
 ## Key Dependencies
 
 | Library | Version | Purpose |
