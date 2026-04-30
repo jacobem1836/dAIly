@@ -66,7 +66,7 @@ See `.planning/milestones/v1.2-ROADMAP.md` for full phase details.
 
 - [ ] Phase 18: LiveKit Backend Integration — wire LangGraph orchestrator into LiveKit Agents framework via livekit-plugins-langchain; replace Python sounddevice voice loop with LiveKit room-based transport
 - [ ] Phase 19: Native iOS App — Swift + LiveKit iOS SDK, AVAudioEngine/AUVoiceIO hardware AEC, minimal voice UI (push-to-talk + auto VAD modes)
-- [ ] Phase 20: Native Android App — Kotlin + LiveKit Android SDK, Oboe hardware AEC, minimal voice UI matching iOS
+- [x] Phase 20: Native Android App — Kotlin + LiveKit Android SDK, Oboe hardware AEC, minimal voice UI matching iOS (completed 2026-04-30)
 - [ ] Phase 21: Desktop Web Fallback — LiveKit web SDK in a minimal web app; replaces current Python sounddevice loop for macOS users; WebRTC AEC handles echo
 
 ### 📋 v2.1 Ecosystem Expansion (Planned)
@@ -99,7 +99,7 @@ See `.planning/milestones/v1.2-ROADMAP.md` for full phase details.
 | 17. Voice Polish | v1.3 | 4/4 | ✅ Complete | 2026-04-28 |
 | 18. LiveKit Backend | v2.0 | — | ○ Not started | — |
 | 19. Native iOS App | v2.0 | — | ○ Not started | — |
-| 20. Native Android App | v2.0 | — | ○ Not started | — |
+| 20. Native Android App | v2.0 | 5/5 | Complete    | 2026-04-30 |
 | 21. Desktop Web Fallback | v2.0 | — | ○ Not started | — |
 | 22. Developer Pack | v2.1 | — | ○ Not started | — |
 | 23. Knowledge Pack | v2.1 | — | ○ Not started | — |
