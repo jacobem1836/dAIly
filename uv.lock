@@ -131,15 +131,6 @@ wheels = [
 ]
 
 [[package]]
-name = "aiosqlite"
-version = "0.22.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/4e/8a/64761f4005f17809769d23e518d915db74e6310474e733e3593cfc854ef1/aiosqlite-0.22.1.tar.gz", hash = "sha256:043e0bd78d32888c0a9ca90fc788b38796843360c855a7262a532813133a0650", size = 14821, upload-time = "2025-12-23T19:25:43.997Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/00/b7/e3bf5133d697a08128598c8d0abc5e16377b51465a33756de24fa7dee953/aiosqlite-0.22.1-py3-none-any.whl", hash = "sha256:21c002eb13823fad740196c5a2e9d8e62f6243bd9e7e4a1f87fb5e44ecb4fceb", size = 17405, upload-time = "2025-12-23T19:25:42.139Z" },
-]
-
-[[package]]
 name = "alembic"
 version = "1.18.4"
 source = { registry = "https://pypi.org/simple" }
@@ -581,14 +572,13 @@ dependencies = [
     { name = "langchain-openai" },
     { name = "langgraph" },
     { name = "langgraph-checkpoint-postgres" },
-    { name = "livekit-api" },
     { name = "msal" },
     { name = "msgraph-sdk" },
     { name = "numpy" },
     { name = "openai" },
     { name = "psycopg", extra = ["binary"] },
     { name = "psycopg-pool" },
-    { name = "pydantic", extra = ["email"] },
+    { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-dateutil" },
     { name = "python-dotenv" },
@@ -610,7 +600,6 @@ dev = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "aiosqlite" },
     { name = "fakeredis" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -633,14 +622,13 @@ requires-dist = [
     { name = "langchain-openai", specifier = ">=1.1.12" },
     { name = "langgraph", specifier = ">=1.1.6" },
     { name = "langgraph-checkpoint-postgres", specifier = ">=3.0.5" },
-    { name = "livekit-api", specifier = ">=1.1.0" },
     { name = "msal", specifier = ">=1.35.0" },
     { name = "msgraph-sdk", specifier = ">=1.55.0" },
     { name = "numpy", specifier = ">=1.26.0" },
     { name = "openai", specifier = ">=2.0.0,<3.0.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.3" },
     { name = "psycopg-pool", specifier = ">=3.3.0" },
-    { name = "pydantic", extras = ["email"], specifier = ">=2.12.0" },
+    { name = "pydantic", specifier = ">=2.12.0" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.2" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.3.0" },
@@ -657,7 +645,6 @@ provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "aiosqlite", specifier = ">=0.22.1" },
     { name = "fakeredis", specifier = ">=2.34.1" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
@@ -686,28 +673,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/fc/f8/98eea607f65de6527f8a2e8885fc8015d3e6f5775df186e443e0964a11c3/distro-1.9.0.tar.gz", hash = "sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed", size = 60722, upload-time = "2023-12-24T09:54:32.31Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/12/b3/231ffd4ab1fc9d679809f356cebee130ac7daa00d6d6f3206dd4fd137e9e/distro-1.9.0-py3-none-any.whl", hash = "sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2", size = 20277, upload-time = "2023-12-24T09:54:30.421Z" },
-]
-
-[[package]]
-name = "dnspython"
-version = "2.8.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/8c/8b/57666417c0f90f08bcafa776861060426765fdb422eb10212086fb811d26/dnspython-2.8.0.tar.gz", hash = "sha256:181d3c6996452cb1189c4046c61599b84a5a86e099562ffde77d26984ff26d0f", size = 368251, upload-time = "2025-09-07T18:58:00.022Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ba/5a/18ad964b0086c6e62e2e7500f7edc89e3faa45033c71c1893d34eed2b2de/dnspython-2.8.0-py3-none-any.whl", hash = "sha256:01d9bbc4a2d76bf0db7c1f729812ded6d912bd318d3b1cf81d30c0f845dbf3af", size = 331094, upload-time = "2025-09-07T18:57:58.071Z" },
-]
-
-[[package]]
-name = "email-validator"
-version = "2.3.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "dnspython" },
-    { name = "idna" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f5/22/900cb125c76b7aaa450ce02fd727f452243f2e91a61af068b40adba60ea9/email_validator-2.3.0.tar.gz", hash = "sha256:9fc05c37f2f6cf439ff414f8fc46d917929974a82244c20eb10231ba60c54426", size = 51238, upload-time = "2025-08-26T13:09:06.831Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/de/15/545e2b6cf2e3be84bc1ed85613edd75b8aea69807a71c26f4ca6a9258e82/email_validator-2.3.0-py3-none-any.whl", hash = "sha256:80f13f623413e6b197ae73bb10bf4eb0908faf509ad8362c5edeb0be7fd450b4", size = 35604, upload-time = "2025-08-26T13:09:05.858Z" },
 ]
 
 [[package]]
@@ -1322,35 +1287,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/76/86/6de4f6f0451a9658f26f633e0bb090552a4dafd7df3f1ae7f0d40558e67e/langsmith-0.7.26.tar.gz", hash = "sha256:a3e06f3d689ce7195717aa6b8f91082319819ec7ea9b9a62cdcd3d9dc25bfc7b", size = 1146118, upload-time = "2026-04-06T15:01:03.336Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/81/8e/7eb7d65ce62e98e74b9f18f193ea7ac3996d4fbd71fffcc67d0f7ba3103e/langsmith-0.7.26-py3-none-any.whl", hash = "sha256:fe5c877972cea450c1c48251c8fae0f18543c8d19dfdb9ff9a9c4263763dde4e", size = 360160, upload-time = "2026-04-06T15:01:01.516Z" },
-]
-
-[[package]]
-name = "livekit-api"
-version = "1.1.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "aiohttp" },
-    { name = "livekit-protocol" },
-    { name = "protobuf" },
-    { name = "pyjwt" },
-    { name = "types-protobuf" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/b5/0a/ad3cce124e608c056d6390244ec4dd18c8a4b5f055693a95831da2119af7/livekit_api-1.1.0.tar.gz", hash = "sha256:f94c000534d3a9b506e6aed2f35eb88db1b23bdea33bb322f0144c4e9f73934e", size = 16649, upload-time = "2025-12-02T19:37:11.452Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d3/b9/8d8515e3e0e629ab07d399cf858b8fc7e0a02bbf6384a6592b285264b4b9/livekit_api-1.1.0-py3-none-any.whl", hash = "sha256:bfc1c2c65392eb3f580a2c28108269f0e79873f053578a677eee7bb1de8aa8fb", size = 19620, upload-time = "2025-12-02T19:37:10.075Z" },
-]
-
-[[package]]
-name = "livekit-protocol"
-version = "1.1.6"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "protobuf" },
-    { name = "types-protobuf" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/5b/28/8a7ee5a4126476a0ce770a482274d51fc81ae0d9f578c07f07d6655acfc4/livekit_protocol-1.1.6.tar.gz", hash = "sha256:43648863440a6ce064f7f8b8b287dda8f5ac82b8da64738b20f42cad51e70f9b", size = 93925, upload-time = "2026-04-20T15:48:43.032Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/76/36/525cd9364036617aa97c597c93d7bddb6be311b86288cd54de77e4892544/livekit_protocol-1.1.6-py3-none-any.whl", hash = "sha256:286ac0bd555b6b75cd8a0c5d417572d7dab524129fcea43080202d170f957710", size = 115012, upload-time = "2026-04-20T15:48:41.312Z" },
 ]
 
 [[package]]
@@ -2261,11 +2197,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/5a/87/b70ad306ebb6f9b585f114d0ac2137d792b48be34d732d60e597c2f8465a/pydantic-2.12.5-py3-none-any.whl", hash = "sha256:e561593fccf61e8a20fc46dfc2dfe075b8be7d0188df33f221ad1f0139180f9d", size = 463580, upload-time = "2025-11-26T15:11:44.605Z" },
 ]
 
-[package.optional-dependencies]
-email = [
-    { name = "email-validator" },
-]
-
 [[package]]
 name = "pydantic-core"
 version = "2.41.5"
@@ -2916,15 +2847,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f5/24/cb09efec5cc954f7f9b930bf8279447d24618bb6758d4f6adf2574c41780/typer-0.24.1.tar.gz", hash = "sha256:e39b4732d65fbdcde189ae76cf7cd48aeae72919dea1fdfc16593be016256b45", size = 118613, upload-time = "2026-02-21T16:54:40.609Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4a/91/48db081e7a63bb37284f9fbcefda7c44c277b18b0e13fbc36ea2335b71e6/typer-0.24.1-py3-none-any.whl", hash = "sha256:112c1f0ce578bfb4cab9ffdabc68f031416ebcc216536611ba21f04e9aa84c9e", size = 56085, upload-time = "2026-02-21T16:54:41.616Z" },
-]
-
-[[package]]
-name = "types-protobuf"
-version = "7.34.1.20260408"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/5b/b1/4521e68c2cc17703d80eb42796751345376dd4c706f84007ef5e7c707774/types_protobuf-7.34.1.20260408.tar.gz", hash = "sha256:e2c0a0430e08c75b52671a6f0035abfdcc791aad12af16274282de1b721758ab", size = 68835, upload-time = "2026-04-08T04:26:43.613Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ef/b5/0bc9874d89c58fb0ce851e150055ce732d254dbb10b06becbc7635d0d635/types_protobuf-7.34.1.20260408-py3-none-any.whl", hash = "sha256:ebbcd4e27b145aef6a59bc0cb6c013b3528151c1ba5e7f7337aeee355d276a5e", size = 86012, upload-time = "2026-04-08T04:26:42.566Z" },
 ]
 
 [[package]]

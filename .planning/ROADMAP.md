@@ -64,66 +64,10 @@ See `.planning/milestones/v1.2-ROADMAP.md` for full phase details.
 
 ### 📋 v2.0 Mobile Voice (Next)
 
-- [x] Phase 18: LiveKit Backend Integration — wire LangGraph orchestrator into LiveKit Agents framework via livekit-plugins-langchain; replace Python sounddevice voice loop with LiveKit room-based transport (completed 2026-04-29)
+- [ ] Phase 18: LiveKit Backend Integration — wire LangGraph orchestrator into LiveKit Agents framework via livekit-plugins-langchain; replace Python sounddevice voice loop with LiveKit room-based transport
 - [ ] Phase 19: Native iOS App — Swift + LiveKit iOS SDK, AVAudioEngine/AUVoiceIO hardware AEC, minimal voice UI (push-to-talk + auto VAD modes)
 - [ ] Phase 20: Native Android App — Kotlin + LiveKit Android SDK, Oboe hardware AEC, minimal voice UI matching iOS
 - [ ] Phase 21: Desktop Web Fallback — LiveKit web SDK in a minimal web app; replaces current Python sounddevice loop for macOS users; WebRTC AEC handles echo
-
-### Phase 19: Native iOS App
-
-**Goal:** Build a native iOS app in Swift using the LiveKit iOS SDK with AVAudioEngine/AUVoiceIO hardware AEC, providing push-to-talk and auto VAD voice modes for the dAIly briefing experience.
-
-**Requirements:** MOB-01
-
-**Success Criteria:**
-1. iOS app connects to LiveKit room and authenticates via token endpoint
-2. Push-to-talk and auto VAD voice modes both functional
-3. AVAudioEngine/AUVoiceIO hardware AEC eliminates echo without software DSP
-4. Daily briefing playback works end-to-end on device
-5. App launches and connects reliably in under 3 seconds
-
-**Canonical refs:**
-- `.planning/phases/18-livekit-infrastructure/18-CONTEXT.md` — LiveKit token endpoint, room naming
-- `.planning/PROJECT.md` — MOB-01 requirement, mobile-first architecture decision
-
-**Plans:** 5 plans
-
-Plans:
-- [ ] 19-01-PLAN.md — Backend prerequisites: POST /auth/pair/send-link (Resend) + AASA endpoint
-- [ ] 19-02-PLAN.md — Xcode project scaffold + LiveKit SPM dep + KeychainStore
-- [ ] 19-03-PLAN.md — Magic link pairing flow: AuthService, PairingView, Universal Link, TokenRefresher
-- [ ] 19-04-PLAN.md — LiveKit voice session, VoiceView UI (auto VAD; PTT debug-only)
-- [ ] 19-05-PLAN.md — Integration polish + VALIDATION.md + manual device test checkpoint
-
----
-
-### Phase 20: Native Android App
-
-**Goal:** Build a native Android app in Kotlin using the LiveKit Android SDK with Oboe hardware AEC, matching the iOS voice UI.
-
-**Requirements:** MOB-02
-
-**Success Criteria:**
-1. Android app connects to LiveKit room with token authentication
-2. Push-to-talk and auto VAD voice modes functional
-3. Oboe hardware AEC eliminates echo
-4. Daily briefing playback works end-to-end on device
-
----
-
-### Phase 21: Desktop Web Fallback
-
-**Goal:** Minimal web app using LiveKit web SDK to replace the Python sounddevice voice loop for macOS users; WebRTC AEC handles echo.
-
-**Requirements:** MOB-04
-
-**Success Criteria:**
-1. Web app connects to LiveKit room via browser WebRTC
-2. Briefing plays back correctly
-3. Voice input (VAD) functional in browser
-4. WebRTC AEC handles echo without additional DSP
-
----
 
 ### 📋 v2.1 Ecosystem Expansion (Planned)
 
@@ -153,8 +97,8 @@ Plans:
 | 15. Deployment | v1.2 | 3/3 | ✅ Complete | 2026-04-19 |
 | 16. Milestone Closeout | v1.2 | 1/1 | ✅ Complete | 2026-04-19 |
 | 17. Voice Polish | v1.3 | 4/4 | ✅ Complete | 2026-04-28 |
-| 18. LiveKit Backend | v2.0 | 3/2 | Complete    | 2026-04-29 |
-| 19. Native iOS App | v2.0 | 0/5 | Planned | — |
+| 18. LiveKit Backend | v2.0 | — | ○ Not started | — |
+| 19. Native iOS App | v2.0 | — | ○ Not started | — |
 | 20. Native Android App | v2.0 | — | ○ Not started | — |
 | 21. Desktop Web Fallback | v2.0 | — | ○ Not started | — |
 | 22. Developer Pack | v2.1 | — | ○ Not started | — |
