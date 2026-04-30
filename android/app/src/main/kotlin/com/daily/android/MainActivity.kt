@@ -6,15 +6,18 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.lifecycleScope
 import com.daily.android.auth.AuthService
 import com.daily.android.auth.FirstLaunchCleanup
 import com.daily.android.auth.PairCodeUriParser
 import com.daily.android.auth.TokenStore
+import com.daily.android.livekit.LiveKitTokenSource
+import com.daily.android.livekit.VoiceSession
 import com.daily.android.ui.PairingScreen
+import com.daily.android.ui.VoiceScreen
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -40,7 +43,15 @@ class MainActivity : ComponentActivity() {
                 Surface {
                     val authed by appState.hasAccessToken.collectAsState()
                     if (authed) {
-                        Text("Voice screen — Plan 20-04")
+                        val session = remember {
+                            VoiceSession(
+                                application = application,
+                                tokenSource = LiveKitTokenSource(backendBaseURL),
+                                auth = auth,
+                                tokenStore = tokenStore,
+                            )
+                        }
+                        VoiceScreen(session = session)
                     } else {
                         PairingScreen(auth = auth)
                     }
