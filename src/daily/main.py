@@ -21,10 +21,12 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
+from daily.auth.router import router as auth_router
 from daily.briefing.scheduler import scheduler, setup_scheduler
 from daily.config import Settings
 from daily.db.engine import async_session
 from daily.db.models import BriefingConfig
+from daily.livekit.router import router as livekit_router
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +92,10 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.include_router(auth_router)
+app.include_router(livekit_router)
+
 
 @app.get("/health")
 async def health() -> dict:

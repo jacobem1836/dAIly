@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import ARRAY, DateTime, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import ARRAY, Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -65,3 +65,32 @@ class VipSender(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "email", name="uq_vip_user_email"),
     )
+
+
+class PairingCode(Base):
+    __tablename__ = "pairing_codes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    code: Mapped[str] = mapped_column(String(6), index=True)
+    used: Mapped[bool] = mapped_column(Boolean, default=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now()
+    )
+
+
+class DeviceToken(Base):
+    __tablename__ = "device_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    device_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    encrypted_refresh_token: Mapped[str] = mapped_column(Text)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now()
+    )
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

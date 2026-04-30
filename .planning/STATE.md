@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Mobile Voice
-status: planning
-last_updated: "2026-04-30T03:33:31.228Z"
-last_activity: 2026-04-30
+status: executing
+last_updated: "2026-04-30T05:02:49.434Z"
+last_activity: 2026-04-30 -- Phase 20.1 execution started
 progress:
-  total_phases: 5
+  total_phases: 2
   completed_phases: 2
-  total_plans: 12
-  completed_plans: 9
-  percent: 75
+  total_plans: 7
+  completed_plans: 8
+  percent: 100
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** The briefing always delivers — every morning, the user gets a prioritised, conversational summary of what matters without touching a single app.
-**Current focus:** v2.0 — Mobile Voice. Phase 17 (Voice Polish) complete. Next: Phase 18 LiveKit Backend Integration.
+**Current focus:** Phase 20.1 — livekit-agent-worker
 
 ## Current Position
 
-Phase: 999.1
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-04-30
+Phase: 20.1 (livekit-agent-worker) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 20.1
+Last activity: 2026-04-30 -- Phase 20.1 execution started
 
 ## Completed Milestones
 
@@ -67,6 +67,10 @@ See `KEY_DECISIONS` in PROJECT.md and `.planning/research/voice-strategy-decisio
 - LiveKit Cloud vs self-hosted — Cloud is simpler for dev/testing (~$4.50/user/month transport); self-host (Apache 2.0) saves cost at scale (~$50-100/mo VPS)
 - Prompt caching strategy for Realtime API — mandatory if that path is used ($6-8/user/month with caching vs $18-40 without)
 - Whether to keep Python voice loop alive as desktop fallback during Phase 18, or stub it out immediately
+
+### Roadmap Evolution
+
+- Phase 20.1 inserted after Phase 20: LiveKit Agent Worker (INSERTED) — server-side agent that speaks into LiveKit rooms; prerequisite for mobile apps being functional end-to-end
 
 ### Blockers/Concerns
 
