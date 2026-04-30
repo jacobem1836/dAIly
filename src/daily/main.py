@@ -18,13 +18,10 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
-from daily.auth.router import router as auth_router
 from daily.briefing.scheduler import scheduler, setup_scheduler
 from daily.config import Settings
-from daily.livekit.router import router as livekit_router
 from daily.db.engine import async_session
 from daily.db.models import BriefingConfig
 
@@ -93,35 +90,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.include_router(auth_router)
-app.include_router(livekit_router)
-
 
 @app.get("/health")
 async def health() -> dict:
     """Health check endpoint."""
     return {"status": "ok"}
-
-
-@app.get("/.well-known/apple-app-site-association", include_in_schema=False)
-async def apple_app_site_association() -> JSONResponse:
-    """Serve the Apple App Site Association file for Universal Links (Phase 19 / D-03).
-
-    Apple's CDN fetches this at app install time to verify the association between
-    the domain and the iOS app. Must be served directly as JSON with no redirects.
-    """
-    settings = Settings()
-    return JSONResponse(
-        content={
-            "applinks": {
-                "apps": [],
-                "details": [
-                    {
-                        "appID": f"{settings.apple_team_id}.{settings.apple_bundle_id}",
-                        "paths": ["/pair", "/pair/*"],
-                    }
-                ],
-            }
-        },
-        media_type="application/json",
-    )
