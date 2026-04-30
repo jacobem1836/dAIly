@@ -1,6 +1,6 @@
 name: dAIly
 options:
-  bundleIdPrefix: com.daily
+  bundleIdPrefix: com.jacobmarriott
   deploymentTarget:
     iOS: "16.0"
   developmentLanguage: en
@@ -21,6 +21,8 @@ targets:
       properties:
         CFBundleDisplayName: dAIly
         UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
         UIBackgroundModes: [audio]
         NSMicrophoneUsageDescription: "dAIly uses your microphone for the voice briefing."
         NSLocalNetworkUsageDescription: "dAIly connects to your local LiveKit dev server."
@@ -29,7 +31,7 @@ targets:
           UISceneConfigurations: {}
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.daily.ios
+        PRODUCT_BUNDLE_IDENTIFIER: com.jacobmarriott.daily
         SWIFT_VERSION: "6.0"
         CODE_SIGN_ENTITLEMENTS: dAIly/dAIly.entitlements
         TARGETED_DEVICE_FAMILY: "1,2"

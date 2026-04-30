@@ -7,7 +7,7 @@ public enum DebugFlags {
     #if DEBUG
     /// Enable push-to-talk mode (D-07). When true, VoiceSession.setMicrophone(enabled:)
     /// is active. NEVER surfaced in production UI — debug/testing only.
-    public static var pttEnabled: Bool = false
+    nonisolated(unsafe) public static var pttEnabled: Bool = false
     #else
     public static let pttEnabled: Bool = false
     #endif

@@ -8,8 +8,12 @@ struct PairingView: View {
     }
 
     private let auth: AuthService
+    @EnvironmentObject private var appState: AppState
     @State private var email: String = ""
     @State private var state: PairingState = .idle
+    @State private var code: String = ""
+    @State private var errorMessage: String? = nil
+    @State private var isVerifying: Bool = false
 
     init(auth: AuthService) {
         self.auth = auth
@@ -54,7 +58,7 @@ struct PairingView: View {
         }
     }
 
-    // MARK: - Sent state: confirmation + reset option
+    // MARK: - Sent state: confirmation + manual code entry
 
     private var sentView: some View {
         VStack(spacing: 16) {
@@ -66,15 +70,50 @@ struct PairingView: View {
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            Text("We sent a magic link to \(email).\nTap the link in your email to continue.")
+            Text("We sent a magic link to \(email).\nTap the link or enter the 6-digit code below.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
 
+            TextField("6-digit code", text: $code)
+                .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
+                .multilineTextAlignment(.center)
+                .font(.title.monospacedDigit())
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(10)
+
+            if let error = errorMessage {
+                Text(error)
+                    .foregroundStyle(.red)
+                    .font(.caption)
+            }
+
+            Button(isVerifying ? "Verifying…" : "Verify code") {
+                Task { await verifyCode() }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(code.count != 6 || isVerifying)
+
             Button("Use a different email") {
                 email = ""
+                code = ""
+                errorMessage = nil
                 state = .idle
             }
             .buttonStyle(.borderless)
+        }
+    }
+
+    private func verifyCode() async {
+        isVerifying = true
+        errorMessage = nil
+        do {
+            _ = try await auth.completePairing(code: code)
+            appState.hasAccessToken = true
+        } catch {
+            errorMessage = "Invalid or expired code. Try again."
+            isVerifying = false
         }
     }
 }

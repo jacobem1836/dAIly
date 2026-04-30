@@ -19,7 +19,7 @@ public enum LiveKitTokenError: Error, Equatable {
 
 /// Fetches a LiveKit room token from POST /livekit/token using Bearer JWT auth.
 /// Backend (Phase 18) returns {token, room, livekit_url}.
-public final class LiveKitTokenSource {
+public final class LiveKitTokenSource: Sendable {
     private let baseURL: URL
     private let session: URLSession
 

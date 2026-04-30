@@ -139,7 +139,7 @@ public final class VoiceSession: ObservableObject {
     public func setMicrophone(enabled: Bool) async {
         #if DEBUG
         guard DebugFlags.pttEnabled, let room = room else { return }
-        try? await room.localParticipant.setMicrophone(enabled: enabled)
+        _ = try? await room.localParticipant.setMicrophone(enabled: enabled)
         #endif
     }
 
@@ -179,6 +179,8 @@ public final class VoiceSession: ObservableObject {
             }
         case .connecting:
             state = .connecting
+        case .disconnecting:
+            break
         @unknown default:
             break
         }

@@ -6,7 +6,7 @@ public enum KeychainError: Error, Equatable {
     case dataEncodingFailed
 }
 
-public final class KeychainStore {
+public final class KeychainStore: @unchecked Sendable {
     public static let shared = KeychainStore(service: "com.daily.ios.tokens")
     private let service: String
 

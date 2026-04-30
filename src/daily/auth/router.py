@@ -133,14 +133,35 @@ async def pair_complete(
             PairingCode.expires_at > now,
         )
         .values(used=True)
-        .returning(PairingCode.id, PairingCode.user_id)
+        .returning(PairingCode.id, PairingCode.user_id, PairingCode.email)
     )
     result = await session.execute(stmt)
     row = result.first()
     if row is None:
         await session.rollback()
         raise HTTPException(status_code=400, detail="Invalid, used, or expired pairing code")
-    _, user_id = row
+    _, user_id, pairing_email = row
+
+    # Magic-link flow: user_id is null — find existing user by email in pairing codes
+    # or create a new user row (User table has no email column; email lives on PairingCode)
+    if user_id is None:
+        if not pairing_email:
+            await session.rollback()
+            raise HTTPException(status_code=400, detail="Pairing code has no associated email")
+        # Check if a user already exists with a prior pairing code for this email
+        prior = await session.execute(
+            select(PairingCode.user_id)
+            .where(PairingCode.email == pairing_email, PairingCode.user_id.is_not(None))
+            .limit(1)
+        )
+        existing_user_id = prior.scalar_one_or_none()
+        if existing_user_id is not None:
+            user_id = existing_user_id
+        else:
+            user = User()
+            session.add(user)
+            await session.flush()
+            user_id = user.id
 
     refresh = generate_refresh_token()
     key = settings.vault_key.encode() if isinstance(settings.vault_key, str) else settings.vault_key
