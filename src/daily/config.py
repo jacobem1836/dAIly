@@ -44,7 +44,3 @@ class Settings(BaseSettings):
     # Universal Links (Phase 19 / D-03)
     apple_team_id: str = ""
     apple_bundle_id: str = "com.daily.ios"
-
-    # Android App Links (Phase 20 / MOB-02)
-    android_package_name: str = "com.daily.android"
-    android_sha256_fingerprint: str = ""  # colon-separated hex; comma-separated list when multiple

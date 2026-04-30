@@ -1,0 +1,43 @@
+name: dAIly
+options:
+  bundleIdPrefix: com.jacobmarriott
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: en
+packages:
+  LiveKit:
+    url: https://github.com/livekit/client-sdk-swift.git
+    majorVersion: 2.13.0
+targets:
+  dAIly:
+    type: application
+    platform: iOS
+    sources: [dAIly]
+    dependencies:
+      - package: LiveKit
+        product: LiveKit
+    info:
+      path: dAIly/Info.plist
+      properties:
+        CFBundleDisplayName: dAIly
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIBackgroundModes: [audio]
+        NSMicrophoneUsageDescription: "dAIly uses your microphone for the voice briefing."
+        NSLocalNetworkUsageDescription: "dAIly connects to your local LiveKit dev server."
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jacobmarriott.daily
+        SWIFT_VERSION: "6.0"
+        CODE_SIGN_ENTITLEMENTS: dAIly/dAIly.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2"
+  dAIlyTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [dAIlyTests]
+    dependencies:
+      - target: dAIly
