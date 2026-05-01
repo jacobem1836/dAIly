@@ -98,9 +98,16 @@ Plans:
 - [x] 20.1-03-PLAN.md — Voice pipeline (STT/TTS/VAD) + briefing-on-connect entrypoint
 - [x] 20.1-04-PLAN.md — Dockerize worker + end-to-end smoke test (checkpoint)
 
-### Phase 21: Per-User Onboarding
+### Phase 21: Per-User Onboarding (Backend)
 
-**Goal:** In-app signup flow, OAuth connect screens (Google, Microsoft, Slack), briefing schedule setup. Every new user can independently connect their own accounts from within the app.
+**Goal:** Backend signup flow, per-user OAuth credential storage (Google, Microsoft, Slack), magic-link auth, briefing schedule configuration API. Every new user can independently connect their own accounts via API — no shared credentials. Frontend UI is Phase 21.1.
+**Plans:** TBD
+
+- [ ] TBD
+
+### Phase 21.1: Per-User Onboarding UI (INSERTED)
+
+**Goal:** Native iOS onboarding screens: welcome/signup, OAuth connect cards (Google, Microsoft, Slack), briefing schedule picker. Users complete full onboarding in-app without leaving to a browser (except OAuth deeplink redirect). Depends on Phase 21 backend.
 **Plans:** TBD
 
 - [ ] TBD
