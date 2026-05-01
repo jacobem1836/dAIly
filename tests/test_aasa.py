@@ -76,3 +76,23 @@ async def test_aasa_body_schema(client):
     detail = details[0]
     assert detail["appID"] == "ABCD1234.com.test.daily"
     assert "/pair" in detail["paths"]
+
+
+# ---------------------------------------------------------------------------
+# Test 4: AASA paths include /oauth/success (Plan 05 — stub)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skip(reason="Plan 05 — adds /oauth/success to AASA paths")
+@pytest.mark.asyncio
+async def test_aasa_includes_oauth_success_path(client):
+    """AASA paths list must include /oauth/success for Universal Link deep linking.
+
+    Plan 05 adds ``/oauth/success`` to the AASA ``paths`` array so that iOS
+    can intercept the backend's post-OAuth redirect and resume the onboarding
+    flow via ASWebAuthenticationSession.
+    """
+    resp = await client.get("/.well-known/apple-app-site-association")
+    assert resp.status_code == 200
+    paths = resp.json()["applinks"]["details"][0]["paths"]
+    assert "/oauth/success" in paths
