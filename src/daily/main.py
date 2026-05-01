@@ -122,7 +122,7 @@ async def apple_app_site_association() -> JSONResponse:
                 "details": [
                     {
                         "appID": f"{settings.apple_team_id}.{settings.apple_bundle_id}",
-                        "paths": ["/pair", "/pair/*"],
+                        "paths": ["/pair", "/pair/*", "/oauth/success"],
                     }
                 ],
             }

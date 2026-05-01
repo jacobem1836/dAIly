@@ -83,7 +83,6 @@ async def test_aasa_body_schema(client):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="Plan 05 — adds /oauth/success to AASA paths")
 @pytest.mark.asyncio
 async def test_aasa_includes_oauth_success_path(client):
     """AASA paths list must include /oauth/success for Universal Link deep linking.
