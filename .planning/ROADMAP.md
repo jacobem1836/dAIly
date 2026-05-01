@@ -101,9 +101,14 @@ Plans:
 ### Phase 21: Per-User Onboarding (Backend)
 
 **Goal:** Backend signup flow, per-user OAuth credential storage (Google, Microsoft, Slack), magic-link auth, briefing schedule configuration API. Every new user can independently connect their own accounts via API — no shared credentials. Frontend UI is Phase 21.1.
-**Plans:** TBD
+**Plans:** 5 plans
 
-- [ ] TBD
+Plans:
+- [ ] 21-01-PLAN.md — Add timezone column to BriefingConfig (model + Alembic migration)
+- [ ] 21-02-PLAN.md — Wave 0 test scaffolding (integrations, users, AASA, conftest fixtures)
+- [ ] 21-03-PLAN.md — Mobile OAuth integrations router (Google, Microsoft, Slack connect/callback)
+- [ ] 21-04-PLAN.md — Users router (integration status + briefing schedule preferences)
+- [ ] 21-05-PLAN.md — Wire routers into main.py, add /oauth/success to AASA, multi-user scheduler lifespan
 
 ### Phase 21.1: Per-User Onboarding UI (INSERTED)
 
@@ -189,7 +194,7 @@ Plans:
 | 18. LiveKit Backend | v2.0 | 3/3 | ✅ Complete (agent missing) | 2026-04-29 |
 | 19. Native iOS App | v2.0 | 5/5 | ✅ Complete | 2026-04-30 |
 | 20. Native Android App | v2.0 | 5/5 | ✅ Complete | 2026-04-30 |
-| 21. Per-User Onboarding | v2.1 | — | ○ Not started | — |
+| 21. Per-User Onboarding | v2.1 | 0/5 | ◐ Planned | — |
 | 22. Apple Integrations | v2.1 | — | ○ Not started | — |
 | 23. Production Backend Deploy | v2.1 | — | ○ Not started | — |
 | 24. Desktop Web Fallback | v2.2 | — | ○ Not started | — |
