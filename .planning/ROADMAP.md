@@ -90,13 +90,13 @@ See `.planning/milestones/v1.2-ROADMAP.md` for full phase details.
 **Goal:** Build the server-side LiveKit Agents worker that dispatches into a user's room on connect, delivers the briefing from Redis as TTS audio via LiveKit, and handles voice turns via the existing LangGraph orchestrator — making the iOS and Android apps fully functional end-to-end.
 **Requirements:** WORKER-01, WORKER-02, WORKER-03, WORKER-04, WORKER-05
 **Depends on:** Phase 19, Phase 20
-**Plans:** 2/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] 20.1-01-PLAN.md — Install livekit-agents, scaffold worker package, identity parser
 - [x] 20.1-02-PLAN.md — Per-user session bootstrap + LangGraph LLM bridge
-- [ ] 20.1-03-PLAN.md — Voice pipeline (STT/TTS/VAD) + briefing-on-connect entrypoint
-- [ ] 20.1-04-PLAN.md — Dockerize worker + end-to-end smoke test (checkpoint)
+- [x] 20.1-03-PLAN.md — Voice pipeline (STT/TTS/VAD) + briefing-on-connect entrypoint
+- [x] 20.1-04-PLAN.md — Dockerize worker + end-to-end smoke test (checkpoint)
 
 ### Phase 21: Per-User Onboarding
 
