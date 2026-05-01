@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     microsoft_client_id: str = ""
     microsoft_tenant_id: str = ""
+    microsoft_client_secret: str = ""
 
     redis_url: str = "redis://localhost:6379/0"
     openai_api_key: str = ""
