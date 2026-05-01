@@ -592,22 +592,13 @@ No migration needed for `IntegrationToken` — the delete-then-insert upsert pat
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Scheduler multi-user iteration**
-   - What we know: The scheduler currently runs only for `user_id=1`. `BriefingConfig` is per-user with a unique FK.
-   - What's unclear: Is Phase 21's scope to make the scheduler iterate all users, or just to store the preference and defer scheduling to a follow-on task?
-   - Recommendation: CONTEXT.md D-15 says "APScheduler cron job reads this per-user". This implies Phase 21 must update `main.py` to query all `BriefingConfig` rows and register a cron job per user. This is a non-trivial lifespan refactor. Planner should include this as a dedicated task (Wave 3).
+1. **Scheduler multi-user iteration** — RESOLVED: Plan 05 Task 2 implements multi-user lifespan refactor. `main.py` queries all `BriefingConfig` rows and registers one cron job per user on startup.
 
-2. **Google Flow reconstruction on callback — `client_config` source**
-   - What we know: The connect endpoint constructs a `Flow` from `client_config`. The callback must reconstruct the same Flow.
-   - What's unclear: Best approach for sharing the `client_config` helper between connect and callback without duplication.
-   - Recommendation: Define `_google_client_config(settings)` as a module-level helper in `integrations/router.py` returning the config dict. Both endpoints call it.
+2. **Google Flow reconstruction on callback — `client_config` source** — RESOLVED: Plan 03 defines `_google_client_config(settings)` as a module-level helper in `integrations/router.py`. Both connect and callback endpoints call it.
 
-3. **Slack `redirect_uri` registration**
-   - What we know: Slack requires the redirect URI to be registered in the Slack app settings.
-   - What's unclear: Whether the production URL is already configured in the Slack app settings, or if this is a deployment prerequisite.
-   - Recommendation: Document as a deployment prerequisite in the plan. The callback URL will be `{magic_link_base_url}/integrations/slack/callback`.
+3. **Slack `redirect_uri` registration** — RESOLVED: Documented as a deployment prerequisite in Plan 03 `user_setup` block. Callback URL is `{magic_link_base_url}/integrations/slack/callback`.
 
 ---
 
