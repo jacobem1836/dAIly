@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Mobile Voice
 status: executing
-last_updated: "2026-05-01T05:16:10.897Z"
+last_updated: "2026-05-01T22:38:57.067Z"
 last_activity: 2026-05-01
 progress:
   total_phases: 2
@@ -20,13 +20,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** The briefing always delivers — every morning, the user gets a prioritised, conversational summary of what matters without touching a single app.
-**Current focus:** Phase 20.1 — livekit-agent-worker
+**Current focus:** Phase 21 — per-user-onboarding
 
 ## Current Position
 
-Phase: 20.1
+Phase: 21
 Plan: Not started
-Status: Executing Phase 20.1
+Status: Executing Phase 21
 Last activity: 2026-05-01
 
 ## Completed Milestones
