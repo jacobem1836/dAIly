@@ -1,7 +1,7 @@
 """add timezone column to briefing_config
 
 Revision ID: 007_briefing_config_timezone
-Revises: 004
+Revises: 006
 Create Date: 2026-05-01
 
 Adds:
@@ -15,7 +15,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "007_briefing_config_timezone"
-down_revision: Union[str, Sequence[str], None] = "004"
+down_revision: Union[str, Sequence[str], None] = "006"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
