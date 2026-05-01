@@ -28,6 +28,7 @@ from daily.db.engine import async_session
 from daily.db.models import BriefingConfig
 from daily.integrations.router import router as integrations_router
 from daily.livekit.router import router as livekit_router
+from daily.users.router import router as users_router
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,7 @@ app = FastAPI(
 app.include_router(auth_router)
 app.include_router(integrations_router)
 app.include_router(livekit_router)
+app.include_router(users_router)
 
 
 @app.get("/health")
