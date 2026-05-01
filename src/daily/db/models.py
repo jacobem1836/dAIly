@@ -14,6 +14,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, unique=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now()
     )
@@ -44,6 +45,7 @@ class BriefingConfig(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
     schedule_hour: Mapped[int] = mapped_column(default=5)  # UTC hour
     schedule_minute: Mapped[int] = mapped_column(default=0)  # UTC minute
+    timezone: Mapped[str] = mapped_column(String(64), default="UTC", server_default="UTC")
     email_top_n: Mapped[int] = mapped_column(default=5)
     slack_channels: Mapped[list[str]] = mapped_column(
         ARRAY(String), server_default="{}", default=list
