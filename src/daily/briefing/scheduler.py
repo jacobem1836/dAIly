@@ -109,7 +109,7 @@ async def _build_pipeline_kwargs(user_id: int, settings: Settings) -> dict:
             email_adapters.append(gmail)
             cal = GoogleCalendarAdapter(credentials=google_creds)
             calendar_adapters.append(cal)
-        elif provider == "microsoft":
+        elif provider == "outlook":
             outlook = OutlookAdapter(credentials=decrypted)
             email_adapters.append(outlook)
         elif provider == "slack":
