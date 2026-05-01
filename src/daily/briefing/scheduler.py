@@ -161,6 +161,18 @@ async def _scheduled_pipeline_run(user_id: int) -> None:
             await redis.aclose()
 
 
+def setup_scheduler_for_user(hour: int, minute: int, user_id: int) -> None:
+    """Register a CronTrigger job for one user. Idempotent — replaces if exists."""
+    job_id = f"briefing_user_{user_id}"
+    scheduler.add_job(
+        _scheduled_pipeline_run,
+        trigger=CronTrigger(hour=hour, minute=minute, timezone="UTC"),
+        kwargs={"user_id": user_id},
+        id=job_id,
+        replace_existing=True,
+    )
+
+
 def setup_scheduler(hour: int, minute: int, user_id: int) -> None:
     """Add the briefing pipeline cron job. Called before scheduler.start().
 
