@@ -1,4 +1,6 @@
+import AuthenticationServices
 import Foundation
+import UIKit
 
 // MARK: - Public Types
 
@@ -79,19 +81,66 @@ public final class AuthService {
                           value: ISO8601DateFormatter().string(from: expires))
     }
 
+    // MARK: - Public integration methods
+
+    /// Fetches the OAuth authorization URL for the given provider (D-13).
+    /// Calls GET /integrations/{provider}/connect with Bearer access_token.
+    /// Backend response shape is { "auth_url": "https://..." } — verified
+    /// 21.1-RESEARCH.md §Confirmed API Contracts (the field name is auth_url,
+    /// NOT authorization_url despite some earlier UI-SPEC drafts).
+    public func getIntegrationConnectURL(provider: String) async throws -> URL {
+        struct Resp: Decodable { let auth_url: String }
+        let r: Resp = try await getJSON(
+            path: "/integrations/\(provider)/connect",
+            expecting: Resp.self
+        )
+        guard let url = URL(string: r.auth_url) else {
+            throw AuthError.decoding
+        }
+        return url
+    }
+
+    /// Saves the user's briefing time and timezone preferences (D-15, D-16).
+    /// Calls PUT /users/me/preferences (NOTE: /users/me/preferences, not
+    /// /users/preferences — verified backend at src/daily/users/router.py:97).
+    /// Returns on 204 No Content.
+    public func savePreferences(briefingTime: String, timezone: String) async throws {
+        try await putJSON(
+            path: "/users/me/preferences",
+            body: ["briefing_time": briefingTime, "timezone": timezone],
+            expecting: EmptyResponse.self
+        )
+    }
+
     // MARK: - Private helpers
 
     private struct EmptyResponse: Decodable {}
 
     @discardableResult
-    private func postJSON<T: Decodable>(path: String,
-                                         body: [String: String],
-                                         expecting: T.Type) async throws -> T {
+    private func getJSON<T: Decodable>(path: String, expecting: T.Type) async throws -> T {
         var req = URLRequest(url: baseURL.appendingPathComponent(path))
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        req.httpMethod = "GET"
+        if let token = keychain.load(key: "access_token") {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        return try await sendAndDecode(req: req, expecting: expecting)
+    }
 
+    @discardableResult
+    private func putJSON<T: Decodable>(path: String,
+                                        body: [String: String],
+                                        expecting: T.Type) async throws -> T {
+        var req = URLRequest(url: baseURL.appendingPathComponent(path))
+        req.httpMethod = "PUT"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = keychain.load(key: "access_token") {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try await sendAndDecode(req: req, expecting: expecting)
+    }
+
+    private func sendAndDecode<T: Decodable>(req: URLRequest, expecting: T.Type) async throws -> T {
         do {
             let (data, response) = try await session.data(for: req)
             guard let http = response as? HTTPURLResponse else {
@@ -114,5 +163,16 @@ public final class AuthService {
         } catch {
             throw AuthError.network(String(describing: error))
         }
+    }
+
+    @discardableResult
+    private func postJSON<T: Decodable>(path: String,
+                                         body: [String: String],
+                                         expecting: T.Type) async throws -> T {
+        var req = URLRequest(url: baseURL.appendingPathComponent(path))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try await sendAndDecode(req: req, expecting: expecting)
     }
 }
