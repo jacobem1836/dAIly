@@ -22,6 +22,7 @@
 		58084FD15403238F97585355 /* LiveKit in Frameworks */ = {isa = PBXBuildFile; productRef = FDA98E751AA2B195AF62EBD7 /* LiveKit */; };
 		5E807B72B008409CCD16F3F4 /* IntegrationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54697A3721AF38B72C8F3522 /* IntegrationState.swift */; };
 		668FD845898D68C790FEC6B2 /* DebugFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D83FBE1B852E8BFA14606B4 /* DebugFlags.swift */; };
+		6A816971AB62199A6B306CFE /* IntegrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249ECFDC86274A5984231382 /* IntegrationView.swift */; };
 		71BB147FB278331E1E9E287A /* IntegrationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40312E64303E6BF388106413 /* IntegrationProvider.swift */; };
 		8A3CE4E4AB845F7CFE6C051A /* OAuthCallbackParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D27764E579A6DD44E12F443C /* OAuthCallbackParserTests.swift */; };
 		A375473F61E9A3815E5A3F95 /* dAIlyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CD0CA433CC154B3501CA978 /* dAIlyApp.swift */; };
@@ -52,6 +53,7 @@
 		07C798D6555FE9ABDBDB467D /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		12D6C857947FC8F86D4FDBF2 /* KeychainStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStoreTests.swift; sourceTree = "<group>"; };
 		1D03C70CD16F956BE3B9EC05 /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
+		249ECFDC86274A5984231382 /* IntegrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationView.swift; sourceTree = "<group>"; };
 		26925FD04998254E0D725EDD /* dAIly.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = dAIly.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3CD0CA433CC154B3501CA978 /* dAIlyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = dAIlyApp.swift; sourceTree = "<group>"; };
 		40312E64303E6BF388106413 /* IntegrationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationProvider.swift; sourceTree = "<group>"; };
@@ -96,6 +98,7 @@
 			children = (
 				40312E64303E6BF388106413 /* IntegrationProvider.swift */,
 				54697A3721AF38B72C8F3522 /* IntegrationState.swift */,
+				249ECFDC86274A5984231382 /* IntegrationView.swift */,
 				F7D74E7100A5D1A77D37F239 /* ScheduleView.swift */,
 				BA7F17E8D526949DF0201E1A /* WelcomeView.swift */,
 			);
@@ -269,6 +272,7 @@
 				668FD845898D68C790FEC6B2 /* DebugFlags.swift in Sources */,
 				71BB147FB278331E1E9E287A /* IntegrationProvider.swift in Sources */,
 				5E807B72B008409CCD16F3F4 /* IntegrationState.swift in Sources */,
+				6A816971AB62199A6B306CFE /* IntegrationView.swift in Sources */,
 				1FEBD0F3DB93546D9C070F68 /* KeychainStore.swift in Sources */,
 				C5C621311DC61B6F0DC914C0 /* LiveKitTokenSource.swift in Sources */,
 				37D221EB7FE5B70AB0A2BEF7 /* OAuthCallbackParser.swift in Sources */,
