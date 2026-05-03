@@ -41,3 +41,6 @@ targets:
     sources: [dAIlyTests]
     dependencies:
       - target: dAIly
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
