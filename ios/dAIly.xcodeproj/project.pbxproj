@@ -14,23 +14,16 @@
 		285344D647A52AE40434922A /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B87F815C25AF4CAF8C5C451 /* AppState.swift */; };
 		2F03D8B3DBD648780EE83606 /* PairCodeURLParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7C6DC5730F20B69F8FE9A10 /* PairCodeURLParser.swift */; };
 		329AA777AA8869BBBE5A8D48 /* AuthServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87A4A357CC8389F02A323D8A /* AuthServiceTests.swift */; };
-		37D221EB7FE5B70AB0A2BEF7 /* OAuthCallbackParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD7C9B88737FB0EDCDA8089 /* OAuthCallbackParser.swift */; };
 		3E8275649EBEA6F9A3DA1489 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D03C70CD16F956BE3B9EC05 /* PairingView.swift */; };
-		4561CA0F184C6E410ABE26F6 /* AppStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD11228C8AC0B4CFF3B70A1F /* AppStateTests.swift */; };
 		58084FD15403238F97585355 /* LiveKit in Frameworks */ = {isa = PBXBuildFile; productRef = FDA98E751AA2B195AF62EBD7 /* LiveKit */; };
-		5E807B72B008409CCD16F3F4 /* IntegrationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54697A3721AF38B72C8F3522 /* IntegrationState.swift */; };
 		668FD845898D68C790FEC6B2 /* DebugFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D83FBE1B852E8BFA14606B4 /* DebugFlags.swift */; };
-		71BB147FB278331E1E9E287A /* IntegrationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40312E64303E6BF388106413 /* IntegrationProvider.swift */; };
-		8A3CE4E4AB845F7CFE6C051A /* OAuthCallbackParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D27764E579A6DD44E12F443C /* OAuthCallbackParserTests.swift */; };
 		A375473F61E9A3815E5A3F95 /* dAIlyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CD0CA433CC154B3501CA978 /* dAIlyApp.swift */; };
 		A9B0200868CE63424891417B /* ConnectionIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FF0CAF31772FD0606347860 /* ConnectionIndicator.swift */; };
-		BB6F4624CCF0F05F06A65E3F /* OnboardingKeychainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED48D3604DD5BE66A4FFFCF3 /* OnboardingKeychainTests.swift */; };
 		C0AF52C90CF21355F76FB782 /* VoiceSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 752A7AE4D33B140ACD8803AC /* VoiceSession.swift */; };
 		C241A43617DF0FF7338AE864 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52E0D2DF5ABB52AAABC4D067 /* AuthService.swift */; };
 		C5C621311DC61B6F0DC914C0 /* LiveKitTokenSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CC5FFAD37184173FC5A9F73 /* LiveKitTokenSource.swift */; };
 		C8549386EE090F1698EDA339 /* PairCodeURLParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FCCBD1B33C83F6088357E80 /* PairCodeURLParserTests.swift */; };
 		D1FDC2044FBCD07335A98394 /* TokenRefresher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A6C58DE0F98F17EE846AA2 /* TokenRefresher.swift */; };
-		D7EEE8CD9AEB246EA91C52E6 /* IntegrationStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78933C431583629FAAC7890 /* IntegrationStateTests.swift */; };
 		DECBC55FB31F01EC556A929E /* VoiceSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41A7E87BCC8D2E7A5BB2C692 /* VoiceSessionTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -50,13 +43,11 @@
 		07C798D6555FE9ABDBDB467D /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		12D6C857947FC8F86D4FDBF2 /* KeychainStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStoreTests.swift; sourceTree = "<group>"; };
 		1D03C70CD16F956BE3B9EC05 /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
-		26925FD04998254E0D725EDD /* dAIly.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = dAIly.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		26925FD04998254E0D725EDD /* dAIly.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = dAIly.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3CD0CA433CC154B3501CA978 /* dAIlyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = dAIlyApp.swift; sourceTree = "<group>"; };
-		40312E64303E6BF388106413 /* IntegrationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationProvider.swift; sourceTree = "<group>"; };
 		41A7E87BCC8D2E7A5BB2C692 /* VoiceSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionTests.swift; sourceTree = "<group>"; };
 		4CC5FFAD37184173FC5A9F73 /* LiveKitTokenSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveKitTokenSource.swift; sourceTree = "<group>"; };
 		52E0D2DF5ABB52AAABC4D067 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
-		54697A3721AF38B72C8F3522 /* IntegrationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationState.swift; sourceTree = "<group>"; };
 		5D83FBE1B852E8BFA14606B4 /* DebugFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugFlags.swift; sourceTree = "<group>"; };
 		752A7AE4D33B140ACD8803AC /* VoiceSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSession.swift; sourceTree = "<group>"; };
 		87A4A357CC8389F02A323D8A /* AuthServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthServiceTests.swift; sourceTree = "<group>"; };
@@ -65,14 +56,9 @@
 		9B87F815C25AF4CAF8C5C451 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		9F9B12A6C59D5FEDFABE7E13 /* dAIlyTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = dAIlyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9FF0CAF31772FD0606347860 /* ConnectionIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionIndicator.swift; sourceTree = "<group>"; };
-		ADD7C9B88737FB0EDCDA8089 /* OAuthCallbackParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthCallbackParser.swift; sourceTree = "<group>"; };
 		B119761300EB73F212A2134B /* VoiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceView.swift; sourceTree = "<group>"; };
-		B78933C431583629FAAC7890 /* IntegrationStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationStateTests.swift; sourceTree = "<group>"; };
 		CB66279C1B5AA22E33DB5E56 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
-		CD11228C8AC0B4CFF3B70A1F /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
-		D27764E579A6DD44E12F443C /* OAuthCallbackParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthCallbackParserTests.swift; sourceTree = "<group>"; };
 		D7C6DC5730F20B69F8FE9A10 /* PairCodeURLParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairCodeURLParser.swift; sourceTree = "<group>"; };
-		ED48D3604DD5BE66A4FFFCF3 /* OnboardingKeychainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingKeychainTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -87,15 +73,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		1D51BB90F43CBB3C243B1B18 /* onboarding */ = {
-			isa = PBXGroup;
-			children = (
-				40312E64303E6BF388106413 /* IntegrationProvider.swift */,
-				54697A3721AF38B72C8F3522 /* IntegrationState.swift */,
-			);
-			path = onboarding;
-			sourceTree = "<group>";
-		};
 		4260E524FD1F0EE07C517553 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -110,7 +87,6 @@
 			children = (
 				52E0D2DF5ABB52AAABC4D067 /* AuthService.swift */,
 				07C798D6555FE9ABDBDB467D /* KeychainStore.swift */,
-				ADD7C9B88737FB0EDCDA8089 /* OAuthCallbackParser.swift */,
 				D7C6DC5730F20B69F8FE9A10 /* PairCodeURLParser.swift */,
 				01A6C58DE0F98F17EE846AA2 /* TokenRefresher.swift */,
 			);
@@ -146,7 +122,6 @@
 				9097C659B7F26D5AB338B21B /* Info.plist */,
 				4951E5F37A2F2B6446714ADA /* auth */,
 				CF120E0B0CC53F93FD3265D3 /* livekit */,
-				1D51BB90F43CBB3C243B1B18 /* onboarding */,
 				A11AF02E3C09B198098B87CA /* views */,
 			);
 			path = dAIly;
@@ -165,12 +140,8 @@
 		F0C806E01A5671C0EEDA75BF /* dAIlyTests */ = {
 			isa = PBXGroup;
 			children = (
-				CD11228C8AC0B4CFF3B70A1F /* AppStateTests.swift */,
 				87A4A357CC8389F02A323D8A /* AuthServiceTests.swift */,
-				B78933C431583629FAAC7890 /* IntegrationStateTests.swift */,
 				12D6C857947FC8F86D4FDBF2 /* KeychainStoreTests.swift */,
-				D27764E579A6DD44E12F443C /* OAuthCallbackParserTests.swift */,
-				ED48D3604DD5BE66A4FFFCF3 /* OnboardingKeychainTests.swift */,
 				8FCCBD1B33C83F6088357E80 /* PairCodeURLParserTests.swift */,
 				41A7E87BCC8D2E7A5BB2C692 /* VoiceSessionTests.swift */,
 			);
@@ -225,8 +196,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
-				TargetAttributes = {
-				};
 			};
 			buildConfigurationList = C3B39126B43B6AFC5E45FBDB /* Build configuration list for PBXProject "dAIly" */;
 			developmentRegion = en;
@@ -261,11 +230,8 @@
 				0E7E89C994E7811A7344C4EC /* Config.swift in Sources */,
 				A9B0200868CE63424891417B /* ConnectionIndicator.swift in Sources */,
 				668FD845898D68C790FEC6B2 /* DebugFlags.swift in Sources */,
-				71BB147FB278331E1E9E287A /* IntegrationProvider.swift in Sources */,
-				5E807B72B008409CCD16F3F4 /* IntegrationState.swift in Sources */,
 				1FEBD0F3DB93546D9C070F68 /* KeychainStore.swift in Sources */,
 				C5C621311DC61B6F0DC914C0 /* LiveKitTokenSource.swift in Sources */,
-				37D221EB7FE5B70AB0A2BEF7 /* OAuthCallbackParser.swift in Sources */,
 				2F03D8B3DBD648780EE83606 /* PairCodeURLParser.swift in Sources */,
 				3E8275649EBEA6F9A3DA1489 /* PairingView.swift in Sources */,
 				D1FDC2044FBCD07335A98394 /* TokenRefresher.swift in Sources */,
@@ -279,12 +245,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4561CA0F184C6E410ABE26F6 /* AppStateTests.swift in Sources */,
 				329AA777AA8869BBBE5A8D48 /* AuthServiceTests.swift in Sources */,
-				D7EEE8CD9AEB246EA91C52E6 /* IntegrationStateTests.swift in Sources */,
 				233581FF4ED8736C505007C8 /* KeychainStoreTests.swift in Sources */,
-				8A3CE4E4AB845F7CFE6C051A /* OAuthCallbackParserTests.swift in Sources */,
-				BB6F4624CCF0F05F06A65E3F /* OnboardingKeychainTests.swift in Sources */,
 				C8549386EE090F1698EDA339 /* PairCodeURLParserTests.swift in Sources */,
 				DECBC55FB31F01EC556A929E /* VoiceSessionTests.swift in Sources */,
 			);
@@ -424,7 +386,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
-				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -443,6 +404,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = dAIly/dAIly.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 68DR9C9ZKL;
 				INFOPLIST_FILE = dAIly/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -461,6 +423,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = dAIly/dAIly.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 68DR9C9ZKL;
 				INFOPLIST_FILE = dAIly/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -477,7 +440,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
-				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

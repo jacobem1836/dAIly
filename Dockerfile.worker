@@ -1,0 +1,26 @@
+FROM python:3.11-slim
+
+# System deps for audio: ffmpeg + libsndfile for audio-frame work the SDK does
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg libsndfile1 ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+RUN pip install --no-cache-dir uv
+
+WORKDIR /app
+
+# Install Python deps first (better layer caching)
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev || uv sync --no-dev
+
+# Copy source
+COPY src ./src
+COPY alembic.ini ./
+COPY alembic ./alembic
+
+# Pre-download Silero VAD model so first dispatch isn't delayed
+RUN uv run python -m daily.worker download-files || true
+
+ENV PYTHONUNBUFFERED=1
+CMD ["uv", "run", "python", "-m", "daily.worker", "start"]
