@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Mobile Voice
 status: executing
-last_updated: "2026-05-02T05:30:30.338Z"
-last_activity: 2026-05-01
+last_updated: "2026-05-03T01:20:46.127Z"
+last_activity: 2026-05-03 -- Phase 21.1 execution started
 progress:
   total_phases: 2
   completed_phases: 2
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** The briefing always delivers — every morning, the user gets a prioritised, conversational summary of what matters without touching a single app.
-**Current focus:** Phase 21 — per-user-onboarding
+**Current focus:** Phase 21.1 — per-user-onboarding-ui
 
 ## Current Position
 
-Phase: 21
-Plan: Not started
-Status: Executing Phase 21
-Last activity: 2026-05-01
+Phase: 21.1 (per-user-onboarding-ui) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 21.1
+Last activity: 2026-05-03 -- Phase 21.1 execution started
 
 ## Completed Milestones
 
@@ -82,8 +82,11 @@ None active.
 |---|-------------|------|--------|-----------|
 | 260411-vlh | Fix Google credentials reconstruction | 2026-04-11 | dc41c9f | [260411-vlh-fix-google-credentials-reconstruction-bu](./quick/260411-vlh-fix-google-credentials-reconstruction-bu/) |
 | 260412-gak | Fix null recipient in draft_node — pass email metadata to LLM prompt | 2026-04-12 | 60975dd | [260412-gak-fix-null-recipient-in-draft-node-pass-em](./quick/260412-gak-fix-null-recipient-in-draft-node-pass-em/) |
+| 260503-gdw | Update magic link email to also include the OTP code as plain text | 2026-05-03 | c381b03 | [260503-gdw-update-magic-link-email-to-also-include-](./quick/260503-gdw-update-magic-link-email-to-also-include-/) |
 
 ## Session Continuity
+
+Last activity: 2026-05-03 - Completed quick task 260503-gdw: Update magic link email to also include the OTP code as plain text
 
 Last session: 2026-05-02T05:30:30.335Z
 Phase 17 (voice polish) complete. Planning docs reconstructed to reflect full v1.0–v1.3 history — the phase-17 branch had branched from phase-06 and the ROADMAP/STATE/MILESTONES had overwritten all intermediate milestone history. Now corrected.
