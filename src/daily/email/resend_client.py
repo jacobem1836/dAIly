@@ -24,6 +24,7 @@ async def send_magic_link(email: str, code: str, *, settings: Settings) -> None:
         f'<p>Tap to sign in to dAIly: '
         f'<a href="{magic_url}">Open dAIly</a></p>'
         f'<p>This link expires in 5 minutes.</p>'
+        f'<p>Or enter code manually: {code}</p>'
     )
 
     async with httpx.AsyncClient() as client:
