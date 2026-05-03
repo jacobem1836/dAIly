@@ -92,13 +92,14 @@ struct OnboardingView: View {
         .tabViewStyle(.page)
         .indexViewStyle(.page(backgroundDisplayMode: .always))
         // Forward-only gate (D-02). Clamp on every selection change.
-        .onChange(of: currentTab) { _, newValue in
+        // Single-argument form required for iOS 16 deployment target compatibility.
+        .onChange(of: currentTab) { newValue in
             if newValue > allowedMaxTab {
                 currentTab = allowedMaxTab
             }
         }
         // Auto-advance after pairing succeeds (Pattern 4).
-        .onChange(of: appState.hasAccessToken) { _, newValue in
+        .onChange(of: appState.hasAccessToken) { newValue in
             if newValue && currentTab == 1 {
                 withAnimation { currentTab = 2 }
             }
