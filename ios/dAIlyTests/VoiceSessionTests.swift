@@ -102,6 +102,7 @@ final class LiveKitTokenSourceTests: XCTestCase {
 
 // MARK: - VoiceSessionStateTests (state machine — no real LiveKit needed)
 
+@MainActor
 final class VoiceSessionStateTests: XCTestCase {
 
     // Test 1: New session has state == .idle
