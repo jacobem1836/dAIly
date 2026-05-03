@@ -267,27 +267,28 @@ class TestCLIVip:
 
 
 class TestSchedulePersistence:
-    """UAT 9: BriefingConfig rows are picked up by lifespan on startup."""
+    """UAT 9: Config set via CLI is picked up by lifespan on restart."""
 
     @pytest.mark.asyncio
     async def test_lifespan_reads_db_schedule(self):
-        """Lifespan calls setup_scheduler_for_user for each BriefingConfig row."""
-        row = MagicMock()
-        row.user_id = 1
-        row.schedule_hour = 7
-        row.schedule_minute = 30
+        """Lifespan uses DB-stored 07:30 instead of env default 05:00."""
+        mock_config = MagicMock()
+        mock_config.schedule_hour = 7
+        mock_config.schedule_minute = 30
 
         mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = [row]
+        mock_result.scalar_one_or_none.return_value = mock_config
 
         mock_ctx, _ = _mock_db_session(execute_return=mock_result)
         mock_sched = _mock_scheduler()
 
         with (
             patch("daily.main.async_session", return_value=mock_ctx),
-            patch("daily.main.setup_scheduler_for_user") as mock_setup,
+            patch("daily.main.setup_scheduler") as mock_setup,
             patch("daily.main.scheduler", mock_sched),
+            patch("daily.main.Settings") as mock_settings_cls,
         ):
+            mock_settings_cls.return_value.briefing_schedule_time = "05:00"
             from fastapi import FastAPI
             from daily.main import lifespan
 
@@ -299,24 +300,25 @@ class TestSchedulePersistence:
 
     @pytest.mark.asyncio
     async def test_lifespan_logs_db_schedule(self, caplog):
-        """Lifespan logs 'Registered N per-user briefing cron jobs'."""
-        row = MagicMock()
-        row.user_id = 1
-        row.schedule_hour = 7
-        row.schedule_minute = 30
+        """Lifespan logs 'Briefing schedule loaded from database: 07:30 UTC'."""
+        mock_config = MagicMock()
+        mock_config.schedule_hour = 7
+        mock_config.schedule_minute = 30
 
         mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = [row]
+        mock_result.scalar_one_or_none.return_value = mock_config
 
         mock_ctx, _ = _mock_db_session(execute_return=mock_result)
         mock_sched = _mock_scheduler()
 
         with (
             patch("daily.main.async_session", return_value=mock_ctx),
-            patch("daily.main.setup_scheduler_for_user"),
+            patch("daily.main.setup_scheduler"),
             patch("daily.main.scheduler", mock_sched),
+            patch("daily.main.Settings") as mock_settings_cls,
             caplog.at_level(logging.INFO, logger="daily.main"),
         ):
+            mock_settings_cls.return_value.briefing_schedule_time = "05:00"
             from fastapi import FastAPI
             from daily.main import lifespan
 
@@ -324,7 +326,7 @@ class TestSchedulePersistence:
             async with lifespan(test_app):
                 pass
 
-        assert "Registered 1 per-user briefing cron jobs" in caplog.text
+        assert "Briefing schedule loaded from database: 07:30 UTC" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -356,35 +358,38 @@ class TestGracefulDBFallback:
         assert response.json() == {"status": "ok"}
 
     def test_falls_back_to_env_schedule_on_db_failure(self):
-        """When DB is down, no jobs are registered and scheduler still starts."""
+        """When DB is down, setup_scheduler uses env default (05:00)."""
         mock_ctx, _ = _mock_db_session(side_effect=Exception("Connection refused"))
         mock_sched = _mock_scheduler()
 
         with (
             patch("daily.main.async_session", return_value=mock_ctx),
-            patch("daily.main.setup_scheduler_for_user") as mock_setup,
+            patch("daily.main.setup_scheduler") as mock_setup,
             patch("daily.main.scheduler", mock_sched),
+            patch("daily.main.Settings") as mock_settings_cls,
         ):
+            mock_settings_cls.return_value.briefing_schedule_time = "05:00"
             from daily.main import app
 
             with TestClient(app):
                 pass
 
-        mock_setup.assert_not_called()
-        mock_sched.start.assert_called()
+        mock_setup.assert_called_once_with(hour=5, minute=0, user_id=1)
 
     @pytest.mark.asyncio
     async def test_logs_db_fallback_warning(self, caplog):
-        """Lifespan logs error when DB config read fails."""
+        """Lifespan logs warning when DB config read fails."""
         mock_ctx, _ = _mock_db_session(side_effect=Exception("DB unavailable"))
         mock_sched = _mock_scheduler()
 
         with (
             patch("daily.main.async_session", return_value=mock_ctx),
-            patch("daily.main.setup_scheduler_for_user"),
+            patch("daily.main.setup_scheduler"),
             patch("daily.main.scheduler", mock_sched),
+            patch("daily.main.Settings") as mock_settings_cls,
             caplog.at_level(logging.WARNING, logger="daily.main"),
         ):
+            mock_settings_cls.return_value.briefing_schedule_time = "05:00"
             from fastapi import FastAPI
             from daily.main import lifespan
 
@@ -392,4 +397,4 @@ class TestGracefulDBFallback:
             async with lifespan(test_app):
                 pass
 
-        assert "Failed to load BriefingConfig rows" in caplog.text
+        assert "Failed to read BriefingConfig from database" in caplog.text

@@ -109,7 +109,7 @@ async def _build_pipeline_kwargs(user_id: int, settings: Settings) -> dict:
             email_adapters.append(gmail)
             cal = GoogleCalendarAdapter(credentials=google_creds)
             calendar_adapters.append(cal)
-        elif provider == "outlook":
+        elif provider == "microsoft":
             outlook = OutlookAdapter(credentials=decrypted)
             email_adapters.append(outlook)
         elif provider == "slack":
@@ -159,18 +159,6 @@ async def _scheduled_pipeline_run(user_id: int) -> None:
         redis = kwargs.get("redis")
         if redis is not None:
             await redis.aclose()
-
-
-def setup_scheduler_for_user(hour: int, minute: int, user_id: int) -> None:
-    """Register a CronTrigger job for one user. Idempotent — replaces if exists."""
-    job_id = f"briefing_user_{user_id}"
-    scheduler.add_job(
-        _scheduled_pipeline_run,
-        trigger=CronTrigger(hour=hour, minute=minute, timezone="UTC"),
-        kwargs={"user_id": user_id},
-        id=job_id,
-        replace_existing=True,
-    )
 
 
 def setup_scheduler(hour: int, minute: int, user_id: int) -> None:
