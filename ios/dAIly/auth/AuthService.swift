@@ -112,6 +112,43 @@ public final class AuthService {
         )
     }
 
+    // MARK: - OAuth session
+
+    // Held to keep the session and presentation provider alive for the duration
+    // of the OAuth flow. Replaced on each new session start.
+    private var currentOAuthSession: ASWebAuthenticationSession?
+    private let oauthPresentationProvider = OAuthPresentationContextProvider()
+
+    /// Opens an ASWebAuthenticationSession for the given OAuth authorization URL (D-13).
+    ///
+    /// Uses callbackURLScheme: nil because the OAuth callback is delivered as a
+    /// Universal Link to /oauth/success?provider= — the system dismisses the
+    /// session automatically and dAIlyApp.onOpenURL receives the redirect (see
+    /// 21.1-RESEARCH.md §Pattern 3 and §Pitfall 4: do NOT use
+    /// withCheckedThrowingContinuation here — the callback handler does not fire
+    /// for Universal Link callbacks, and the continuation would never resume).
+    ///
+    /// Fire-and-forget: returns once the session has started. The caller updates
+    /// UI reactively when IntegrationState.markConnected is called from
+    /// dAIlyApp.onOpenURL.
+    @MainActor
+    public func openOAuthSession(url: URL) throws {
+        let session = ASWebAuthenticationSession(
+            url: url,
+            callbackURLScheme: nil
+        ) { _, _ in
+            // Universal Link callbacks do not fire this handler. This closure is
+            // intentionally a no-op; the only path that runs it is user
+            // cancellation, in which case we simply tear down state.
+        }
+        session.presentationContextProvider = oauthPresentationProvider
+        session.prefersEphemeralWebBrowserSession = false
+        guard session.start() else {
+            throw AuthError.network("ASWebAuthenticationSession failed to start")
+        }
+        self.currentOAuthSession = session
+    }
+
     // MARK: - Private helpers
 
     private struct EmptyResponse: Decodable {}
@@ -174,5 +211,23 @@ public final class AuthService {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         return try await sendAndDecode(req: req, expecting: expecting)
+    }
+}
+
+// MARK: - OAuthPresentationContextProvider
+
+/// Provides the active foreground UIWindow for ASWebAuthenticationSession.
+/// Required because the project uses pure SwiftUI lifecycle (@main struct App)
+/// without a SceneDelegate.
+@MainActor
+final class OAuthPresentationContextProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first(where: { $0.activationState == .foregroundActive })
+            ?? UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        return scene?.keyWindow
+            ?? scene?.windows.first
+            ?? UIWindow()
     }
 }
