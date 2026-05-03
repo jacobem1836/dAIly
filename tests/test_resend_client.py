@@ -139,3 +139,37 @@ def test_settings_exposes_resend_and_apple_fields(monkeypatch):
     assert settings.magic_link_base_url == "https://app.example.com"
     assert settings.apple_team_id == "ABCD1234"
     assert settings.apple_bundle_id == "com.daily.ios"
+
+
+# ---------------------------------------------------------------------------
+# Test 5: Email body contains plain-text OTP code for manual entry
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_send_magic_link_body_contains_code_fallback(monkeypatch):
+    """Email HTML body contains the plain-text OTP code for manual entry."""
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+        text = "ok"
+
+    class FakeAsyncClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, url, *, headers, json):
+            captured["json"] = json
+            return FakeResponse()
+
+    import daily.email.resend_client as rc
+    monkeypatch.setattr(rc.httpx, "AsyncClient", lambda: FakeAsyncClient())
+
+    settings = _make_settings()
+    await rc.send_magic_link("user@example.com", "654321", settings=settings)
+
+    html = captured["json"]["html"]
+    assert "Or enter code manually: 654321" in html
