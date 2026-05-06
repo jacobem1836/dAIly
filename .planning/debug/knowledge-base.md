@@ -12,3 +12,11 @@ Resolved debug sessions. Used by `gsd-debugger` to surface known-pattern hypothe
 - **Files changed:** src/daily/profile/service.py, tests/test_profile_service.py
 ---
 
+## uvicorn-startup-hang — Uvicorn reloader starts but worker never prints "Application startup complete"
+- **Date:** 2026-05-06
+- **Error patterns:** uvicorn hang, reloader process, application startup complete, port 8000, worker process
+- **Root cause:** Stale uvicorn process from a prior dev session was holding port 8000. The new uvicorn's reloader process started fine (it doesn't bind to the port), but the forked worker subprocess couldn't bind and silently failed. No code error — the recent code changes were all correct.
+- **Fix:** Kill the stale uvicorn process holding port 8000. Check with `lsof -i :8000` before assuming the bug is in code.
+- **Files changed:** (none — no code change needed)
+---
+
