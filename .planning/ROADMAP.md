@@ -113,13 +113,13 @@ Plans:
 ### Phase 21.1: Per-User Onboarding UI (INSERTED)
 
 **Goal:** Native iOS onboarding screens: welcome/signup, OAuth connect cards (Google, Microsoft, Slack), briefing schedule picker. Users complete full onboarding in-app without leaving to a browser (except OAuth deeplink redirect). Depends on Phase 21 backend.
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 
 Plans:
-- [ ] 21.1-01-PLAN.md — State + model layer (AppState extension, IntegrationState, IntegrationProvider, OAuthCallbackParser) + Wave 0 tests
-- [ ] 21.1-02-PLAN.md — AuthService extensions (getIntegrationConnectURL, openOAuthSession, savePreferences) with Bearer auth + tests
-- [ ] 21.1-03-PLAN.md — Onboarding leaf views (WelcomeView, IntegrationView, ScheduleView, CompletionView)
-- [ ] 21.1-04-PLAN.md — OnboardingView TabView + dAIlyApp routing + deep-link wiring (manual verification checkpoint)
+- [x] 21.1-01-PLAN.md — State + model layer (AppState extension, IntegrationState, IntegrationProvider, OAuthCallbackParser) + Wave 0 tests
+- [x] 21.1-02-PLAN.md — AuthService extensions (getIntegrationConnectURL, openOAuthSession, savePreferences) with Bearer auth + tests
+- [x] 21.1-03-PLAN.md — Onboarding leaf views (WelcomeView, IntegrationView, ScheduleView, CompletionView)
+- [x] 21.1-04-PLAN.md — OnboardingView TabView + dAIlyApp routing + deep-link wiring (manual verification checkpoint)
 
 ### Phase 22: Apple Integrations
 
