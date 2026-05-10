@@ -87,11 +87,9 @@ struct CompletionView: View {
 }
 
 #Preview {
-    let state = IntegrationState()
-    state.markConnected(provider: "google")
-    return CompletionView(
+    CompletionView(
         auth: AuthService(baseURL: URL(string: "http://localhost:8000")!),
-        integrationState: state,
+        integrationState: IntegrationState(),
         briefingTime: Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: Date())!,
         onFinish: {}
     )
