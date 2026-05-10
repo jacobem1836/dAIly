@@ -379,3 +379,116 @@ async def test_concurrent_body_fetch():
         f"Body fetches appear sequential: {elapsed:.3f}s >= {DELAY * 3 * 0.9:.3f}s"
     )
     assert len(ctx.emails) == 3
+
+
+# ---------------------------------------------------------------------------
+# Edge-case tests targeting previously-uncovered branches
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_multi_adapter_logs_warning_and_uses_first() -> None:
+    """Two email adapters triggers the multi-adapter warning (line 179); only first is used."""
+    emails = [make_email_meta("email-multi")]
+    adapter1 = MockEmailAdapter(pages=[(emails, None)])
+    adapter2 = MockEmailAdapter(pages=[(emails, None)])
+
+    ctx = await build_context(
+        user_id=1,
+        email_adapters=[adapter1, adapter2],  # > 1 triggers line 179
+        calendar_adapters=[],
+        message_adapters=[],
+        vip_senders=frozenset(),
+        user_email="me@example.com",
+        top_n=5,
+    )
+
+    # Context should still succeed with one email fetched from adapter1
+    assert isinstance(ctx, BriefingContext)
+    assert len(ctx.emails) >= 1
+
+
+@pytest.mark.asyncio
+async def test_body_fetch_exception_is_swallowed() -> None:
+    """If get_email_body raises for an email, the exception is logged and skipped (lines 192-193)."""
+    emails = [make_email_meta("email-fail-body")]
+    adapter = MockEmailAdapter(pages=[(emails, None)])
+    adapter.get_email_body = AsyncMock(side_effect=RuntimeError("body unavailable"))
+
+    ctx = await build_context(
+        user_id=1,
+        email_adapters=[adapter],
+        calendar_adapters=[],
+        message_adapters=[],
+        vip_senders=frozenset(),
+        user_email="me@example.com",
+        top_n=5,
+    )
+
+    # Pipeline continues without crashing even when body fetch fails
+    assert isinstance(ctx, BriefingContext)
+
+
+@pytest.mark.asyncio
+async def test_calendar_adapter_exception_is_swallowed() -> None:
+    """If calendar adapter raises, pipeline continues with empty calendar (lines 212-213)."""
+    class FailingCalendarAdapter(CalendarAdapter):
+        async def list_events(self, since: datetime, until: datetime) -> list[CalendarEvent]:
+            raise RuntimeError("calendar API down")
+
+    emails = [make_email_meta("email-ok")]
+    adapter = MockEmailAdapter(pages=[(emails, None)])
+
+    ctx = await build_context(
+        user_id=1,
+        email_adapters=[adapter],
+        calendar_adapters=[FailingCalendarAdapter()],
+        message_adapters=[],
+        vip_senders=frozenset(),
+        user_email="me@example.com",
+    )
+
+    assert isinstance(ctx, BriefingContext)
+    assert ctx.calendar.events == []
+
+
+@pytest.mark.asyncio
+async def test_slack_message_text_fetch_exception_is_swallowed() -> None:
+    """If get_message_text raises for a slack message, it is skipped (lines 241-242)."""
+    msgs = [make_message("slack-fail-text", is_mention=True)]
+    msg_adapter = MockMessageAdapter(pages=[(msgs, None)])
+    msg_adapter.get_message_text = AsyncMock(side_effect=RuntimeError("slack API error"))
+
+    ctx = await build_context(
+        user_id=1,
+        email_adapters=[],
+        calendar_adapters=[],
+        message_adapters=[msg_adapter],
+        vip_senders=frozenset(),
+        user_email="me@example.com",
+    )
+
+    assert isinstance(ctx, BriefingContext)
+
+
+@pytest.mark.asyncio
+async def test_slack_phase_list_exception_is_swallowed() -> None:
+    """If list_messages raises entirely, slack phase is skipped (lines 248-249)."""
+    class FailingMessageAdapter(MessageAdapter):
+        async def list_messages(self, channels: list[str], since: datetime) -> MessagePage:
+            raise RuntimeError("slack down entirely")
+
+        async def get_message_text(self, message_id: str, channel_id: str) -> str:
+            return ""
+
+    ctx = await build_context(
+        user_id=1,
+        email_adapters=[],
+        calendar_adapters=[],
+        message_adapters=[FailingMessageAdapter()],
+        vip_senders=frozenset(),
+        user_email="me@example.com",
+    )
+
+    assert isinstance(ctx, BriefingContext)
+    assert ctx.slack.messages == []

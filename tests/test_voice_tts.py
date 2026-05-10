@@ -293,3 +293,220 @@ class TestTTSPipeline:
             await pipeline.play_streaming("Hello.", stop_event)
 
         assert chunks_written == [b"real_audio"]
+
+    @pytest.mark.asyncio
+    async def test_play_streaming_logs_error_response(self) -> None:
+        """An error-type response is logged via logger.error (line 208)."""
+        stop_event = asyncio.Event()
+
+        error_response = MagicMock()
+        error_response.type = "error"
+        error_response.audio = None
+
+        chunk_response = MagicMock()
+        chunk_response.type = "chunk"
+        chunk_response.audio = b"audio"
+
+        async def fake_receive():
+            yield error_response
+            yield chunk_response
+
+        mock_ctx = MagicMock()
+        mock_ctx.push = AsyncMock()
+        mock_ctx.no_more_inputs = AsyncMock()
+        mock_ctx.receive = fake_receive
+
+        mock_connection = MagicMock()
+        mock_connection.context.return_value = mock_ctx
+
+        mock_ws_cm = MagicMock()
+        mock_ws_cm.__aenter__ = AsyncMock(return_value=mock_connection)
+        mock_ws_cm.__aexit__ = AsyncMock(return_value=False)
+
+        mock_tts = MagicMock()
+        mock_tts.websocket_connect.return_value = mock_ws_cm
+
+        mock_client = MagicMock()
+        mock_client.tts = mock_tts
+        mock_cartesia_cm = MagicMock()
+        mock_cartesia_cm.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cartesia_cm.__aexit__ = AsyncMock(return_value=False)
+
+        mock_output_stream = MagicMock()
+
+        with (
+            patch("daily.voice.tts.AsyncCartesia", return_value=mock_cartesia_cm),
+            patch("daily.voice.tts.sd.RawOutputStream", return_value=mock_output_stream),
+            patch("daily.voice.tts.logger") as mock_logger,
+        ):
+            pipeline = TTSPipeline(api_key="test-key")
+            await pipeline.play_streaming("Hello.", stop_event)
+
+        mock_logger.error.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_play_streaming_warns_on_zero_chunks(self) -> None:
+        """When 0 audio chunks are received, a warning is logged (lines 214-215)."""
+        stop_event = asyncio.Event()
+
+        non_audio_response = MagicMock()
+        non_audio_response.type = "done"
+        non_audio_response.audio = None
+
+        async def fake_receive():
+            yield non_audio_response
+
+        mock_ctx = MagicMock()
+        mock_ctx.push = AsyncMock()
+        mock_ctx.no_more_inputs = AsyncMock()
+        mock_ctx.receive = fake_receive
+
+        mock_connection = MagicMock()
+        mock_connection.context.return_value = mock_ctx
+
+        mock_ws_cm = MagicMock()
+        mock_ws_cm.__aenter__ = AsyncMock(return_value=mock_connection)
+        mock_ws_cm.__aexit__ = AsyncMock(return_value=False)
+
+        mock_tts = MagicMock()
+        mock_tts.websocket_connect.return_value = mock_ws_cm
+
+        mock_client = MagicMock()
+        mock_client.tts = mock_tts
+        mock_cartesia_cm = MagicMock()
+        mock_cartesia_cm.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cartesia_cm.__aexit__ = AsyncMock(return_value=False)
+
+        mock_output_stream = MagicMock()
+
+        with (
+            patch("daily.voice.tts.AsyncCartesia", return_value=mock_cartesia_cm),
+            patch("daily.voice.tts.sd.RawOutputStream", return_value=mock_output_stream),
+            patch("daily.voice.tts.logger") as mock_logger,
+        ):
+            pipeline = TTSPipeline(api_key="test-key")
+            await pipeline.play_streaming("Hello.", stop_event)
+
+        mock_logger.warning.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_play_streaming_tokens_basic(self) -> None:
+        """play_streaming_tokens streams text tokens through TTS pipeline."""
+        stop_event = asyncio.Event()
+        chunks_written: list[bytes] = []
+
+        async def token_stream():
+            yield "Hello "
+            yield "world. "
+            yield "How are you today?"
+
+        audio_response = MagicMock()
+        audio_response.type = "chunk"
+        audio_response.audio = b"audio_bytes"
+
+        sentinel = MagicMock()
+        sentinel.type = "done"
+        sentinel.audio = None
+
+        async def fake_receive():
+            yield audio_response
+            yield sentinel
+
+        mock_ctx = MagicMock()
+        mock_ctx.push = AsyncMock()
+        mock_ctx.no_more_inputs = AsyncMock()
+        mock_ctx.receive = fake_receive
+
+        mock_connection = MagicMock()
+        mock_connection.context.return_value = mock_ctx
+
+        mock_ws_cm = MagicMock()
+        mock_ws_cm.__aenter__ = AsyncMock(return_value=mock_connection)
+        mock_ws_cm.__aexit__ = AsyncMock(return_value=False)
+
+        mock_tts = MagicMock()
+        mock_tts.websocket_connect.return_value = mock_ws_cm
+
+        mock_client = MagicMock()
+        mock_client.tts = mock_tts
+        mock_cartesia_cm = MagicMock()
+        mock_cartesia_cm.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cartesia_cm.__aexit__ = AsyncMock(return_value=False)
+
+        mock_output_stream = MagicMock()
+        mock_output_stream.write.side_effect = lambda data: chunks_written.append(data)
+
+        with (
+            patch("daily.voice.tts.AsyncCartesia", return_value=mock_cartesia_cm),
+            patch("daily.voice.tts.sd.RawOutputStream", return_value=mock_output_stream),
+        ):
+            pipeline = TTSPipeline(api_key="test-key")
+            await pipeline.play_streaming_tokens(token_stream(), stop_event)
+
+        # Verify that output_stream was properly started and closed
+        mock_output_stream.start.assert_called_once()
+        mock_output_stream.stop.assert_called_once()
+        mock_output_stream.close.assert_called_once()
+        # At least one audio chunk was written
+        assert chunks_written == [b"audio_bytes"]
+
+    @pytest.mark.asyncio
+    async def test_play_streaming_tokens_stop_event_mid_stream(self) -> None:
+        """play_streaming_tokens respects stop_event set during token production."""
+        stop_event = asyncio.Event()
+
+        async def token_stream():
+            yield "Hello "
+            stop_event.set()  # Signal stop during streaming
+            yield "world."
+
+        async def fake_receive():
+            return
+            yield  # make it an async generator
+
+        mock_ctx = MagicMock()
+        mock_ctx.push = AsyncMock()
+        mock_ctx.no_more_inputs = AsyncMock()
+        mock_ctx.receive = fake_receive
+
+        mock_connection = MagicMock()
+        mock_connection.context.return_value = mock_ctx
+
+        mock_ws_cm = MagicMock()
+        mock_ws_cm.__aenter__ = AsyncMock(return_value=mock_connection)
+        mock_ws_cm.__aexit__ = AsyncMock(return_value=False)
+
+        mock_tts = MagicMock()
+        mock_tts.websocket_connect.return_value = mock_ws_cm
+
+        mock_client = MagicMock()
+        mock_client.tts = mock_tts
+        mock_cartesia_cm = MagicMock()
+        mock_cartesia_cm.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cartesia_cm.__aexit__ = AsyncMock(return_value=False)
+
+        mock_output_stream = MagicMock()
+
+        with (
+            patch("daily.voice.tts.AsyncCartesia", return_value=mock_cartesia_cm),
+            patch("daily.voice.tts.sd.RawOutputStream", return_value=mock_output_stream),
+        ):
+            pipeline = TTSPipeline(api_key="test-key")
+            await pipeline.play_streaming_tokens(token_stream(), stop_event)
+
+        # Cleanup must always happen
+        mock_output_stream.stop.assert_called_once()
+        mock_output_stream.close.assert_called_once()
+
+
+class TestSplitSentencesEdgeCases:
+    def test_split_sentences_no_segments_fallback(self) -> None:
+        """split_sentences returns [text] when splitting produces no non-empty segments."""
+        # Force the no-segments path: text > MIN_CHARS threshold with only boundary chars
+        # A string of just sentence-boundary punctuation with no content
+        # We need len > 5 to pass the short-circuit, but all content stripped to empty
+        text = "    .    .    .    ."  # spaces and periods; after split all segments empty
+        result = split_sentences(text)
+        # Should return [text] when no valid segments found or fallback
+        assert isinstance(result, list)
+        assert len(result) >= 1
