@@ -56,9 +56,9 @@ struct IntegrationView: View {
             Spacer()
         }
         .padding()
-        // Pitfall 4 (21.1-RESEARCH): clear isConnecting only when the deep
-        // link reports the provider as connected, not when the session
-        // callback fires (which never fires for Universal Link redirects).
+        // When a deep link (/oauth/success) arrives, dAIlyApp.onOpenURL calls
+        // integrationState.markConnected, which fires this observer. Clear any
+        // residual isConnecting state and error so the connected UI renders.
         // Uses single-argument onChange for iOS 16 deployment target compatibility.
         .onChange(of: integrationState.connectedProviders) { newValue in
             if newValue.contains(provider.rawValue) {
@@ -113,10 +113,12 @@ struct IntegrationView: View {
         do {
             let authURL = try await auth.getIntegrationConnectURL(provider: provider.rawValue)
             try auth.openOAuthSession(url: authURL)
-            // Do NOT set isConnecting = false here — wait for the deep link
-            // (handled by the .onChange observer above). User cancellation
-            // leaves isConnecting=true; tapping Connect again re-enters this
-            // function which resets state, so this is safe.
+            // Reset isConnecting after the session launches. If a deep link
+            // arrives (/oauth/success), the .onChange on connectedProviders
+            // handles marking the provider connected. If no deep link arrives
+            // (e.g. personal dev team with no Universal Links configured), the
+            // button resets so the user can retry or tap Skip.
+            isConnecting = false
         } catch {
             errorMessage = "Connection failed. Please try again."
             isConnecting = false

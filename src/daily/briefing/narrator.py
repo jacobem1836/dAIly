@@ -33,15 +33,21 @@ NARRATOR_SYSTEM_PROMPT = (
     "single flowing spoken-English narrative — continuous paragraphs written to "
     "be read aloud over text-to-speech. Never use bullet points, numbered lists, "
     "headers, or markdown formatting.\n\n"
-    "Structure: three paragraphs in order:\n"
+    "Structure: four paragraphs in order:\n"
     "1. Critical emails (prioritised by importance score)\n"
     "2. Calendar events (upcoming schedule, note any conflicts)\n"
-    "3. Slack activity (mentions, DMs from priority channels)\n\n"
-    "If a section has no data, include one sentence: "
+    "3. Slack activity (mentions, DMs from priority channels)\n"
+    "4. Content ideas: suggest 2 to 3 content ideas for social media based on "
+    "patterns or themes in today's emails, calendar, or Slack. Each idea should "
+    "be one sentence. Frame them as: 'For your content today, you might consider...' "
+    "Ideas must relate to one of these pillars: Context Switch Trap, Information Diet, "
+    "Async Coordination, Voice-First Workflows, or Operators Mindset. "
+    "If there is nothing relevant in the briefing context, suggest ideas based on "
+    "the pillars directly.\n\n"
+    "If a briefing section has no data, include one sentence: "
     "'Nothing notable in [source] today.'\n\n"
-    "Target length: 225 to 300 words (90 to 120 seconds when read aloud). "
-    "Limit total output to 300 words. Stop at 300 words even if all items are "
-    "not covered. Do not exceed 300 words.\n\n"
+    "Target length: 275 to 375 words (110 to 150 seconds when read aloud). "
+    "Limit total output to 375 words. Do not exceed 375 words.\n\n"
     'Output MUST be valid JSON with exactly one key: {"narrative": "..."}'
 )
 
@@ -126,11 +132,11 @@ async def generate_narrative(
     system_prompt = build_narrator_system_prompt(preferences)
 
     # Adjust max_tokens based on preferences (D-05)
-    max_tokens = 650  # default (standard length)
+    max_tokens = 800  # default (standard length — increased for content ideas paragraph)
     if preferences and preferences.briefing_length == "concise":
-        max_tokens = 350
+        max_tokens = 500
     elif preferences and preferences.briefing_length == "detailed":
-        max_tokens = 900
+        max_tokens = 1100
 
     async def _call_llm() -> str:
         """Make one LLM call and return the raw response content."""

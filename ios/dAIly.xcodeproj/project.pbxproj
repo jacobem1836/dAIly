@@ -21,14 +21,14 @@
 		5E807B72B008409CCD16F3F4 /* IntegrationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54697A3721AF38B72C8F3522 /* IntegrationState.swift */; };
 		668FD845898D68C790FEC6B2 /* DebugFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D83FBE1B852E8BFA14606B4 /* DebugFlags.swift */; };
 		71BB147FB278331E1E9E287A /* IntegrationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40312E64303E6BF388106413 /* IntegrationProvider.swift */; };
+		8A3CE4E4AB845F7CFE6C051A /* OAuthCallbackParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D27764E579A6DD44E12F443C /* OAuthCallbackParserTests.swift */; };
+		A375473F61E9A3815E5A3F95 /* dAIlyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CD0CA433CC154B3501CA978 /* dAIlyApp.swift */; };
+		A9B0200868CE63424891417B /* ConnectionIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FF0CAF31772FD0606347860 /* ConnectionIndicator.swift */; };
 		AA11000001000001AA000001 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11000001000002AA000001 /* WelcomeView.swift */; };
 		AA11000001000003AA000001 /* IntegrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11000001000004AA000001 /* IntegrationView.swift */; };
 		AA11000001000005AA000001 /* ScheduleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11000001000006AA000001 /* ScheduleView.swift */; };
 		AA11000001000007AA000001 /* CompletionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11000001000008AA000001 /* CompletionView.swift */; };
 		AA11000001000009AA000001 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11000001000010AA000001 /* OnboardingView.swift */; };
-		8A3CE4E4AB845F7CFE6C051A /* OAuthCallbackParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D27764E579A6DD44E12F443C /* OAuthCallbackParserTests.swift */; };
-		A375473F61E9A3815E5A3F95 /* dAIlyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CD0CA433CC154B3501CA978 /* dAIlyApp.swift */; };
-		A9B0200868CE63424891417B /* ConnectionIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FF0CAF31772FD0606347860 /* ConnectionIndicator.swift */; };
 		BB6F4624CCF0F05F06A65E3F /* OnboardingKeychainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED48D3604DD5BE66A4FFFCF3 /* OnboardingKeychainTests.swift */; };
 		C0AF52C90CF21355F76FB782 /* VoiceSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 752A7AE4D33B140ACD8803AC /* VoiceSession.swift */; };
 		C241A43617DF0FF7338AE864 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52E0D2DF5ABB52AAABC4D067 /* AuthService.swift */; };
@@ -55,15 +55,10 @@
 		07C798D6555FE9ABDBDB467D /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		12D6C857947FC8F86D4FDBF2 /* KeychainStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStoreTests.swift; sourceTree = "<group>"; };
 		1D03C70CD16F956BE3B9EC05 /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
-		26925FD04998254E0D725EDD /* dAIly.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = dAIly.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		26925FD04998254E0D725EDD /* dAIly.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = dAIly.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3CD0CA433CC154B3501CA978 /* dAIlyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = dAIlyApp.swift; sourceTree = "<group>"; };
 		40312E64303E6BF388106413 /* IntegrationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationProvider.swift; sourceTree = "<group>"; };
 		41A7E87BCC8D2E7A5BB2C692 /* VoiceSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionTests.swift; sourceTree = "<group>"; };
-		AA11000001000002AA000001 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
-		AA11000001000004AA000001 /* IntegrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationView.swift; sourceTree = "<group>"; };
-		AA11000001000006AA000001 /* ScheduleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleView.swift; sourceTree = "<group>"; };
-		AA11000001000008AA000001 /* CompletionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionView.swift; sourceTree = "<group>"; };
-		AA11000001000010AA000001 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		4CC5FFAD37184173FC5A9F73 /* LiveKitTokenSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveKitTokenSource.swift; sourceTree = "<group>"; };
 		52E0D2DF5ABB52AAABC4D067 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		54697A3721AF38B72C8F3522 /* IntegrationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationState.swift; sourceTree = "<group>"; };
@@ -75,6 +70,11 @@
 		9B87F815C25AF4CAF8C5C451 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		9F9B12A6C59D5FEDFABE7E13 /* dAIlyTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = dAIlyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9FF0CAF31772FD0606347860 /* ConnectionIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionIndicator.swift; sourceTree = "<group>"; };
+		AA11000001000002AA000001 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		AA11000001000004AA000001 /* IntegrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationView.swift; sourceTree = "<group>"; };
+		AA11000001000006AA000001 /* ScheduleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleView.swift; sourceTree = "<group>"; };
+		AA11000001000008AA000001 /* CompletionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionView.swift; sourceTree = "<group>"; };
+		AA11000001000010AA000001 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		ADD7C9B88737FB0EDCDA8089 /* OAuthCallbackParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthCallbackParser.swift; sourceTree = "<group>"; };
 		B119761300EB73F212A2134B /* VoiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceView.swift; sourceTree = "<group>"; };
 		B78933C431583629FAAC7890 /* IntegrationStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationStateTests.swift; sourceTree = "<group>"; };
@@ -240,8 +240,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
-				TargetAttributes = {
-				};
 			};
 			buildConfigurationList = C3B39126B43B6AFC5E45FBDB /* Build configuration list for PBXProject "dAIly" */;
 			developmentRegion = en;
@@ -461,13 +459,16 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				CODE_SIGN_ENTITLEMENTS = dAIly/dAIly.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 68DR9C9ZKL;
 				INFOPLIST_FILE = dAIly/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				NEW_SETTING = "";
 				PRODUCT_BUNDLE_IDENTIFIER = com.jacobmarriott.daily;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 6.0;
@@ -479,13 +480,16 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				CODE_SIGN_ENTITLEMENTS = dAIly/dAIly.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 68DR9C9ZKL;
 				INFOPLIST_FILE = dAIly/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				NEW_SETTING = "";
 				PRODUCT_BUNDLE_IDENTIFIER = com.jacobmarriott.daily;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 6.0;

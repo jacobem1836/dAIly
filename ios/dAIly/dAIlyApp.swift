@@ -5,6 +5,10 @@ import LiveKit
 struct dAIlyApp: App {
     @StateObject private var appState = AppState()
     @StateObject private var integrationState = IntegrationState()
+    @StateObject private var voiceSession = VoiceSession(
+        tokenSource: LiveKitTokenSource(baseURL: Config.backendBaseURL),
+        auth: AuthService(baseURL: Config.backendBaseURL)
+    )
 
     private let auth = AuthService(baseURL: Config.backendBaseURL)
 
@@ -20,10 +24,7 @@ struct dAIlyApp: App {
                 // which itself starts at the correct tab via its gate logic
                 // (tab 0 always; PairingView at tab 1 if not authed yet).
                 if appState.hasAccessToken && appState.hasCompletedOnboarding {
-                    VoiceView(session: VoiceSession(
-                        tokenSource: LiveKitTokenSource(baseURL: Config.backendBaseURL),
-                        auth: auth
-                    ))
+                    VoiceView(session: voiceSession)
                 } else {
                     OnboardingView(auth: auth)
                 }
@@ -32,6 +33,11 @@ struct dAIlyApp: App {
             .environmentObject(integrationState)
             .onOpenURL { url in
                 handleDeepLink(url)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .oauthCallbackReceived)) { notification in
+                if let url = notification.object as? URL {
+                    handleDeepLink(url)
+                }
             }
         }
     }

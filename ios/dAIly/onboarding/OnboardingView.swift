@@ -38,7 +38,7 @@ struct OnboardingView: View {
             WelcomeView(onContinue: { advance() })
                 .tag(0)
 
-            PairingView(auth: auth)
+            PairingView(auth: auth, onComplete: { advance() })
                 .tag(1)
 
             IntegrationView(
@@ -91,6 +91,14 @@ struct OnboardingView: View {
         }
         .tabViewStyle(.page)
         .indexViewStyle(.page(backgroundDisplayMode: .always))
+        // Auto-advance on appear if already authenticated from a prior session.
+        // .onChange won't fire if hasAccessToken starts as true (no value change),
+        // so we also check on task launch.
+        .task {
+            if appState.hasAccessToken && currentTab == 1 {
+                withAnimation { currentTab = 2 }
+            }
+        }
         // Forward-only gate (D-02). Clamp on every selection change.
         // Single-argument form required for iOS 16 deployment target compatibility.
         .onChange(of: currentTab) { newValue in

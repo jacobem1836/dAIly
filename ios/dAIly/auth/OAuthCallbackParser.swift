@@ -17,7 +17,7 @@ public enum OAuthCallbackParser {
     /// or the value is empty.
     public static func extractProvider(from url: URL) -> String? {
         guard let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              comps.path.hasSuffix("/oauth/success") else { return nil }
+              comps.path.hasSuffix("/oauth/success") || comps.path == "/success" else { return nil }
         guard let value = comps.queryItems?.first(where: { $0.name == "provider" })?.value,
               !value.isEmpty else { return nil }
         return value

@@ -8,6 +8,7 @@ struct PairingView: View {
     }
 
     private let auth: AuthService
+    private let onComplete: () -> Void
     @EnvironmentObject private var appState: AppState
     @State private var email: String = ""
     @State private var state: PairingState = .idle
@@ -15,8 +16,9 @@ struct PairingView: View {
     @State private var errorMessage: String? = nil
     @State private var isVerifying: Bool = false
 
-    init(auth: AuthService) {
+    init(auth: AuthService, onComplete: @escaping () -> Void) {
         self.auth = auth
+        self.onComplete = onComplete
     }
 
     var body: some View {
@@ -111,6 +113,8 @@ struct PairingView: View {
         do {
             _ = try await auth.completePairing(code: code)
             appState.hasAccessToken = true
+            isVerifying = false
+            onComplete()
         } catch {
             errorMessage = "Invalid or expired code. Try again."
             isVerifying = false

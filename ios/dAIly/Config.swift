@@ -11,5 +11,5 @@ public enum Config {
     ///   3. Update the `applinks:` entry in `ios/dAIly/dAIly.entitlements` to match the tunnel host
     ///   4. Re-run `xcodegen generate` if `project.yml` changed
     ///   5. Verify AASA: `curl https://<tunnel>/.well-known/apple-app-site-association`
-    public static let backendBaseURL: URL = URL(string: "https://insurance-backup-quest-antiques.trycloudflare.com")!
+    public static let backendBaseURL: URL = URL(string: "https://api.getdaily.dev")!
 }

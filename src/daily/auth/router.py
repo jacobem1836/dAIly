@@ -1,4 +1,5 @@
 """Auth endpoints: pairing + token refresh (Phase 18, D-01..D-04)."""
+import base64
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -164,7 +165,7 @@ async def pair_complete(
             user_id = user.id
 
     refresh = generate_refresh_token()
-    key = settings.vault_key.encode() if isinstance(settings.vault_key, str) else settings.vault_key
+    key = base64.b64decode(settings.vault_key) if isinstance(settings.vault_key, str) else settings.vault_key
     encrypted = encrypt_token(refresh, key)
     expires_at = now + timedelta(days=settings.jwt_refresh_ttl_days)
     dt = DeviceToken(
@@ -198,7 +199,7 @@ async def token_refresh(
         DeviceToken.expires_at > now,
     )
     result = await session.execute(stmt)
-    key = settings.vault_key.encode() if isinstance(settings.vault_key, str) else settings.vault_key
+    key = base64.b64decode(settings.vault_key) if isinstance(settings.vault_key, str) else settings.vault_key
     for dt in result.scalars():
         try:
             if decrypt_token(dt.encrypted_refresh_token, key) == body.refresh_token:

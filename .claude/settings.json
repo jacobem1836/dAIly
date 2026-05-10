@@ -1,0 +1,6 @@
+{
+  "enabledPlugins": {
+    "marketing-skills@marketingskills": true,
+    "superpowers@claude-plugins-official": true
+  }
+}

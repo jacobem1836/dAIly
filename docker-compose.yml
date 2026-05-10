@@ -25,6 +25,25 @@ services:
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml:ro
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8001:8000"
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      DATABASE_URL: postgresql+asyncpg://daily:daily_dev@postgres:5432/daily
+      DATABASE_URL_PSYCOPG: postgresql://daily:daily_dev@postgres:5432/daily
+      REDIS_URL: redis://redis:6379/0
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./src:/app/src
+
   worker:
     build:
       context: .
@@ -37,7 +56,7 @@ services:
     environment:
       LIVEKIT_URL: ws://livekit:7880
       LIVEKIT_API_KEY: devkey
-      LIVEKIT_API_SECRET: secret
+      LIVEKIT_API_SECRET: devsecret12345678901234567890123
       DATABASE_URL: postgresql+asyncpg://daily:daily_dev@postgres:5432/daily
       DATABASE_URL_PSYCOPG: postgresql://daily:daily_dev@postgres:5432/daily
       REDIS_URL: redis://redis:6379/0

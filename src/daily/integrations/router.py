@@ -14,6 +14,7 @@ Security:
   T-21-03-08: Microsoft stored as provider="outlook" to match existing CLI convention.
 """
 import base64
+import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone as _tz
 from urllib.parse import urlencode
@@ -143,6 +144,13 @@ async def google_connect(
     state = secrets.token_urlsafe(32)
     await redis.setex(f"oauth_state:{state}", OAUTH_STATE_TTL_SECONDS, str(current_user.id))
 
+    # Generate PKCE explicitly so the verifier survives the stateless callback.
+    code_verifier = secrets.token_urlsafe(96)
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode()).digest()
+    ).rstrip(b"=").decode()
+    await redis.setex(f"oauth_cv:{state}", OAUTH_STATE_TTL_SECONDS, code_verifier)
+
     redirect_uri = f"{settings.magic_link_base_url}/integrations/google/callback"
     flow = Flow.from_client_config(
         _google_client_config(settings, redirect_uri),
@@ -154,6 +162,8 @@ async def google_connect(
         prompt="consent",
         state=state,
         include_granted_scopes="true",
+        code_challenge=code_challenge,
+        code_challenge_method="S256",
     )
     return ConnectResponse(auth_url=auth_url)
 
@@ -173,6 +183,8 @@ async def google_callback(
     T-21-03-07: Redirects to settings.magic_link_base_url/oauth/success?provider=google.
     """
     user_id = await _consume_oauth_state(redis, state)
+    code_verifier = await redis.get(f"oauth_cv:{state}")
+    await redis.delete(f"oauth_cv:{state}")
 
     redirect_uri = f"{settings.magic_link_base_url}/integrations/google/callback"
     flow = Flow.from_client_config(
@@ -180,7 +192,10 @@ async def google_callback(
         scopes=GOOGLE_ACTION_SCOPES,
         redirect_uri=redirect_uri,
     )
-    flow.fetch_token(code=code)
+    fetch_kwargs: dict = {"code": code}
+    if code_verifier:
+        fetch_kwargs["code_verifier"] = code_verifier
+    flow.fetch_token(**fetch_kwargs)
     creds = flow.credentials
 
     key = _vault_key(settings)
@@ -207,7 +222,7 @@ async def google_callback(
     await session.commit()
 
     return RedirectResponse(
-        url=f"{settings.magic_link_base_url}/oauth/success?provider=google",
+        url="daily://oauth/success?provider=google",
         status_code=302,
     )
 
@@ -307,7 +322,7 @@ async def microsoft_callback(
     await session.commit()
 
     return RedirectResponse(
-        url=f"{settings.magic_link_base_url}/oauth/success?provider=microsoft",
+        url="daily://oauth/success?provider=microsoft",
         status_code=302,
     )
 
@@ -399,6 +414,6 @@ async def slack_callback(
     await session.commit()
 
     return RedirectResponse(
-        url=f"{settings.magic_link_base_url}/oauth/success?provider=slack",
+        url="daily://oauth/success?provider=slack",
         status_code=302,
     )

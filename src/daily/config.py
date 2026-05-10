@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     cartesia_api_key: str = ""
 
     # LiveKit (Phase 18 / D-05, D-08, D-09)
+    # IMPORTANT: livekit_url must be a wss:// address reachable from mobile
+    # devices — NOT ws://localhost:7880. iOS clients and the agent worker must
+    # both point at the same server. Use your LiveKit Cloud URL or a publicly
+    # accessible tunnel (e.g. wss://your-project.livekit.cloud).
     livekit_url: str = "ws://localhost:7880"
     livekit_api_key: str = "devkey"
     livekit_api_secret: str = "secret"

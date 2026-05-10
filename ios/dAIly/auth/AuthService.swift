@@ -121,12 +121,12 @@ public final class AuthService {
 
     /// Opens an ASWebAuthenticationSession for the given OAuth authorization URL (D-13).
     ///
-    /// Uses callbackURLScheme: nil because the OAuth callback is delivered as a
-    /// Universal Link to /oauth/success?provider= — the system dismisses the
-    /// session automatically and dAIlyApp.onOpenURL receives the redirect (see
-    /// 21.1-RESEARCH.md §Pattern 3 and §Pitfall 4: do NOT use
-    /// withCheckedThrowingContinuation here — the callback handler does not fire
-    /// for Universal Link callbacks, and the continuation would never resume).
+    /// Uses callbackURLScheme: "daily" so that ASWebAuthenticationSession intercepts
+    /// the backend's redirect to daily://oauth/success?provider= and delivers it via
+    /// the completion handler without requiring Universal Links / Associated Domains.
+    /// The completion handler fires on both success and cancellation; on success it
+    /// forwards the deep link URL to dAIlyApp.handleDeepLink so IntegrationState is
+    /// updated reactively.
     ///
     /// Fire-and-forget: returns once the session has started. The caller updates
     /// UI reactively when IntegrationState.markConnected is called from
@@ -135,11 +135,18 @@ public final class AuthService {
     public func openOAuthSession(url: URL) throws {
         let session = ASWebAuthenticationSession(
             url: url,
-            callbackURLScheme: nil
-        ) { _, _ in
-            // Universal Link callbacks do not fire this handler. This closure is
-            // intentionally a no-op; the only path that runs it is user
-            // cancellation, in which case we simply tear down state.
+            callbackURLScheme: "daily"
+        ) { [weak self] callbackURL, error in
+            // callbackURL is the daily://oauth/success?provider= redirect.
+            // Re-dispatch to the main app via the registered onOpenURL handler
+            // by posting a notification that dAIlyApp observes.
+            guard let callbackURL else { return }
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: .oauthCallbackReceived,
+                    object: callbackURL
+                )
+            }
         }
         session.presentationContextProvider = oauthPresentationProvider
         session.prefersEphemeralWebBrowserSession = false
@@ -212,6 +219,14 @@ public final class AuthService {
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         return try await sendAndDecode(req: req, expecting: expecting)
     }
+}
+
+// MARK: - Notification names
+
+extension Notification.Name {
+    /// Posted by AuthService when ASWebAuthenticationSession delivers the
+    /// daily://oauth/success?provider= callback URL. Object is the URL.
+    static let oauthCallbackReceived = Notification.Name("dAIlyOAuthCallbackReceived")
 }
 
 // MARK: - OAuthPresentationContextProvider

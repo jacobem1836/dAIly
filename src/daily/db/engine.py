@@ -11,7 +11,12 @@ from daily.config import Settings
 
 def make_engine(database_url: str) -> AsyncEngine:
     """Create an async SQLAlchemy engine."""
-    return create_async_engine(database_url, echo=False, pool_pre_ping=True)
+    return create_async_engine(
+        database_url,
+        echo=False,
+        pool_pre_ping=True,
+        connect_args={"timeout": 5},
+    )
 
 
 def make_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:

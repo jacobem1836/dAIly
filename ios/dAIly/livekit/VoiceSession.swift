@@ -45,6 +45,7 @@ public final class VoiceSession: ObservableObject {
     private var room: Room?
     private var roomDelegate: SessionRoomDelegate?
     private var listeningTimeoutTask: Task<Void, Never>?
+    private var agentJoinTimeoutTask: Task<Void, Never>?
     private var reconnectTimeoutTask: Task<Void, Never>?
 
     public init(tokenSource: LiveKitTokenSource,
@@ -125,6 +126,8 @@ public final class VoiceSession: ObservableObject {
     public func disconnect() async {
         listeningTimeoutTask?.cancel()
         listeningTimeoutTask = nil
+        agentJoinTimeoutTask?.cancel()
+        agentJoinTimeoutTask = nil
         reconnectTimeoutTask?.cancel()
         reconnectTimeoutTask = nil
         await room?.disconnect()
@@ -151,6 +154,20 @@ public final class VoiceSession: ObservableObject {
             reconnectTimeoutTask?.cancel()
             reconnectTimeoutTask = nil
             state = .listening
+            // 15-second agent-join timeout: if no agent participant speaks within
+            // 15s of the room connecting, surface an actionable error. This guards
+            // against the worker not running or pointing at a different LiveKit
+            // server — without this the UI stays in .listening forever (T-22-01).
+            agentJoinTimeoutTask?.cancel()
+            agentJoinTimeoutTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    if case .listening = self.state {
+                        self.state = .error("Agent not available — make sure the worker is running.")
+                    }
+                }
+            }
         case .reconnecting:
             state = .reconnecting
             // 30-second reconnect timeout — if state hasn't recovered, surface error (T-19-28)
@@ -188,6 +205,9 @@ public final class VoiceSession: ObservableObject {
 
     fileprivate func handleAgentSpeaking(_ speaking: Bool) {
         if speaking {
+            // Agent has joined and is speaking — cancel the join timeout.
+            agentJoinTimeoutTask?.cancel()
+            agentJoinTimeoutTask = nil
             state = .speaking
         } else if case .speaking = state {
             state = .listening
@@ -201,6 +221,8 @@ public final class VoiceSession: ObservableObject {
         reconnectTimeoutTask = nil
         listeningTimeoutTask?.cancel()
         listeningTimeoutTask = nil
+        agentJoinTimeoutTask?.cancel()
+        agentJoinTimeoutTask = nil
         if let error = error {
             let msg = String(error.localizedDescription.prefix(60))
             state = .error("disconnected: \(msg)")
