@@ -234,7 +234,7 @@ public final class VoiceSession: ObservableObject {
 
     /// Maps LiveKit / NSURLError values to user-facing strings.
     /// Internal so unit tests can call it; not part of the public API.
-    internal static func humanizeConnectError(_ error: Error) -> String {
+    nonisolated internal static func humanizeConnectError(_ error: Error) -> String {
         let ns = error as NSError
         // NSURLError codes (transport-level — pre-WebSocket)
         if ns.domain == NSURLErrorDomain {

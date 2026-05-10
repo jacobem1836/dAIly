@@ -124,9 +124,13 @@ Plans:
 ### Phase 21.2: Bug Fixes and Polish (INSERTED)
 
 **Goal:** Iron out all known bugs before production deploy. Speaking state indicator not surfacing on iOS while agent responds, first-load briefing not playing on session connect, and any other issues surfaced during onboarding testing. Zero known bugs before TestFlight.
-**Plans:** TBD
+**Plans:** 4 plans
 
-- [ ] TBD
+Plans:
+- [ ] 21.2-01-PLAN.md – Briefing trigger endpoint + iOS call + multi-provider audit (D-03, D-04)
+- [ ] 21.2-02-PLAN.md – APPLE_TEAM_ID / AASA / Universal Links + Google OAuth test users (D-02, D-06)
+- [ ] 21.2-03-PLAN.md – LiveKit connect_failed friendly errors + worker runbook (D-01)
+- [ ] 21.2-04-PLAN.md – iOS UX polish: OTP keypad, page dots, link copy, mic permissions (D-05, D-07, D-08, D-09)
 
 ### Phase 21.3: UI Tidy-Up (INSERTED)
 

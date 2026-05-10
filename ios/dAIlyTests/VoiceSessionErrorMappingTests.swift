@@ -8,8 +8,8 @@ import Foundation
 // Verifies that known NSURLError codes and LiveKit error patterns map to
 // user-facing strings instead of raw NSError descriptions.
 
-@Suite @MainActor
-final class VoiceSessionErrorMappingTests {
+@Suite
+struct VoiceSessionErrorMappingTests {
 
     // Test 1: NSURLErrorCannotConnectToHost (-1004) returns a "couldn't reach" message
     @Test("NSURLErrorCannotConnectToHost maps to reachability message")

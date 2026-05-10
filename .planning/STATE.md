@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Mobile Voice
 status: executing
-last_updated: "2026-05-10T04:30:01.815Z"
-last_activity: 2026-05-10 -- Phase 21.2 planning complete
+last_updated: "2026-05-10T04:31:40.193Z"
+last_activity: 2026-05-10 -- Phase 21.2 execution started
 progress:
   total_phases: 2
   completed_phases: 2
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** The briefing always delivers — every morning, the user gets a prioritised, conversational summary of what matters without touching a single app.
-**Current focus:** Phase 21.1 — per-user-onboarding-ui
+**Current focus:** Phase 21.2 — bug-fixes-and-polish
 
 ## Current Position
 
-Phase: 21.1
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-10 -- Phase 21.2 planning complete
+Phase: 21.2 (bug-fixes-and-polish) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 21.2
+Last activity: 2026-05-10 -- Phase 21.2 execution started
 
 ## Completed Milestones
 
