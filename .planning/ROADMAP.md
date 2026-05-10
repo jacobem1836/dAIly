@@ -121,6 +121,20 @@ Plans:
 - [x] 21.1-03-PLAN.md — Onboarding leaf views (WelcomeView, IntegrationView, ScheduleView, CompletionView)
 - [x] 21.1-04-PLAN.md — OnboardingView TabView + dAIlyApp routing + deep-link wiring (manual verification checkpoint)
 
+### Phase 21.2: Bug Fixes and Polish (INSERTED)
+
+**Goal:** Iron out all known bugs before production deploy. Speaking state indicator not surfacing on iOS while agent responds, first-load briefing not playing on session connect, and any other issues surfaced during onboarding testing. Zero known bugs before TestFlight.
+**Plans:** TBD
+
+- [ ] TBD
+
+### Phase 21.3: UI Tidy-Up (INSERTED)
+
+**Goal:** Visual polish pass across all iOS screens — consistency in spacing, typography, colours, and interaction states. Ensure the app looks intentional and production-ready before TestFlight, not like a prototype.
+**Plans:** TBD
+
+- [ ] TBD
+
 ### Phase 22: Apple Integrations
 
 **Goal:** iCloud Mail + Apple Calendar via EventKit/CloudKit. Alternative to Google for iOS users. Also covers iCloud contacts.
@@ -198,7 +212,10 @@ Plans:
 | 18. LiveKit Backend | v2.0 | 3/3 | ✅ Complete (agent missing) | 2026-04-29 |
 | 19. Native iOS App | v2.0 | 5/5 | ✅ Complete | 2026-04-30 |
 | 20. Native Android App | v2.0 | 5/5 | ✅ Complete | 2026-04-30 |
-| 21. Per-User Onboarding | v2.1 | 5/5 | Complete    | 2026-05-01 |
+| 21. Per-User Onboarding | v2.1 | 5/5 | ✅ Complete | 2026-05-01 |
+| 21.1. Per-User Onboarding UI | v2.1 | 4/4 | ✅ Complete | 2026-05-10 |
+| 21.2. Bug Fixes and Polish | v2.1 | — | ○ Not started | — |
+| 21.3. UI Tidy-Up | v2.1 | — | ○ Not started | — |
 | 22. Apple Integrations | v2.1 | — | ○ Not started | — |
 | 23. Production Backend Deploy | v2.1 | — | ○ Not started | — |
 | 24. Desktop Web Fallback | v2.2 | — | ○ Not started | — |
