@@ -105,7 +105,7 @@ public final class VoiceSession: ObservableObject {
                 connectOptions: ConnectOptions(enableMicrophone: true)
             )
         } catch {
-            state = .error("connect_failed:\(error)")
+            state = .error(Self.humanizeConnectError(error))
             throw VoiceSessionError.connectFailed(String(describing: error))
         }
 
@@ -164,7 +164,7 @@ public final class VoiceSession: ObservableObject {
                 await MainActor.run { [weak self] in
                     guard let self else { return }
                     if case .listening = self.state {
-                        self.state = .error("Agent not available — make sure the worker is running.")
+                        self.state = .error("Voice agent didn't join — the worker may not be running, or LIVEKIT_URL is misconfigured. Check the runbook.")
                     }
                 }
             }
@@ -224,11 +224,41 @@ public final class VoiceSession: ObservableObject {
         agentJoinTimeoutTask?.cancel()
         agentJoinTimeoutTask = nil
         if let error = error {
-            let msg = String(error.localizedDescription.prefix(60))
-            state = .error("disconnected: \(msg)")
+            state = .error(Self.humanizeConnectError(error))
         }
         // No else: clean disconnects arrive via didUpdateConnectionState(.disconnected)
         // which already transitions to .idle via handleConnectionState
+    }
+
+    // MARK: - Error mapping (D-01)
+
+    /// Maps LiveKit / NSURLError values to user-facing strings.
+    /// Internal so unit tests can call it; not part of the public API.
+    internal static func humanizeConnectError(_ error: Error) -> String {
+        let ns = error as NSError
+        // NSURLError codes (transport-level — pre-WebSocket)
+        if ns.domain == NSURLErrorDomain {
+            switch ns.code {
+            case NSURLErrorNotConnectedToInternet:
+                return "You appear to be offline. Check your internet connection and try again."
+            case NSURLErrorTimedOut:
+                return "Voice server didn't respond. The backend may be down."
+            case NSURLErrorCannotConnectToHost, NSURLErrorCannotFindHost:
+                return "Couldn't reach the voice server. Check your internet connection."
+            default:
+                break
+            }
+        }
+        // Anything LiveKit raises post-DNS/TCP — usually means the URL is wrong
+        // or the LiveKit server / agent worker isn't reachable from this host.
+        let desc = ns.localizedDescription.lowercased()
+        if desc.contains("websocket") || desc.contains("handshake") {
+            return "Couldn't open a voice session — the worker may not be running."
+        }
+        if ns.domain.contains("livekit") {
+            return "Voice server rejected the connection. The worker may be offline or misconfigured."
+        }
+        return "Couldn't connect to voice. Try again — if this keeps happening, check the worker is running."
     }
 
     // MARK: - Test hooks (DEBUG only)
