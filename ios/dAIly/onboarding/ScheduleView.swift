@@ -23,7 +23,8 @@ struct ScheduleView: View {
 
             Image(systemName: "alarm")
                 .font(.system(size: 56))
-                .foregroundStyle(.primary)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.tint)
 
             Text("When should we brief you?")
                 .font(.title2)

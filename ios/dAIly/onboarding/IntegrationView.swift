@@ -35,7 +35,8 @@ struct IntegrationView: View {
 
             Image(systemName: provider.icon)
                 .font(.system(size: 56))
-                .foregroundStyle(.primary)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.tint, .secondary)
 
             Text("Connect \(provider.displayName)")
                 .font(.title2)
@@ -45,6 +46,7 @@ struct IntegrationView: View {
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+                .frame(maxWidth: 300)
                 .padding(.horizontal)
 
             if isConnected {

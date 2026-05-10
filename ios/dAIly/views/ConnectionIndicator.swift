@@ -1,31 +1,41 @@
 import SwiftUI
 
 /// Visual indicator for the current VoiceSessionState.
-/// Renders a coloured circle with a label — minimal, functional, per D-10.
+/// Renders a layered circle indicator with a label — 21.3 visual polish.
 struct ConnectionIndicator: View {
     let state: VoiceSessionState
 
     var body: some View {
-        VStack(spacing: 12) {
-            Circle()
-                .fill(circleColor)
-                .frame(width: 72, height: 72)
-                .overlay(
-                    Circle()
-                        .stroke(circleColor.opacity(0.3), lineWidth: 6)
-                        .scaleEffect(pulseActive ? 1.4 : 1.0)
-                        .animation(
-                            pulseActive
-                                ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
-                                : .default,
-                            value: pulseActive
-                        )
-                )
+        VStack(spacing: 16) {
+            ZStack {
+                // Ambient outer ring — always present, faint, adds depth.
+                Circle()
+                    .stroke(circleColor.opacity(0.12), lineWidth: 2)
+                    .frame(width: 144, height: 144)
+
+                // Pulse ring — animates outward when connecting/reconnecting.
+                Circle()
+                    .stroke(circleColor.opacity(0.28), lineWidth: 8)
+                    .frame(width: 96, height: 96)
+                    .scaleEffect(pulseActive ? 1.4 : 1.0)
+                    .animation(
+                        pulseActive
+                            ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
+                            : .default,
+                        value: pulseActive
+                    )
+
+                // Main circle.
+                Circle()
+                    .fill(circleColor)
+                    .frame(width: 96, height: 96)
+            }
+
             Text(label)
-                .font(.callout)
-                .foregroundColor(.secondary)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 200)
+                .frame(maxWidth: 240)
         }
     }
 
@@ -33,12 +43,12 @@ struct ConnectionIndicator: View {
 
     private var circleColor: Color {
         switch state {
-        case .idle:         return Color(.systemGray4)
+        case .idle:         return Color.accentColor.opacity(0.6)
         case .connecting,
-             .reconnecting: return .yellow
-        case .listening:    return .green
-        case .speaking:     return .blue
-        case .error:        return .red
+             .reconnecting: return Color.yellow
+        case .listening:    return Color.green
+        case .speaking:     return Color.blue
+        case .error:        return Color.red
         }
     }
 

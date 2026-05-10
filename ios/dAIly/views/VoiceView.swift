@@ -9,6 +9,11 @@ struct VoiceView: View {
 
     var body: some View {
         VStack(spacing: 32) {
+            Text("dAIly")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
             Spacer()
             ConnectionIndicator(state: session.state)
             if case .error(let msg) = session.state {

@@ -66,8 +66,9 @@ struct PairingView: View {
     private var sentView: some View {
         VStack(spacing: 16) {
             Image(systemName: "envelope.open")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 56))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.tint)
 
             Text("Check your email")
                 .font(.title2)

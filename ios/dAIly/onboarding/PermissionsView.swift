@@ -20,8 +20,9 @@ struct PermissionsView: View {
             Spacer()
 
             Image(systemName: "mic.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(.primary)
+                .font(.system(size: 64))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.tint)
 
             Text("Allow microphone access")
                 .font(.title2)
@@ -31,6 +32,7 @@ struct PermissionsView: View {
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+                .frame(maxWidth: 300)
                 .padding(.horizontal)
 
             Spacer()

@@ -34,7 +34,8 @@ struct CompletionView: View {
             Spacer()
 
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 72))
+                .font(.system(size: 80))
+                .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.green)
 
             Text("You're all set")
@@ -50,6 +51,7 @@ struct CompletionView: View {
             }
             .font(.body)
             .foregroundStyle(.secondary)
+            .frame(maxWidth: 280)
 
             Spacer()
 

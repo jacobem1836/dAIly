@@ -11,8 +11,9 @@ struct WelcomeView: View {
             Spacer()
 
             Image(systemName: "waveform")
-                .font(.system(size: 64))
-                .foregroundStyle(.primary)
+                .font(.system(size: 72))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.tint)
 
             Text("dAIly")
                 .font(.largeTitle)
@@ -22,6 +23,7 @@ struct WelcomeView: View {
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+                .frame(maxWidth: 300)
                 .padding(.horizontal)
 
             Spacer()
