@@ -31,6 +31,7 @@ struct WelcomeView: View {
                 .controlSize(.large)
         }
         .padding()
+        .padding(.bottom, 40)
     }
 }
 

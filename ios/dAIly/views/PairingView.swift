@@ -31,6 +31,7 @@ struct PairingView: View {
             }
         }
         .padding()
+        .padding(.bottom, 40)
     }
 
     // MARK: - Idle state: email entry + send button
@@ -49,7 +50,7 @@ struct PairingView: View {
                 .background(Color(.systemGray6))
                 .cornerRadius(10)
 
-            Button("Send magic link") {
+            Button("Send link") {
                 Task {
                     try? await auth.sendLink(email: email)
                     state = .sent
@@ -72,7 +73,7 @@ struct PairingView: View {
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            Text("We sent a magic link to \(email).\nTap the link or enter the 6-digit code below.")
+            Text("We sent a link to \(email).\nTap the link or enter the 6-digit code below.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
 
@@ -84,6 +85,14 @@ struct PairingView: View {
                 .padding()
                 .background(Color(.systemGray6))
                 .cornerRadius(10)
+                .onChange(of: code) { newValue in
+                    if newValue.count == 6 {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
+                    }
+                }
 
             if let error = errorMessage {
                 Text(error)

@@ -54,6 +54,7 @@ struct ScheduleView: View {
             Spacer()
         }
         .padding()
+        .padding(.bottom, 40)
     }
 
     @MainActor

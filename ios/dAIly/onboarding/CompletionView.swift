@@ -83,6 +83,7 @@ struct CompletionView: View {
             }
         }
         .padding()
+        .padding(.bottom, 40)
     }
 }
 

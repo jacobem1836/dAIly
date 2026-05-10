@@ -56,6 +56,7 @@ struct IntegrationView: View {
             Spacer()
         }
         .padding()
+        .padding(.bottom, 40)
         // When a deep link (/oauth/success) arrives, dAIlyApp.onOpenURL calls
         // integrationState.markConnected, which fires this observer. Clear any
         // residual isConnecting state and error so the connected UI renders.

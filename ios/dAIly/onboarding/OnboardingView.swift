@@ -1,7 +1,8 @@
 import SwiftUI
+import AVFoundation
 
-/// Root onboarding carousel (D-01): TabView with .page style. Hosts 7 tabs:
-/// Welcome → Pairing → Google → Microsoft → Slack → Schedule → Completion.
+/// Root onboarding carousel (D-01): TabView with .page style. Hosts 8 tabs:
+/// Welcome → Pairing → Google → Microsoft → Slack → Permissions → Schedule → Completion.
 ///
 /// Gate semantics (D-02): forward swipe is clamped via .onChange — the user
 /// can only advance past a tab when its gate condition is met. Back-swipe
@@ -21,16 +22,18 @@ struct OnboardingView: View {
     @State private var briefingTime: Date =
         Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: Date()) ?? Date()
     @State private var scheduleSaved: Bool = false
+    @State private var micPermissionGranted: Bool = false
 
     /// Highest tab index the user is allowed to reach right now.
     /// (Pitfall 3 mitigation: returns dynamically based on @Published state,
     /// so SwiftUI re-evaluates whenever hasAccessToken or
     /// integrationState.connectedProviders change.)
     private var allowedMaxTab: Int {
-        if !appState.hasAccessToken { return 1 }       // Locked at Pairing
+        if !appState.hasAccessToken { return 1 }            // Locked at Pairing
         if !integrationState.atLeastOneConnected { return 4 } // Locked at Slack (D-12)
-        if !scheduleSaved { return 5 }                  // Locked at Schedule
-        return 6                                        // Completion reachable
+        if !micPermissionGranted { return 5 }               // Locked at Permissions (D-09)
+        if !scheduleSaved { return 6 }                      // Locked at Schedule
+        return 7                                            // Completion reachable
     }
 
     var body: some View {
@@ -68,6 +71,12 @@ struct OnboardingView: View {
             )
             .tag(4)
 
+            PermissionsView(onGranted: {
+                micPermissionGranted = true
+                advance()
+            })
+            .tag(5)
+
             ScheduleView(
                 auth: auth,
                 onComplete: { savedTime in
@@ -76,7 +85,7 @@ struct OnboardingView: View {
                     advance()
                 }
             )
-            .tag(5)
+            .tag(6)
 
             CompletionView(
                 auth: auth,
@@ -88,7 +97,7 @@ struct OnboardingView: View {
                     appState.hasCompletedOnboarding = true
                 }
             )
-            .tag(6)
+            .tag(7)
         }
         .tabViewStyle(.page)
         .indexViewStyle(.page(backgroundDisplayMode: .always))
@@ -98,6 +107,11 @@ struct OnboardingView: View {
         .task {
             if appState.hasAccessToken && currentTab == 1 {
                 withAnimation { currentTab = 2 }
+            }
+            // Pre-grant: if the user already allowed mic in a previous session,
+            // skip the gate so returning users don't re-see the Permissions tab.
+            if AVAudioSession.sharedInstance().recordPermission == .granted {
+                micPermissionGranted = true
             }
         }
         // Forward-only gate (D-02). Clamp on every selection change.
