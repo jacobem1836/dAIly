@@ -307,3 +307,44 @@ class TestGracefulErrorHandling:
         ms_result = next(r for r in results if r["provider"] == "outlook")
         assert google_result["success"] is False
         assert ms_result["success"] is True
+
+
+    @pytest.mark.asyncio
+    async def test_no_refresh_token_raises_value_error_and_is_caught(self):
+        """When encrypted_refresh_token is None a ValueError is raised and caught (T-1-21)."""
+        near_expiry = datetime.now(tz=timezone.utc) + timedelta(minutes=5)
+        token = _make_token_row(
+            provider="google",
+            token_expiry=near_expiry,
+            encrypted_refresh_token=None,  # triggers ValueError path (line 76)
+        )
+
+        session_factory = _make_session_factory([token])
+        vault_key = b"k" * 32
+
+        with patch("daily.vault.refresh.decrypt_token", return_value="plain"):
+            results = await refresh_expiring_tokens(session_factory, vault_key)
+
+        result = next(r for r in results if r["provider"] == "google")
+        assert result["success"] is False
+        assert result["error"] is not None
+
+    @pytest.mark.asyncio
+    async def test_unknown_provider_skipped_with_error(self):
+        """Unknown provider token is skipped with error message (lines 94-99)."""
+        near_expiry = datetime.now(tz=timezone.utc) + timedelta(minutes=5)
+        token = _make_token_row(
+            provider="unknown_provider",
+            token_expiry=near_expiry,
+            encrypted_refresh_token="enc_refresh",
+        )
+
+        session_factory = _make_session_factory([token])
+        vault_key = b"k" * 32
+
+        with patch("daily.vault.refresh.decrypt_token", return_value="plain_refresh"):
+            results = await refresh_expiring_tokens(session_factory, vault_key)
+
+        result = next(r for r in results if r["provider"] == "unknown_provider")
+        assert result["success"] is False
+        assert "Unsupported provider" in (result["error"] or "")

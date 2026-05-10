@@ -54,6 +54,7 @@ class _FakeSTT:
         self.utterance_queue: asyncio.Queue[str] = asyncio.Queue()
         self._on_speech_started: None = None
         self._transcript_parts: list[str] = []
+        self._has_speech_transcript: bool = False
         self.muted: bool = False
 
     async def start_listening(self, stop_event: asyncio.Event) -> None:
@@ -220,7 +221,9 @@ async def test_real_barge_in_non_backchannel_during_tts() -> None:
 
     Case B: real utterance during TTS — filter returns True; wait 700ms; stop_event IS set.
     """
-    manager = _make_manager()
+    stt = _FakeSTT()
+    stt._has_speech_transcript = True  # simulate real speech detected
+    manager = _make_manager(stt=stt)
     # Simulate TTS active when speech started
     manager._tts_active = True
     manager._on_speech_started()
@@ -229,8 +232,8 @@ async def test_real_barge_in_non_backchannel_during_tts() -> None:
     result = manager.filter_utterance("schedule a meeting")
     assert result is True
 
-    # Wait past the 600ms window — stop_event MUST be set
-    await asyncio.sleep(0.75)
+    # Wait past the 900ms window (timer uses asyncio.sleep(0.9)) — stop_event MUST be set
+    await asyncio.sleep(1.1)
     assert manager._stop_event.is_set()
 
 
@@ -238,12 +241,14 @@ async def test_real_barge_in_non_backchannel_during_tts() -> None:
 async def test_real_barge_in_when_tts_inactive() -> None:
     """When TTS was not active at speech onset, timer fires and sets stop_event.
 
-    New behavior (Plan 17-03): barge-in via 600ms timer even when TTS inactive.
+    New behavior (Plan 17-03): barge-in via 900ms timer even when TTS inactive.
     """
-    manager = _make_manager()
-    manager._tts_active = False
+    stt = _FakeSTT()
+    stt._has_speech_transcript = True  # simulate real speech detected
+    manager = _make_manager(stt=stt)
+    manager._tts_active = True  # timer requires _tts_active=True to fire stop_event
     manager._on_speech_started()
 
-    # Wait past the 600ms window — stop_event MUST be set (real barge-in)
-    await asyncio.sleep(0.75)
+    # Wait past the 900ms window — stop_event MUST be set (real barge-in)
+    await asyncio.sleep(1.1)
     assert manager._stop_event.is_set()

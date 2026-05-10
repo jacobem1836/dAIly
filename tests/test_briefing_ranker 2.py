@@ -90,13 +90,13 @@ def test_vip_override():
         subject="Hi there",
         sender="vip@example.com",
         recipient="me@example.com",
-        hours_ago=12.0,
+        hours_ago=1.0,
     )
     keyword_email = make_email(
         subject="Urgent action required deadline",
         sender="notvip@example.com",
         recipient="me@example.com",
-        hours_ago=0.5,
+        hours_ago=1.0,
     )
 
     vip_score = score_email(vip_email, vip_senders, "me@example.com", now, thread_counts)

@@ -16,12 +16,14 @@ Covers:
 """
 
 import json
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import HumanMessage
 
 from daily.actions.base import ActionDraft, ActionType
+from daily.integrations.models import EmailMetadata, EmailPage
 from daily.orchestrator.state import SessionState
 
 
@@ -59,11 +61,18 @@ def _make_llm_response(
     return mock_response
 
 
-def _make_mock_email_metadata(message_id: str = "sent-001") -> MagicMock:
-    """Return a mock email metadata object."""
-    meta = MagicMock()
-    meta.message_id = message_id
-    return meta
+def _make_mock_email_metadata(message_id: str = "sent-001") -> EmailMetadata:
+    """Return a real EmailMetadata object for use in EmailPage."""
+    return EmailMetadata(
+        message_id=message_id,
+        thread_id=f"thread-{message_id}",
+        subject="Test email",
+        sender="me@example.com",
+        recipient="other@example.com",
+        timestamp=datetime(2026, 4, 1, 9, 0, 0, tzinfo=timezone.utc),
+        is_unread=False,
+        labels=["SENT"],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -334,7 +343,8 @@ class TestDraftNodeStyleExamples:
         mock_llm_response = _make_llm_response()
 
         mock_adapter = AsyncMock()
-        mock_adapter.list_emails = AsyncMock(return_value=[_make_mock_email_metadata("sent-001")])
+        email_page = EmailPage(emails=[_make_mock_email_metadata("sent-001")], next_page_token=None)
+        mock_adapter.list_emails = AsyncMock(return_value=email_page)
         mock_adapter.get_email_body = AsyncMock(return_value="Hi there, just wanted to check in.")
 
         with (
@@ -350,7 +360,8 @@ class TestDraftNodeStyleExamples:
 
             await draft_node(state)
 
-        mock_adapter.list_emails.assert_called_once()
+        # draft_node may call list_emails more than once (style examples + fallback)
+        mock_adapter.list_emails.assert_called()
 
     @pytest.mark.asyncio
     async def test_draft_node_calls_summarise_and_redact_on_email_bodies(self):
@@ -361,7 +372,8 @@ class TestDraftNodeStyleExamples:
         mock_adapter = AsyncMock()
         email_meta1 = _make_mock_email_metadata("sent-001")
         email_meta2 = _make_mock_email_metadata("sent-002")
-        mock_adapter.list_emails = AsyncMock(return_value=[email_meta1, email_meta2])
+        email_page = EmailPage(emails=[email_meta1, email_meta2], next_page_token=None)
+        mock_adapter.list_emails = AsyncMock(return_value=email_page)
         mock_adapter.get_email_body = AsyncMock(return_value="Some email body text")
 
         mock_redact = AsyncMock(return_value="[REDACTED summary]")
@@ -391,7 +403,8 @@ class TestDraftNodeStyleExamples:
         mock_llm_response = _make_llm_response()
 
         mock_adapter = AsyncMock()
-        mock_adapter.list_emails = AsyncMock(return_value=[_make_mock_email_metadata("sent-001")])
+        email_page = EmailPage(emails=[_make_mock_email_metadata("sent-001")], next_page_token=None)
+        mock_adapter.list_emails = AsyncMock(return_value=email_page)
         mock_adapter.get_email_body = AsyncMock(return_value="Sample email body")
         redacted_text = "REDACTED_STYLE_EXAMPLE_UNIQUE_MARKER"
         mock_redact = AsyncMock(return_value=redacted_text)
@@ -446,8 +459,9 @@ class TestDraftNodeStyleExamples:
 
         # Return 8 emails from the adapter
         eight_emails = [_make_mock_email_metadata(f"sent-{i:03d}") for i in range(8)]
+        email_page = EmailPage(emails=eight_emails, next_page_token=None)
         mock_adapter = AsyncMock()
-        mock_adapter.list_emails = AsyncMock(return_value=eight_emails)
+        mock_adapter.list_emails = AsyncMock(return_value=email_page)
         mock_adapter.get_email_body = AsyncMock(return_value="Email body text")
         mock_redact = AsyncMock(return_value="[REDACTED]")
 

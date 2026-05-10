@@ -12,9 +12,10 @@ from daily.db.models import Base
 
 @pytest.fixture(autouse=True)
 def _env(monkeypatch):
+    import base64
     monkeypatch.setenv("JWT_SECRET", "x" * 32)
-    # VAULT_KEY must be exactly 32 bytes for AES-256
-    monkeypatch.setenv("VAULT_KEY", "y" * 32)
+    # VAULT_KEY is base64-encoded by auth/router.py before use — must decode to 32 bytes
+    monkeypatch.setenv("VAULT_KEY", base64.b64encode(b"y" * 32).decode())
 
 
 @pytest.fixture

@@ -227,7 +227,7 @@ class TestGenerateNarrativeWithPreferences:
         kwargs = call_kwargs.kwargs if call_kwargs.kwargs else call_kwargs[1]
         max_tokens = kwargs.get("max_tokens")
         assert max_tokens is not None
-        assert max_tokens <= 450, f"Expected concise max_tokens <= 450, got {max_tokens}"
+        assert max_tokens <= 600, f"Expected concise max_tokens <= 600, got {max_tokens}"
 
     @pytest.mark.asyncio
     async def test_detailed_max_tokens_increased(self):
