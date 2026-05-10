@@ -135,6 +135,14 @@ Plans:
 
 - [ ] TBD
 
+### Phase 21.4: Test Coverage (INSERTED)
+
+**Goal:** Comprehensive test suite for production readiness. Python backend: pytest for auth, integrations router, briefing pipeline, and new trigger endpoint. iOS unit tests: VoiceSession state machine, OAuthCallbackParser, AuthService. iOS onboarding flow and deep link routing tests. E2E smoke test covering pairing → onboarding → voice connect happy path. Target 80%+ backend coverage, all critical iOS state machines covered.
+**Depends on:** Phase 21.2, Phase 21.3
+**Plans:** TBD
+
+- [ ] TBD
+
 ### Phase 22: Apple Integrations
 
 **Goal:** iCloud Mail + Apple Calendar via EventKit/CloudKit. Alternative to Google for iOS users. Also covers iCloud contacts.
@@ -216,6 +224,7 @@ Plans:
 | 21.1. Per-User Onboarding UI | v2.1 | 4/4 | ✅ Complete | 2026-05-10 |
 | 21.2. Bug Fixes and Polish | v2.1 | — | ○ Not started | — |
 | 21.3. UI Tidy-Up | v2.1 | — | ○ Not started | — |
+| 21.4. Test Coverage | v2.1 | — | ○ Not started | — |
 | 22. Apple Integrations | v2.1 | — | ○ Not started | — |
 | 23. Production Backend Deploy | v2.1 | — | ○ Not started | — |
 | 24. Desktop Web Fallback | v2.2 | — | ○ Not started | — |
@@ -233,8 +242,6 @@ Plans:
 **Plans:** 0 plans
 
 - [ ] TBD (promote with /gsd-review-backlog when ready)
-
----
 
 ### Phase 999.2: Deep Customization (BACKLOG)
 
