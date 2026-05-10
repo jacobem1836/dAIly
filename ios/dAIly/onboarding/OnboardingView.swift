@@ -79,6 +79,7 @@ struct OnboardingView: View {
             .tag(5)
 
             CompletionView(
+                auth: auth,
                 integrationState: integrationState,
                 briefingTime: briefingTime,
                 onFinish: {

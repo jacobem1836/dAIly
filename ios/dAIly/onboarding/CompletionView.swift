@@ -2,13 +2,18 @@ import SwiftUI
 
 /// Tab 6 of the onboarding TabView — final confirmation screen (D-17).
 /// Summarises briefing time + connected providers. Tapping "Start talking
-/// to dAIly" calls onFinish, which sets appState.hasCompletedOnboarding
-/// = true in the parent OnboardingView, transitioning the app root to
-/// VoiceView (D-18).
+/// to dAIly" triggers on-demand briefing generation (D-04) via
+/// AuthService.triggerBriefing(), then calls onFinish which sets
+/// appState.hasCompletedOnboarding = true in OnboardingView, transitioning
+/// the app root to VoiceView (D-18).
 struct CompletionView: View {
+    let auth: AuthService
     @ObservedObject var integrationState: IntegrationState
     let briefingTime: Date
     let onFinish: () -> Void
+
+    @State private var isGeneratingBriefing: Bool = false
+    @State private var briefingError: String? = nil
 
     private var formattedTime: String {
         let formatter = DateFormatter()
@@ -48,9 +53,34 @@ struct CompletionView: View {
 
             Spacer()
 
-            Button("Start talking to dAIly", action: onFinish)
+            if isGeneratingBriefing {
+                ProgressView("Generating your first briefing...")
+                    .progressViewStyle(.circular)
+                    .controlSize(.large)
+            } else {
+                Button("Start talking to dAIly") {
+                    Task {
+                        isGeneratingBriefing = true
+                        briefingError = nil
+                        do {
+                            try await auth.triggerBriefing()
+                            onFinish()
+                        } catch {
+                            briefingError = "Couldn't generate your first briefing. Tap to try again."
+                            isGeneratingBriefing = false
+                        }
+                    }
+                }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
+            }
+
+            if let errorMessage = briefingError {
+                Text(errorMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(.center)
+            }
         }
         .padding()
     }
@@ -60,6 +90,7 @@ struct CompletionView: View {
     let state = IntegrationState()
     state.markConnected(provider: "google")
     return CompletionView(
+        auth: AuthService(baseURL: URL(string: "http://localhost:8000")!),
         integrationState: state,
         briefingTime: Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: Date())!,
         onFinish: {}

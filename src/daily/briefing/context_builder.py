@@ -172,9 +172,14 @@ async def build_context(
 
         # For M1 single-adapter, fetch all from first adapter.
         # In multi-adapter scenario, we use the first adapter for all bodies
-        # (adapter routing by email domain is a M2 concern).
+        # (adapter routing by email domain is a M2 concern — D-03).
         body_tasks = []
         if email_adapters:
+            if len(email_adapters) > 1:
+                logger.warning(
+                    "Multi-adapter setup detected — body fetch uses adapters[0] only "
+                    "(M2 routing pending)"
+                )
             adapter = email_adapters[0]
             body_tasks = [
                 _fetch_email_body(adapter, ranked.metadata.message_id)

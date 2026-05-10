@@ -100,6 +100,21 @@ public final class AuthService {
         return url
     }
 
+    /// Triggers on-demand briefing generation for the current user (D-04).
+    /// Calls POST /briefings/trigger with Bearer auth. Blocks until the pipeline
+    /// completes (15-30s acceptable per CONTEXT.md). Returns on 202.
+    public func triggerBriefing() async throws {
+        var req = URLRequest(url: baseURL.appendingPathComponent("/briefings/trigger"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = keychain.load(key: "access_token") {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        // Long timeout: pipeline can take 15-30s
+        req.timeoutInterval = 60
+        _ = try await sendAndDecode(req: req, expecting: EmptyResponse.self)
+    }
+
     /// Saves the user's briefing time and timezone preferences (D-15, D-16).
     /// Calls PUT /users/me/preferences (NOTE: /users/me/preferences, not
     /// /users/preferences — verified backend at src/daily/users/router.py:97).
