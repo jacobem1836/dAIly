@@ -36,6 +36,7 @@
 		C8549386EE090F1698EDA339 /* PairCodeURLParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FCCBD1B33C83F6088357E80 /* PairCodeURLParserTests.swift */; };
 		D1FDC2044FBCD07335A98394 /* TokenRefresher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A6C58DE0F98F17EE846AA2 /* TokenRefresher.swift */; };
 		D7EEE8CD9AEB246EA91C52E6 /* IntegrationStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78933C431583629FAAC7890 /* IntegrationStateTests.swift */; };
+		35864D853B27443694A90FBF /* VoiceSessionErrorMappingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C3AC0089FB548459A545632 /* VoiceSessionErrorMappingTests.swift */; };
 		DECBC55FB31F01EC556A929E /* VoiceSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41A7E87BCC8D2E7A5BB2C692 /* VoiceSessionTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -58,6 +59,7 @@
 		26925FD04998254E0D725EDD /* dAIly.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = dAIly.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3CD0CA433CC154B3501CA978 /* dAIlyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = dAIlyApp.swift; sourceTree = "<group>"; };
 		40312E64303E6BF388106413 /* IntegrationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationProvider.swift; sourceTree = "<group>"; };
+		3C3AC0089FB548459A545632 /* VoiceSessionErrorMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionErrorMappingTests.swift; sourceTree = "<group>"; };
 		41A7E87BCC8D2E7A5BB2C692 /* VoiceSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionTests.swift; sourceTree = "<group>"; };
 		4CC5FFAD37184173FC5A9F73 /* LiveKitTokenSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveKitTokenSource.swift; sourceTree = "<group>"; };
 		52E0D2DF5ABB52AAABC4D067 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
@@ -187,6 +189,7 @@
 				D27764E579A6DD44E12F443C /* OAuthCallbackParserTests.swift */,
 				ED48D3604DD5BE66A4FFFCF3 /* OnboardingKeychainTests.swift */,
 				8FCCBD1B33C83F6088357E80 /* PairCodeURLParserTests.swift */,
+				3C3AC0089FB548459A545632 /* VoiceSessionErrorMappingTests.swift */,
 				41A7E87BCC8D2E7A5BB2C692 /* VoiceSessionTests.swift */,
 			);
 			path = dAIlyTests;
@@ -304,6 +307,7 @@
 				8A3CE4E4AB845F7CFE6C051A /* OAuthCallbackParserTests.swift in Sources */,
 				BB6F4624CCF0F05F06A65E3F /* OnboardingKeychainTests.swift in Sources */,
 				C8549386EE090F1698EDA339 /* PairCodeURLParserTests.swift in Sources */,
+				35864D853B27443694A90FBF /* VoiceSessionErrorMappingTests.swift in Sources */,
 				DECBC55FB31F01EC556A929E /* VoiceSessionTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
