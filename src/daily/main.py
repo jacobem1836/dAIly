@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
 from daily.auth.router import router as auth_router
+from daily.briefing.router import router as briefing_router
 from daily.briefing.scheduler import scheduler, setup_scheduler, setup_scheduler_for_user
 from daily.config import Settings
 from daily.db.engine import async_session
@@ -74,6 +75,7 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
+app.include_router(briefing_router)
 app.include_router(integrations_router)
 app.include_router(livekit_router)
 app.include_router(users_router)
