@@ -64,6 +64,10 @@ packages = ["src/daily"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = "-m 'not e2e'"
+markers = [
+    "e2e: end-to-end smoke tests (opt-in, slower)",
+]
 
 [tool.coverage.report]
 fail_under = 80
