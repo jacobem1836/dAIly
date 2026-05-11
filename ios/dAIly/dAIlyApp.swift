@@ -19,13 +19,12 @@ struct dAIlyApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                // D-05: only route to VoiceView once both auth AND onboarding
-                // are complete. Any other state shows the OnboardingView,
-                // which itself starts at the correct tab via its gate logic
-                // (tab 0 always; PairingView at tab 1 if not authed yet).
-                if appState.hasAccessToken && appState.hasCompletedOnboarding {
+                // D-05: use rootRoute computed property on AppState for clean routing.
+                // hasAccessToken && hasCompletedOnboarding → VoiceView; else OnboardingView.
+                switch appState.rootRoute {
+                case .voice:
                     VoiceView(session: voiceSession)
-                } else {
+                case .pairing, .onboarding:
                     OnboardingView(auth: auth)
                 }
             }
@@ -43,13 +42,10 @@ struct dAIlyApp: App {
     }
 
     /// Handles Universal Links delivered to the app while running.
-    /// Two shapes are supported:
-    ///   - /pair?code=...           → pair-code completion (existing)
-    ///   - /oauth/success?provider= → integration connect success (new, D-13)
+    /// Delegates to AppState.handleDeepLink for testability.
     @MainActor
     private func handleDeepLink(_ url: URL) {
-        // Branch 1: pair code (existing behavior preserved verbatim).
-        if let code = PairCodeURLParser.extractPairCode(from: url) {
+        appState.handleDeepLink(url, integrationState: integrationState) { code in
             Task { @MainActor in
                 do {
                     _ = try await auth.completePairing(code: code)
@@ -58,15 +54,6 @@ struct dAIlyApp: App {
                     print("[dAIly] pair complete failed: \(error)")
                 }
             }
-            return
-        }
-
-        // Branch 2: OAuth success (new). Validate the provider rawValue
-        // against IntegrationProvider so a malformed query string can't
-        // mark an arbitrary string as "connected" (T-21.1-04-01).
-        if let providerRaw = OAuthCallbackParser.extractProvider(from: url),
-           IntegrationProvider(rawValue: providerRaw) != nil {
-            integrationState.markConnected(provider: providerRaw)
         }
     }
 }

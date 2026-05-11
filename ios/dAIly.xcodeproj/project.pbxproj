@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		06FCE76FD1AD451CB54F2C20 /* AppStateRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6989341588C74537990BB9AC /* AppStateRoutingTests.swift */; };
+		4F4122F75BF74BB08B593D4B /* OnboardingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9514CBCD9FD4AE5A37C7BFB /* OnboardingCoordinator.swift */; };
+		7B2745C54D6040178B403C20 /* DeepLinkRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A38FB64BD3734F189FDA86A7 /* DeepLinkRoutingTests.swift */; };
+		8994FAF414C44B4992233EAA /* OnboardingFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D1748BBC36444A580375A44 /* OnboardingFlowTests.swift */; };
 		0E7E89C994E7811A7344C4EC /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB66279C1B5AA22E33DB5E56 /* Config.swift */; };
 		195B0F5C66CBD24D2EFB985C /* CompletionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D42B097F642A40B8C7D3F7D /* CompletionView.swift */; };
 		1C262F97344F87E6F28A87A8 /* VoiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B119761300EB73F212A2134B /* VoiceView.swift */; };
@@ -85,6 +89,10 @@
 		CD11228C8AC0B4CFF3B70A1F /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
 		D27764E579A6DD44E12F443C /* OAuthCallbackParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthCallbackParserTests.swift; sourceTree = "<group>"; };
 		D7C6DC5730F20B69F8FE9A10 /* PairCodeURLParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairCodeURLParser.swift; sourceTree = "<group>"; };
+		6989341588C74537990BB9AC /* AppStateRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateRoutingTests.swift; sourceTree = "<group>"; };
+		8D1748BBC36444A580375A44 /* OnboardingFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowTests.swift; sourceTree = "<group>"; };
+		A38FB64BD3734F189FDA86A7 /* DeepLinkRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRoutingTests.swift; sourceTree = "<group>"; };
+		D9514CBCD9FD4AE5A37C7BFB /* OnboardingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingCoordinator.swift; sourceTree = "<group>"; };
 		ED48D3604DD5BE66A4FFFCF3 /* OnboardingKeychainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingKeychainTests.swift; sourceTree = "<group>"; };
 		F7D74E7100A5D1A77D37F239 /* ScheduleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -108,6 +116,7 @@
 				40312E64303E6BF388106413 /* IntegrationProvider.swift */,
 				54697A3721AF38B72C8F3522 /* IntegrationState.swift */,
 				249ECFDC86274A5984231382 /* IntegrationView.swift */,
+				D9514CBCD9FD4AE5A37C7BFB /* OnboardingCoordinator.swift */,
 				09696478AAFFADE8A00958E9 /* OnboardingView.swift */,
 				020902C286EAB115BD744429 /* PermissionsView.swift */,
 				F7D74E7100A5D1A77D37F239 /* ScheduleView.swift */,
@@ -185,12 +194,15 @@
 		F0C806E01A5671C0EEDA75BF /* dAIlyTests */ = {
 			isa = PBXGroup;
 			children = (
+				6989341588C74537990BB9AC /* AppStateRoutingTests.swift */,
 				CD11228C8AC0B4CFF3B70A1F /* AppStateTests.swift */,
 				87A4A357CC8389F02A323D8A /* AuthServiceTests.swift */,
+				A38FB64BD3734F189FDA86A7 /* DeepLinkRoutingTests.swift */,
 				B78933C431583629FAAC7890 /* IntegrationStateTests.swift */,
 				12D6C857947FC8F86D4FDBF2 /* KeychainStoreTests.swift */,
 				D27764E579A6DD44E12F443C /* OAuthCallbackParserTests.swift */,
 				ED48D3604DD5BE66A4FFFCF3 /* OnboardingKeychainTests.swift */,
+				8D1748BBC36444A580375A44 /* OnboardingFlowTests.swift */,
 				8FCCBD1B33C83F6088357E80 /* PairCodeURLParserTests.swift */,
 				B7221F6BBA162783A30506D6 /* VoiceSessionErrorMappingTests.swift */,
 				41A7E87BCC8D2E7A5BB2C692 /* VoiceSessionTests.swift */,
@@ -289,6 +301,7 @@
 				1FEBD0F3DB93546D9C070F68 /* KeychainStore.swift in Sources */,
 				C5C621311DC61B6F0DC914C0 /* LiveKitTokenSource.swift in Sources */,
 				37D221EB7FE5B70AB0A2BEF7 /* OAuthCallbackParser.swift in Sources */,
+				4F4122F75BF74BB08B593D4B /* OnboardingCoordinator.swift in Sources */,
 				EE9F234FB7B96B1975796F74 /* OnboardingView.swift in Sources */,
 				2F03D8B3DBD648780EE83606 /* PairCodeURLParser.swift in Sources */,
 				3E8275649EBEA6F9A3DA1489 /* PairingView.swift in Sources */,
@@ -306,12 +319,15 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				06FCE76FD1AD451CB54F2C20 /* AppStateRoutingTests.swift in Sources */,
 				4561CA0F184C6E410ABE26F6 /* AppStateTests.swift in Sources */,
 				329AA777AA8869BBBE5A8D48 /* AuthServiceTests.swift in Sources */,
+				7B2745C54D6040178B403C20 /* DeepLinkRoutingTests.swift in Sources */,
 				D7EEE8CD9AEB246EA91C52E6 /* IntegrationStateTests.swift in Sources */,
 				233581FF4ED8736C505007C8 /* KeychainStoreTests.swift in Sources */,
 				8A3CE4E4AB845F7CFE6C051A /* OAuthCallbackParserTests.swift in Sources */,
 				BB6F4624CCF0F05F06A65E3F /* OnboardingKeychainTests.swift in Sources */,
+				8994FAF414C44B4992233EAA /* OnboardingFlowTests.swift in Sources */,
 				C8549386EE090F1698EDA339 /* PairCodeURLParserTests.swift in Sources */,
 				366C2529E906448AD887BB8C /* VoiceSessionErrorMappingTests.swift in Sources */,
 				DECBC55FB31F01EC556A929E /* VoiceSessionTests.swift in Sources */,
