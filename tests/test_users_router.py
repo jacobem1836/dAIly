@@ -270,3 +270,49 @@ async def test_invalid_timezone(client, auth_user):
         headers=_bearer(auth_user),
     )
     assert r.status_code == 422, r.text
+
+
+# ---------------------------------------------------------------------------
+# PreferencesUpdateRequest validator branches
+# ---------------------------------------------------------------------------
+
+
+def test_validate_time_missing_colon():
+    """Validator raises on briefing_time without colon (line 72)."""
+    import pytest
+    from pydantic import ValidationError
+    from daily.users.router import PreferencesUpdateRequest
+
+    with pytest.raises(ValidationError) as exc_info:
+        PreferencesUpdateRequest(briefing_time="700", timezone="UTC")
+    assert "HH:MM" in str(exc_info.value)
+
+
+def test_validate_time_non_integer_parts():
+    """Validator raises when hour/minute are not integers (lines 75-76)."""
+    import pytest
+    from pydantic import ValidationError
+    from daily.users.router import PreferencesUpdateRequest
+
+    with pytest.raises(ValidationError) as exc_info:
+        PreferencesUpdateRequest(briefing_time="ab:cd", timezone="UTC")
+    assert "integer" in str(exc_info.value)
+
+
+def test_validate_time_out_of_range():
+    """Validator raises when hour > 23 or minute > 59 (line 78)."""
+    import pytest
+    from pydantic import ValidationError
+    from daily.users.router import PreferencesUpdateRequest
+
+    with pytest.raises(ValidationError) as exc_info:
+        PreferencesUpdateRequest(briefing_time="25:00", timezone="UTC")
+    assert "0-23" in str(exc_info.value)
+
+
+def test_validate_time_valid():
+    """Validator accepts a well-formed HH:MM string."""
+    from daily.users.router import PreferencesUpdateRequest
+
+    req = PreferencesUpdateRequest(briefing_time="07:30", timezone="UTC")
+    assert req.briefing_time == "07:30"

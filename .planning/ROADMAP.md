@@ -143,9 +143,12 @@ Plans:
 
 **Goal:** Comprehensive test suite for production readiness. Python backend: pytest for auth, integrations router, briefing pipeline, and new trigger endpoint. iOS unit tests: VoiceSession state machine, OAuthCallbackParser, AuthService. iOS onboarding flow and deep link routing tests. E2E smoke test covering pairing → onboarding → voice connect happy path. Target 80%+ backend coverage, all critical iOS state machines covered.
 **Depends on:** Phase 21.2, Phase 21.3
-**Plans:** TBD
+**Plans:** 2/3 plans executed
 
-- [ ] TBD
+Plans:
+- [x] 21.4-01-PLAN.md — Backend OAuth + auth router coverage uplift to 80%+ per module, enforce coverage floor
+- [x] 21.4-02-PLAN.md — iOS onboarding flow, deep-link routing, AppState routing tests
+- [ ] 21.4-03-PLAN.md — Backend E2E smoke test: pairing → onboarding → voice connect
 
 ### Phase 22: Apple Integrations
 
@@ -228,7 +231,7 @@ Plans:
 | 21.1. Per-User Onboarding UI | v2.1 | 4/4 | ✅ Complete | 2026-05-10 |
 | 21.2. Bug Fixes and Polish | v2.1 | — | ○ Not started | — |
 | 21.3. UI Tidy-Up | v2.1 | — | ○ Not started | — |
-| 21.4. Test Coverage | v2.1 | — | ○ Not started | — |
+| 21.4. Test Coverage | v2.1 | 2/3 | In Progress|  |
 | 22. Apple Integrations | v2.1 | — | ○ Not started | — |
 | 23. Production Backend Deploy | v2.1 | — | ○ Not started | — |
 | 24. Desktop Web Fallback | v2.2 | — | ○ Not started | — |
