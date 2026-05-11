@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Mobile Voice
-status: complete
-last_updated: "2026-05-10T16:00:00.000Z"
-last_activity: 2026-05-10 -- Phase 21.2 complete
+status: planning
+last_updated: "2026-04-28T00:00:00Z"
+last_activity: 2026-04-28 -- Phase 17 complete, planning docs reconstructed
 progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 7
-  completed_plans: 8
-  percent: 100
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** The briefing always delivers — every morning, the user gets a prioritised, conversational summary of what matters without touching a single app.
-**Current focus:** Phase 21.2 — bug-fixes-and-polish
+**Current focus:** v2.0 — Mobile Voice. Phase 17 (Voice Polish) complete. Next: Phase 18 LiveKit Backend Integration.
 
 ## Current Position
 
-Phase: 21.2 (bug-fixes-and-polish) — COMPLETE
-Plan: 4 of 4
-Status: Phase 21.2 complete
-Last activity: 2026-05-10 -- Phase 21.2 closed
+Phase: Phase 18 — LiveKit Backend Integration
+Plan: —
+Status: Ready to plan
+Last activity: 2026-04-28 — Phase 17 complete; v1.x history reconstructed in planning docs
 
 ## Completed Milestones
 
@@ -68,10 +68,6 @@ See `KEY_DECISIONS` in PROJECT.md and `.planning/research/voice-strategy-decisio
 - Prompt caching strategy for Realtime API — mandatory if that path is used ($6-8/user/month with caching vs $18-40 without)
 - Whether to keep Python voice loop alive as desktop fallback during Phase 18, or stub it out immediately
 
-### Roadmap Evolution
-
-- Phase 20.1 inserted after Phase 20: LiveKit Agent Worker (INSERTED) — server-side agent that speaks into LiveKit rooms; prerequisite for mobile apps being functional end-to-end
-
 ### Blockers/Concerns
 
 None active.
@@ -82,13 +78,10 @@ None active.
 |---|-------------|------|--------|-----------|
 | 260411-vlh | Fix Google credentials reconstruction | 2026-04-11 | dc41c9f | [260411-vlh-fix-google-credentials-reconstruction-bu](./quick/260411-vlh-fix-google-credentials-reconstruction-bu/) |
 | 260412-gak | Fix null recipient in draft_node — pass email metadata to LLM prompt | 2026-04-12 | 60975dd | [260412-gak-fix-null-recipient-in-draft-node-pass-em](./quick/260412-gak-fix-null-recipient-in-draft-node-pass-em/) |
-| 260503-gdw | Update magic link email to also include the OTP code as plain text | 2026-05-03 | c381b03 | [260503-gdw-update-magic-link-email-to-also-include-](./quick/260503-gdw-update-magic-link-email-to-also-include-/) |
 
 ## Session Continuity
 
-Last activity: 2026-05-03 - Completed quick task 260503-gdw: Update magic link email to also include the OTP code as plain text
-
-Last session: 2026-05-10T04:12:52.632Z
+Last session: 2026-04-28
 Phase 17 (voice polish) complete. Planning docs reconstructed to reflect full v1.0–v1.3 history — the phase-17 branch had branched from phase-06 and the ROADMAP/STATE/MILESTONES had overwritten all intermediate milestone history. Now corrected.
 
 Next session: plan Phase 18 (LiveKit Backend Integration) via `/gsd-plan-phase 18`.

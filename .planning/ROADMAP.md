@@ -6,9 +6,8 @@
 - ✅ **v1.1 Intelligence Layer** — Phases 7–12 (shipped 2026-04-18)
 - ✅ **v1.2 Deployability Layer** — Phases 13–16 (shipped 2026-04-20)
 - ✅ **v1.3 Voice Polish** — Phase 17 (shipped 2026-04-28)
-- 📋 **v2.0 Mobile Voice** — Phases 18–20 (partially complete)
-- 📋 **v2.1 TestFlight Ready** — Phases 21–23 (planned)
-- 📋 **v2.2 Ecosystem Expansion** — Phases 24–28 (planned)
+- 📋 **v2.0 Mobile Voice** — Phases 18–21 (planned)
+- 📋 **v2.1 Ecosystem Expansion** — Phases 22–25 (planned)
 
 ## Phases
 
@@ -65,140 +64,17 @@ See `.planning/milestones/v1.2-ROADMAP.md` for full phase details.
 
 ### 📋 v2.0 Mobile Voice (Next)
 
-### Phase 18: LiveKit Backend Integration
+- [ ] Phase 18: LiveKit Backend Integration — wire LangGraph orchestrator into LiveKit Agents framework via livekit-plugins-langchain; replace Python sounddevice voice loop with LiveKit room-based transport
+- [ ] Phase 19: Native iOS App — Swift + LiveKit iOS SDK, AVAudioEngine/AUVoiceIO hardware AEC, minimal voice UI (push-to-talk + auto VAD modes)
+- [ ] Phase 20: Native Android App — Kotlin + LiveKit Android SDK, Oboe hardware AEC, minimal voice UI matching iOS
+- [ ] Phase 21: Desktop Web Fallback — LiveKit web SDK in a minimal web app; replaces current Python sounddevice loop for macOS users; WebRTC AEC handles echo
 
-**Goal:** Wire the LangGraph orchestrator into LiveKit Agents framework via livekit-plugins-langchain; replace the Python sounddevice voice loop with LiveKit room-based WebRTC transport.
-**Plans:** TBD
+### 📋 v2.1 Ecosystem Expansion (Planned)
 
-- [ ] TBD
-
-### Phase 19: Native iOS App
-
-**Goal:** Swift + LiveKit iOS SDK, AVAudioEngine/AUVoiceIO hardware AEC, minimal voice UI (push-to-talk + auto VAD modes).
-**Plans:** 5 plans — completed 2026-04-30
-
-- [x] Phase 19: Native iOS App — completed 2026-04-30
-
-- [x] Phase 20: Native Android App — Kotlin + LiveKit Android SDK, Oboe hardware AEC, minimal voice UI matching iOS (completed 2026-04-30)
-
----
-
-### 📋 v2.1 TestFlight Ready (Planned)
-
-### Phase 20.1: LiveKit Agent Worker (INSERTED)
-
-**Goal:** Build the server-side LiveKit Agents worker that dispatches into a user's room on connect, delivers the briefing from Redis as TTS audio via LiveKit, and handles voice turns via the existing LangGraph orchestrator — making the iOS and Android apps fully functional end-to-end.
-**Requirements:** WORKER-01, WORKER-02, WORKER-03, WORKER-04, WORKER-05
-**Depends on:** Phase 19, Phase 20
-**Plans:** 4/4 plans complete
-
-Plans:
-- [x] 20.1-01-PLAN.md — Install livekit-agents, scaffold worker package, identity parser
-- [x] 20.1-02-PLAN.md — Per-user session bootstrap + LangGraph LLM bridge
-- [x] 20.1-03-PLAN.md — Voice pipeline (STT/TTS/VAD) + briefing-on-connect entrypoint
-- [x] 20.1-04-PLAN.md — Dockerize worker + end-to-end smoke test (checkpoint)
-
-### Phase 21: Per-User Onboarding (Backend)
-
-**Goal:** Backend signup flow, per-user OAuth credential storage (Google, Microsoft, Slack), magic-link auth, briefing schedule configuration API. Every new user can independently connect their own accounts via API — no shared credentials. Frontend UI is Phase 21.1.
-**Plans:** 5/5 plans complete
-
-Plans:
-- [x] 21-01-PLAN.md — Add timezone column to BriefingConfig (model + Alembic migration)
-- [x] 21-02-PLAN.md — Wave 0 test scaffolding (integrations, users, AASA, conftest fixtures)
-- [x] 21-03-PLAN.md — Mobile OAuth integrations router (Google, Microsoft, Slack connect/callback)
-- [x] 21-04-PLAN.md — Users router (integration status + briefing schedule preferences)
-- [x] 21-05-PLAN.md — Wire routers into main.py, add /oauth/success to AASA, multi-user scheduler lifespan
-
-### Phase 21.1: Per-User Onboarding UI (INSERTED)
-
-**Goal:** Native iOS onboarding screens: welcome/signup, OAuth connect cards (Google, Microsoft, Slack), briefing schedule picker. Users complete full onboarding in-app without leaving to a browser (except OAuth deeplink redirect). Depends on Phase 21 backend.
-**Plans:** 4/4 plans complete
-
-Plans:
-- [x] 21.1-01-PLAN.md — State + model layer (AppState extension, IntegrationState, IntegrationProvider, OAuthCallbackParser) + Wave 0 tests
-- [x] 21.1-02-PLAN.md — AuthService extensions (getIntegrationConnectURL, openOAuthSession, savePreferences) with Bearer auth + tests
-- [x] 21.1-03-PLAN.md — Onboarding leaf views (WelcomeView, IntegrationView, ScheduleView, CompletionView)
-- [x] 21.1-04-PLAN.md — OnboardingView TabView + dAIlyApp routing + deep-link wiring (manual verification checkpoint)
-
-### Phase 21.2: Bug Fixes and Polish (INSERTED)
-
-**Goal:** Iron out all known bugs before production deploy. Speaking state indicator not surfacing on iOS while agent responds, first-load briefing not playing on session connect, and any other issues surfaced during onboarding testing. Zero known bugs before TestFlight.
-**Plans:** 4 plans
-
-Plans:
-- [ ] 21.2-01-PLAN.md – Briefing trigger endpoint + iOS call + multi-provider audit (D-03, D-04)
-- [ ] 21.2-02-PLAN.md – APPLE_TEAM_ID / AASA / Universal Links + Google OAuth test users (D-02, D-06)
-- [ ] 21.2-03-PLAN.md – LiveKit connect_failed friendly errors + worker runbook (D-01)
-- [ ] 21.2-04-PLAN.md – iOS UX polish: OTP keypad, page dots, link copy, mic permissions (D-05, D-07, D-08, D-09)
-
-### Phase 21.3: UI Tidy-Up (INSERTED)
-
-**Goal:** Visual polish pass across all iOS screens — consistency in spacing, typography, colours, and interaction states. Ensure the app looks intentional and production-ready before TestFlight, not like a prototype.
-**Plans:** TBD
-
-- [ ] TBD
-
-### Phase 21.4: Test Coverage (INSERTED)
-
-**Goal:** Comprehensive test suite for production readiness. Python backend: pytest for auth, integrations router, briefing pipeline, and new trigger endpoint. iOS unit tests: VoiceSession state machine, OAuthCallbackParser, AuthService. iOS onboarding flow and deep link routing tests. E2E smoke test covering pairing → onboarding → voice connect happy path. Target 80%+ backend coverage, all critical iOS state machines covered.
-**Depends on:** Phase 21.2, Phase 21.3
-**Plans:** TBD
-
-- [ ] TBD
-
-### Phase 22: Apple Integrations
-
-**Goal:** iCloud Mail + Apple Calendar via EventKit/CloudKit. Alternative to Google for iOS users. Also covers iCloud contacts.
-**Plans:** TBD
-
-- [ ] TBD
-
-### Phase 23: Production Backend Deploy
-
-**Goal:** Stable public backend URL, multi-user hardening, SSL/TLS, secrets management, environment config for real users. Backend runs independently of any dev machine.
-**Plans:** TBD
-
-- [ ] TBD
-
----
-
-### 📋 v2.2 Ecosystem Expansion (Planned)
-
-### Phase 24: Desktop Web Fallback
-
-**Goal:** LiveKit web SDK in a minimal web app; replaces current Python sounddevice loop for macOS users; WebRTC AEC handles echo.
-**Plans:** TBD
-
-- [ ] TBD
-
-### Phase 25: Developer Pack
-
-**Goal:** GitHub (PRs, issues, CI status), Linear (tasks/issues), Hacker News (top stories); briefing gains a "work tools" section.
-**Plans:** TBD
-
-- [ ] TBD
-
-### Phase 26: Knowledge Pack
-
-**Goal:** Notion (pages, tasks, meetings), Google Maps Routes (commute ETA); deep-link action layer to create Notion tasks via voice.
-**Plans:** TBD
-
-- [ ] TBD
-
-### Phase 27: Operator Pack
-
-**Goal:** WhatsApp Business (via Twilio), PagerDuty (incidents/on-call), Vercel (deploy status); real-time alerting triggers.
-**Plans:** TBD
-
-- [ ] TBD
-
-### Phase 28: Finance Pack
-
-**Goal:** Stripe (MRR, payment failures), Brex/Mercury (spend, cash position); morning briefing gains financial digest section.
-**Plans:** TBD
-
-- [ ] TBD
+- [ ] Phase 22: Developer Pack — GitHub (PRs, issues, CI status), Linear (tasks/issues), Hacker News (top stories); briefing gains a "work tools" section
+- [ ] Phase 23: Knowledge Pack — Notion (pages, tasks, meetings), Google Maps Routes (commute ETA); deep-link action layer to create Notion tasks via voice
+- [ ] Phase 24: Operator Pack — WhatsApp Business (via Twilio), PagerDuty (incidents/on-call), Vercel (deploy status); real-time alerting triggers
+- [ ] Phase 25: Finance Pack — Stripe (MRR, payment failures), Brex/Mercury (spend, cash position); morning briefing gains financial digest section
 
 ## Progress
 
@@ -221,21 +97,14 @@ Plans:
 | 15. Deployment | v1.2 | 3/3 | ✅ Complete | 2026-04-19 |
 | 16. Milestone Closeout | v1.2 | 1/1 | ✅ Complete | 2026-04-19 |
 | 17. Voice Polish | v1.3 | 4/4 | ✅ Complete | 2026-04-28 |
-| 18. LiveKit Backend | v2.0 | 3/3 | ✅ Complete (agent missing) | 2026-04-29 |
-| 19. Native iOS App | v2.0 | 5/5 | ✅ Complete | 2026-04-30 |
-| 20. Native Android App | v2.0 | 5/5 | ✅ Complete | 2026-04-30 |
-| 21. Per-User Onboarding | v2.1 | 5/5 | ✅ Complete | 2026-05-01 |
-| 21.1. Per-User Onboarding UI | v2.1 | 4/4 | ✅ Complete | 2026-05-10 |
-| 21.2. Bug Fixes and Polish | v2.1 | — | ○ Not started | — |
-| 21.3. UI Tidy-Up | v2.1 | — | ○ Not started | — |
-| 21.4. Test Coverage | v2.1 | — | ○ Not started | — |
-| 22. Apple Integrations | v2.1 | — | ○ Not started | — |
-| 23. Production Backend Deploy | v2.1 | — | ○ Not started | — |
-| 24. Desktop Web Fallback | v2.2 | — | ○ Not started | — |
-| 25. Developer Pack | v2.2 | — | ○ Not started | — |
-| 26. Knowledge Pack | v2.2 | — | ○ Not started | — |
-| 27. Operator Pack | v2.2 | — | ○ Not started | — |
-| 28. Finance Pack | v2.2 | — | ○ Not started | — |
+| 18. LiveKit Backend | v2.0 | — | ○ Not started | — |
+| 19. Native iOS App | v2.0 | — | ○ Not started | — |
+| 20. Native Android App | v2.0 | — | ○ Not started | — |
+| 21. Desktop Web Fallback | v2.0 | — | ○ Not started | — |
+| 22. Developer Pack | v2.1 | — | ○ Not started | — |
+| 23. Knowledge Pack | v2.1 | — | ○ Not started | — |
+| 24. Operator Pack | v2.1 | — | ○ Not started | — |
+| 25. Finance Pack | v2.1 | — | ○ Not started | — |
 
 ## Backlog
 
@@ -246,6 +115,8 @@ Plans:
 **Plans:** 0 plans
 
 - [ ] TBD (promote with /gsd-review-backlog when ready)
+
+---
 
 ### Phase 999.2: Deep Customization (BACKLOG)
 
