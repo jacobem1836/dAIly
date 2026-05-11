@@ -156,3 +156,24 @@ def test_run_slack_oauth_flow_slack_error_in_callback():
 
         with pytest.raises(RuntimeError):
             run_slack_oauth_flow("fake-client-id", "fake-client-secret")
+
+
+# ---------------------------------------------------------------------------
+# run_slack_oauth_flow — client_id present in authorize URL
+# ---------------------------------------------------------------------------
+
+
+def test_run_slack_oauth_flow_includes_client_id_in_url():
+    """run_slack_oauth_flow embeds client_id in the authorize URL."""
+    opened = []
+
+    with patch("daily.integrations.slack.auth.webbrowser.open", side_effect=opened.append), \
+         patch("daily.integrations.slack.auth.uvicorn.Server") as mock_server_cls, \
+         patch("daily.integrations.slack.auth.uvicorn.Config"):
+
+        mock_server_cls.return_value.run.return_value = None
+
+        with pytest.raises(RuntimeError):
+            run_slack_oauth_flow("my-client-id", "csecret")
+
+    assert "my-client-id" in opened[0]

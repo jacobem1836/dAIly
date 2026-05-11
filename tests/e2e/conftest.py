@@ -27,11 +27,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.types import TypeDecorator
 
 from daily.db.models import Base, BriefingConfig
+from daily.profile.models import UserProfile
+from daily.profile.signals import SignalLog
 
 
 # ---------------------------------------------------------------------------
-# SQLite ARRAY compatibility shim
-# Replace BriefingConfig.slack_channels with a JSON-serialised TEXT column.
+# SQLite ARRAY/JSONB compatibility shims
+# Replace PostgreSQL-specific column types with TEXT-backed equivalents.
 # ---------------------------------------------------------------------------
 
 
@@ -59,11 +61,33 @@ class _JsonList(TypeDecorator):
             return []
 
 
-# Patch the slack_channels column type before any engine creates the schema.
-# This modifies the mapped column in-place for the duration of the test session.
-# The original ARRAY(String) type is restored by Python's garbage collector when
-# the module is reloaded between test sessions (or unpatched explicitly if needed).
+class _JsonB(TypeDecorator):
+    """Store Python dict as a JSON string in SQLite TEXT column.
+
+    On PostgreSQL (production) the real JSONB type is used instead.
+    """
+
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):  # noqa: ANN001, ANN201
+        if value is None:
+            return None
+        return json.dumps(value)
+
+    def process_result_value(self, value, dialect):  # noqa: ANN001, ANN201
+        if value is None:
+            return None
+        try:
+            return json.loads(value)
+        except (TypeError, ValueError):
+            return {}
+
+
+# Patch PostgreSQL-specific column types before any engine creates the schema.
 BriefingConfig.__table__.c["slack_channels"].type = _JsonList()
+UserProfile.__table__.c["preferences"].type = _JsonB()
+SignalLog.__table__.c["metadata_json"].type = _JsonB()
 
 
 # ---------------------------------------------------------------------------
