@@ -44,6 +44,11 @@ class DailyLLMBridge:
         self._first_turn = True
         # True when the graph is paused at an approval interrupt.
         self.pending_approval: bool = False
+        # Briefing narrative stored permanently so follow-up turns retain context.
+        # Extracted from initial_state on construction; never cleared after first turn.
+        self._briefing_narrative: str = (
+            initial_state.get("briefing_narrative", "") if isinstance(initial_state, dict) else ""
+        )
 
     def _extract_last_content(self, result: dict) -> str:
         """Return the content of the last message in a graph result dict."""
@@ -85,9 +90,16 @@ class DailyLLMBridge:
         """
         self.pending_approval = False
         init = self._initial_state if self._first_turn else None
+        # For streaming respond turns, always inject the briefing narrative so
+        # follow-up questions ("tell me more about those emails") have context.
+        # astream_session reads briefing_narrative from initial_state only, so
+        # we pass a minimal dict with just the narrative on non-first turns.
+        stream_init = init if self._first_turn else (
+            {"briefing_narrative": self._briefing_narrative} if self._briefing_narrative else None
+        )
         try:
             try:
-                async for delta in astream_session(self._graph, user_input, self._config, initial_state=init):
+                async for delta in astream_session(self._graph, user_input, self._config, initial_state=stream_init):
                     yield delta
             except StreamingNotSupported:
                 logger.debug("llm_bridge: streaming not supported, using run_session")

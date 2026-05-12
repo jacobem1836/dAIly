@@ -205,11 +205,18 @@ public final class VoiceSession: ObservableObject {
 
     fileprivate func handleAgentSpeaking(_ speaking: Bool) {
         if speaking {
-            // Agent has joined and is speaking — cancel the join timeout.
+            // Agent has joined and is speaking — permanently cancel the join timeout.
+            // Once the agent proves it joined by speaking, we never re-arm this timer.
+            // Bug fix: previously agentJoinTimeoutTask remained running after speaking=true
+            // fired and was cancelled, meaning it could fire spuriously during post-briefing
+            // silence if total elapsed time exceeded 60s (T-22-01 regression).
             agentJoinTimeoutTask?.cancel()
             agentJoinTimeoutTask = nil
             state = .speaking
         } else if case .speaking = state {
+            // Agent stopped speaking — return to listening.
+            // agentJoinTimeoutTask is already nil here (cancelled above), so no
+            // spurious "agent didn't join" error can fire during silence.
             state = .listening
         }
     }
@@ -300,12 +307,18 @@ private final class SessionRoomDelegate: NSObject, RoomDelegate {
         }
     }
 
-    // Agent audio activity detection: observe isSpeaking on remote participants.
-    // RoomDelegate.room(_:participant:didUpdateIsSpeaking:) is the idiomatic callback.
-    // Falls back to polling audioLevel at 10Hz if isSpeaking is unavailable.
-    nonisolated func room(_ room: Room, participant: RemoteParticipant, didUpdateIsSpeaking speaking: Bool) {
+    // Agent audio activity detection: observe the speaking participants list.
+    // RoomDelegate.room(_:didUpdateSpeakingParticipants:) is fired whenever the
+    // set of actively-speaking participants changes. Any remote participant in the
+    // list is considered "speaking" — any absence means they stopped.
+    //
+    // Note: room(_:participant:didUpdateIsSpeaking:) does NOT exist in the LiveKit
+    // Swift SDK 2.x RoomDelegate protocol — using that name silently produces a
+    // dead method that never fires. The correct API is didUpdateSpeakingParticipants.
+    nonisolated func room(_ room: Room, didUpdateSpeakingParticipants participants: [Participant]) {
+        let agentSpeaking = participants.contains { $0 is RemoteParticipant }
         Task { @MainActor [weak self] in
-            self?.owner?.handleAgentSpeaking(speaking)
+            self?.owner?.handleAgentSpeaking(agentSpeaking)
         }
     }
 
