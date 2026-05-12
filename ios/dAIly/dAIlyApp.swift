@@ -50,6 +50,10 @@ struct dAIlyApp: App {
                 do {
                     _ = try await auth.completePairing(code: code)
                     appState.hasAccessToken = true
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil, from: nil, for: nil
+                    )
                 } catch {
                     print("[dAIly] pair complete failed: \(error)")
                 }

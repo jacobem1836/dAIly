@@ -75,7 +75,7 @@ struct PermissionsView: View {
         isRequesting = true
         let granted: Bool = await withCheckedContinuation { cont in
             AVAudioSession.sharedInstance().requestRecordPermission { ok in
-                cont.resume(returning: ok)
+                DispatchQueue.main.async { cont.resume(returning: ok) }
             }
         }
         isRequesting = false
