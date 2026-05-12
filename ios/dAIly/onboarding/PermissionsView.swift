@@ -71,6 +71,7 @@ struct PermissionsView: View {
         }
     }
 
+    @MainActor
     private func request() async {
         isRequesting = true
         let granted: Bool = await withCheckedContinuation { cont in
