@@ -203,7 +203,7 @@ async def build_context(
     try:
         all_events: list[CalendarEvent] = []
         for adapter in calendar_adapters:
-            events = await adapter.list_events(since=now, until=until)
+            events = await adapter.list_events(since=since, until=until)
             all_events.extend(events)
 
         conflicts = find_conflicts(all_events)

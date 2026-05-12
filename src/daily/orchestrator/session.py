@@ -18,11 +18,25 @@ import re
 from collections.abc import AsyncIterator
 from datetime import date, datetime, timedelta, timezone
 
+from openai import AsyncOpenAI
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daily.briefing.cache import get_briefing
+from daily.config import Settings
 from daily.profile.service import load_profile
+
+# Module-level cached OpenAI client — created once on first use and reused
+# across astream_session calls to avoid per-call connection overhead.
+_openai_client: AsyncOpenAI | None = None
+
+
+def _get_openai_client() -> AsyncOpenAI:
+    """Return (and lazily create) the module-level OpenAI client."""
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = AsyncOpenAI(api_key=Settings().openai_api_key)
+    return _openai_client
 
 logger = logging.getLogger(__name__)
 
@@ -257,11 +271,8 @@ async def astream_session(
     if not _looks_like_respond_intent(user_input):
         raise StreamingNotSupported(f"non-respond intent: {user_input!r}")
 
-    # Build the OpenAI client the same way nodes.py does.
-    from daily.config import Settings  # noqa: PLC0415
-    from openai import AsyncOpenAI  # noqa: PLC0415
-
-    client = AsyncOpenAI(api_key=Settings().openai_api_key)
+    # Reuse the module-level cached client to avoid per-call connection overhead.
+    client = _get_openai_client()
 
     # Mirror respond_node's system prompt but drop response_format=json_object
     # and request plain narrative text instead.

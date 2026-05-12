@@ -3,9 +3,12 @@ and our LangGraph-backed DailyLLMBridge.
 
 Note: livekit-agents 0.12.x uses VoicePipelineAgent (not AgentSession).
 AgentSession was introduced in livekit-agents 1.0+.
+
+Approval routing: DailyAgentLLM checks bridge.pending_approval on each turn.
+When True, the user's utterance is treated as a confirm/reject/edit decision and
+routed to bridge.resume_approval() instead of bridge.stream_response().
 """
 import logging
-from typing import AsyncIterator
 
 from livekit.agents import APIConnectOptions
 from livekit.agents import llm as agents_llm
@@ -28,7 +31,8 @@ class DailyAgentLLM(agents_llm.LLM):
 
     Implements the LLM base class required by VoicePipelineAgent.
     Extracts the most recent user message from the chat context and
-    routes it through DailyLLMBridge.stream_response().
+    routes it through DailyLLMBridge.stream_response() for normal turns,
+    or DailyLLMBridge.resume_approval() when an approval interrupt is pending.
     """
 
     def __init__(self, bridge: DailyLLMBridge) -> None:
@@ -76,7 +80,15 @@ class _DailyLLMStream(agents_llm.LLMStream):
         self._user_msg = user_msg
 
     async def _run(self) -> None:
-        async for delta in self._bridge.stream_response(self._user_msg):
+        # Route through approval sub-loop when the graph is paused at an interrupt,
+        # otherwise use the normal stream_response path.
+        if self._bridge.pending_approval:
+            logger.debug("llm_bridge: routing utterance to resume_approval")
+            token_iter = self._bridge.resume_approval(self._user_msg)
+        else:
+            token_iter = self._bridge.stream_response(self._user_msg)
+
+        async for delta in token_iter:
             chunk = agents_llm.ChatChunk(
                 request_id="",
                 choices=[
@@ -93,15 +105,19 @@ def build_voice_pipeline(bridge: DailyLLMBridge, settings: Settings) -> VoicePip
     """Construct a VoicePipelineAgent ready to .start() against a JobContext.room.
 
     Wires:
-    - Deepgram Nova-3 STT (streaming, en-US)
-    - Cartesia TTS with the project-standard voice ID
+    - Deepgram Nova-3 STT (streaming, en-AU for Australian accent)
+    - Cartesia Sonic-3 TTS with the project-standard voice ID (lower TTFB than sonic-2)
     - Silero VAD for end-of-utterance detection
     - DailyAgentLLM adapter routing turns to DailyLLMBridge
     """
     return VoicePipelineAgent(
-        stt=deepgram.STT(model="nova-3", api_key=settings.deepgram_api_key),
+        stt=deepgram.STT(
+            model="nova-3",
+            language="en-AU",
+            api_key=settings.deepgram_api_key,
+        ),
         tts=cartesia.TTS(
-            model="sonic-2",
+            model="sonic-3",
             voice=_DEFAULT_VOICE_ID,
             api_key=settings.cartesia_api_key,
         ),
