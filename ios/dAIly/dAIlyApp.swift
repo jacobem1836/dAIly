@@ -9,6 +9,10 @@ struct dAIlyApp: App {
         tokenSource: LiveKitTokenSource(baseURL: Config.backendBaseURL),
         auth: AuthService(baseURL: Config.backendBaseURL)
     )
+    // scenePhase: observe app lifecycle transitions for graceful session pause/reconnect.
+    // handleBackground() tears down the LiveKit room and sets shouldResume = true.
+    // handleForeground() reconnects (via connect() backoff path) if shouldResume is set.
+    @Environment(\.scenePhase) private var scenePhase
 
     private let auth = AuthService(baseURL: Config.backendBaseURL)
 
@@ -37,6 +41,28 @@ struct dAIlyApp: App {
                 if let url = notification.object as? URL {
                     handleDeepLink(url)
                 }
+            }
+        }
+        .onChange(of: scenePhase) { newPhase in
+            switch newPhase {
+            case .background:
+                // Gracefully tear down the LiveKit room and record that a session was live.
+                // Cancels in-flight reconnect timers so they cannot fire while suspended.
+                Task { @MainActor in
+                    await voiceSession.handleBackground()
+                }
+            case .active:
+                // Reconnect if a session was live before backgrounding.
+                // Delegates to the existing connect() path which includes backoff token refresh.
+                Task { @MainActor in
+                    await voiceSession.handleForeground()
+                }
+            case .inactive:
+                // App is transitioning (e.g. lock screen overlay, notification drawer).
+                // Do nothing — wait for .background or .active to be definitive.
+                break
+            @unknown default:
+                break
             }
         }
     }
