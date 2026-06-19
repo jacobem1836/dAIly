@@ -65,11 +65,16 @@ async def test_session_bundle_populated(monkeypatch):
         from daily.config import Settings
 
         settings = Settings(
+            _env_file=None,
             database_url="postgresql+asyncpg://test/test",
             database_url_psycopg="postgresql+psycopg://test/test",
             redis_url="redis://localhost",
             openai_api_key="sk-test",
-            vault_key="",
+            vault_key="test-vault-key-not-real",
+            jwt_secret="x" * 32,
+            deepgram_api_key="dg-test",
+            cartesia_api_key="sk_car_test",
+            resend_api_key="re_test",
         )
 
         async with load_user_session_state(user_id=1, settings=settings) as bundle:
@@ -105,11 +110,16 @@ async def test_thread_id_format(monkeypatch):
         from daily.config import Settings
 
         settings = Settings(
+            _env_file=None,
             database_url="postgresql+asyncpg://test/test",
             database_url_psycopg="postgresql+psycopg://test/test",
             redis_url="redis://localhost",
             openai_api_key="sk-test",
-            vault_key="",
+            vault_key="test-vault-key-not-real",
+            jwt_secret="x" * 32,
+            deepgram_api_key="dg-test",
+            cartesia_api_key="sk_car_test",
+            resend_api_key="re_test",
         )
 
         async with load_user_session_state(user_id=1, settings=settings) as bundle:
@@ -144,11 +154,16 @@ async def test_briefing_empty_on_cache_miss(monkeypatch):
         from daily.config import Settings
 
         settings = Settings(
+            _env_file=None,
             database_url="postgresql+asyncpg://test/test",
             database_url_psycopg="postgresql+psycopg://test/test",
             redis_url="redis://localhost",
             openai_api_key="sk-test",
-            vault_key="",
+            vault_key="test-vault-key-not-real",
+            jwt_secret="x" * 32,
+            deepgram_api_key="dg-test",
+            cartesia_api_key="sk_car_test",
+            resend_api_key="re_test",
         )
 
         async with load_user_session_state(user_id=1, settings=settings) as bundle:

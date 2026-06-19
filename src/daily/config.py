@@ -1,5 +1,17 @@
 """Application settings loaded from environment variables."""
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Required vars that have NO safe default — the app cannot operate without them.
+# Mapped as field_name -> UPPER_SNAKE env var name for error messages.
+_REQUIRED_VARS: dict[str, str] = {
+    "vault_key": "VAULT_KEY",
+    "jwt_secret": "JWT_SECRET",
+    "openai_api_key": "OPENAI_API_KEY",
+    "deepgram_api_key": "DEEPGRAM_API_KEY",
+    "cartesia_api_key": "CARTESIA_API_KEY",
+    "resend_api_key": "RESEND_API_KEY",
+}
 
 
 class Settings(BaseSettings):
@@ -53,3 +65,27 @@ class Settings(BaseSettings):
     # Android App Links (Phase 20 / MOB-02)
     android_package_name: str = "com.daily.android"
     android_sha256_fingerprint: str = ""
+
+    # Logging — runtime log level (read by logging setup at startup)
+    log_level: str = "INFO"
+
+    @model_validator(mode="after")
+    def _require_critical_vars(self) -> "Settings":
+        """Fail fast at startup if any required, no-safe-default vars are unset.
+
+        Collects ALL missing required vars and raises a single error that names
+        them all — so a developer sees everything missing in one message rather
+        than fixing one var and hitting another error on the next boot.
+        """
+        missing = [
+            env_name
+            for field_name, env_name in _REQUIRED_VARS.items()
+            if not getattr(self, field_name, "")
+        ]
+        if missing:
+            var_list = ", ".join(missing)
+            raise ValueError(
+                f"Missing required environment variables: {var_list}. "
+                "Copy .env.example to .env and fill them in."
+            )
+        return self
