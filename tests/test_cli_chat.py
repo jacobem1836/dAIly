@@ -153,7 +153,8 @@ class TestChatSessionConfig:
             captured_configs.append(config)
             return config
 
-        with patch("daily.cli._resolve_email_adapters", new_callable=AsyncMock) as mock_resolve:
+        with patch("langgraph.checkpoint.postgres.aio.AsyncPostgresSaver", _mock_checkpointer_saver()), \
+             patch("daily.cli._resolve_email_adapters", new_callable=AsyncMock) as mock_resolve:
             mock_resolve.return_value = []
 
             with patch("daily.cli.set_email_adapters"):
