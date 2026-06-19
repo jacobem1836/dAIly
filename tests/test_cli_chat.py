@@ -186,6 +186,24 @@ def _mock_redis():
     return mock_redis_class, mock_redis_instance
 
 
+def _mock_checkpointer_saver():
+    """Return a mock AsyncPostgresSaver class whose from_conn_string() is an async context manager.
+
+    The context manager's __aenter__ yields a mock checkpointer with an async setup().
+    Patch target: langgraph.checkpoint.postgres.aio.AsyncPostgresSaver
+    """
+    mock_checkpointer = AsyncMock()
+    mock_checkpointer.setup = AsyncMock()
+
+    mock_ctx = MagicMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_checkpointer)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+
+    mock_saver_class = MagicMock()
+    mock_saver_class.from_conn_string = MagicMock(return_value=mock_ctx)
+    return mock_saver_class
+
+
 def _mock_async_session_ctx():
     """Create a properly mocked async_session context manager."""
     mock_session = AsyncMock()
@@ -203,27 +221,29 @@ class TestChatInteractiveLoop:
 
         mock_redis_class, _ = _mock_redis()
         mock_async_session = _mock_async_session_ctx()
+        mock_saver = _mock_checkpointer_saver()
 
-        with patch("daily.cli._resolve_email_adapters", new_callable=AsyncMock) as mock_resolve:
-            mock_resolve.return_value = []
+        with patch("langgraph.checkpoint.postgres.aio.AsyncPostgresSaver", mock_saver):
+            with patch("daily.cli._resolve_email_adapters", new_callable=AsyncMock) as mock_resolve:
+                mock_resolve.return_value = []
 
-            with patch("daily.cli.set_email_adapters"):
-                with patch("daily.cli.build_graph") as mock_build:
-                    mock_graph = _make_mock_graph()
-                    mock_build.return_value = mock_graph
+                with patch("daily.cli.set_email_adapters"):
+                    with patch("daily.cli.build_graph") as mock_build:
+                        mock_graph = _make_mock_graph()
+                        mock_build.return_value = mock_graph
 
-                    with patch("daily.cli.create_session_config", new_callable=AsyncMock) as mock_cfg:
-                        mock_cfg.return_value = {"configurable": {"thread_id": "user-1-2026-04-07"}}
+                        with patch("daily.cli.create_session_config", new_callable=AsyncMock) as mock_cfg:
+                            mock_cfg.return_value = {"configurable": {"thread_id": "user-1-2026-04-07"}}
 
-                        with patch("daily.cli.initialize_session_state", new_callable=AsyncMock) as mock_init:
-                            mock_init.return_value = {}
+                            with patch("daily.cli.initialize_session_state", new_callable=AsyncMock) as mock_init:
+                                mock_init.return_value = {}
 
-                            with patch("daily.cli.run_session", new_callable=AsyncMock) as mock_run:
-                                mock_run.return_value = {"messages": []}
+                                with patch("daily.cli.run_session", new_callable=AsyncMock) as mock_run:
+                                    mock_run.return_value = {"messages": []}
 
-                                with patch("daily.cli.Redis", mock_redis_class):
-                                    with patch("daily.cli.async_session", mock_async_session):
-                                        result = runner.invoke(app, ["chat"], input="exit\n")
+                                    with patch("daily.cli.Redis", mock_redis_class):
+                                        with patch("daily.cli.async_session", mock_async_session):
+                                            result = runner.invoke(app, ["chat"], input="exit\n")
 
         assert result.exit_code == 0
 
@@ -233,27 +253,29 @@ class TestChatInteractiveLoop:
 
         mock_redis_class, _ = _mock_redis()
         mock_async_session = _mock_async_session_ctx()
+        mock_saver = _mock_checkpointer_saver()
 
-        with patch("daily.cli._resolve_email_adapters", new_callable=AsyncMock) as mock_resolve:
-            mock_resolve.return_value = []
+        with patch("langgraph.checkpoint.postgres.aio.AsyncPostgresSaver", mock_saver):
+            with patch("daily.cli._resolve_email_adapters", new_callable=AsyncMock) as mock_resolve:
+                mock_resolve.return_value = []
 
-            with patch("daily.cli.set_email_adapters"):
-                with patch("daily.cli.build_graph") as mock_build:
-                    mock_graph = _make_mock_graph()
-                    mock_build.return_value = mock_graph
+                with patch("daily.cli.set_email_adapters"):
+                    with patch("daily.cli.build_graph") as mock_build:
+                        mock_graph = _make_mock_graph()
+                        mock_build.return_value = mock_graph
 
-                    with patch("daily.cli.create_session_config", new_callable=AsyncMock) as mock_cfg:
-                        mock_cfg.return_value = {"configurable": {"thread_id": "user-1-2026-04-07"}}
+                        with patch("daily.cli.create_session_config", new_callable=AsyncMock) as mock_cfg:
+                            mock_cfg.return_value = {"configurable": {"thread_id": "user-1-2026-04-07"}}
 
-                        with patch("daily.cli.initialize_session_state", new_callable=AsyncMock) as mock_init:
-                            mock_init.return_value = {}
+                            with patch("daily.cli.initialize_session_state", new_callable=AsyncMock) as mock_init:
+                                mock_init.return_value = {}
 
-                            with patch("daily.cli.run_session", new_callable=AsyncMock) as mock_run:
-                                mock_run.return_value = {"messages": []}
+                                with patch("daily.cli.run_session", new_callable=AsyncMock) as mock_run:
+                                    mock_run.return_value = {"messages": []}
 
-                                with patch("daily.cli.Redis", mock_redis_class):
-                                    with patch("daily.cli.async_session", mock_async_session):
-                                        result = runner.invoke(app, ["chat"], input="quit\n")
+                                    with patch("daily.cli.Redis", mock_redis_class):
+                                        with patch("daily.cli.async_session", mock_async_session):
+                                            result = runner.invoke(app, ["chat"], input="quit\n")
 
         assert result.exit_code == 0
 
@@ -264,29 +286,31 @@ class TestChatInteractiveLoop:
         captured_inputs = []
         mock_redis_class, _ = _mock_redis()
         mock_async_session = _mock_async_session_ctx()
+        mock_saver = _mock_checkpointer_saver()
 
         async def mock_run_session(graph, user_input, config, initial_state=None):
             captured_inputs.append(user_input)
             return {"messages": [AIMessage(content="Response.")]}
 
-        with patch("daily.cli._resolve_email_adapters", new_callable=AsyncMock) as mock_resolve:
-            mock_resolve.return_value = []
+        with patch("langgraph.checkpoint.postgres.aio.AsyncPostgresSaver", mock_saver):
+            with patch("daily.cli._resolve_email_adapters", new_callable=AsyncMock) as mock_resolve:
+                mock_resolve.return_value = []
 
-            with patch("daily.cli.set_email_adapters"):
-                with patch("daily.cli.build_graph") as mock_build:
-                    mock_graph = _make_mock_graph()
-                    mock_build.return_value = mock_graph
+                with patch("daily.cli.set_email_adapters"):
+                    with patch("daily.cli.build_graph") as mock_build:
+                        mock_graph = _make_mock_graph()
+                        mock_build.return_value = mock_graph
 
-                    with patch("daily.cli.create_session_config", new_callable=AsyncMock) as mock_cfg:
-                        mock_cfg.return_value = {"configurable": {"thread_id": "user-1-2026-04-07"}}
+                        with patch("daily.cli.create_session_config", new_callable=AsyncMock) as mock_cfg:
+                            mock_cfg.return_value = {"configurable": {"thread_id": "user-1-2026-04-07"}}
 
-                        with patch("daily.cli.initialize_session_state", new_callable=AsyncMock) as mock_init:
-                            mock_init.return_value = {}
+                            with patch("daily.cli.initialize_session_state", new_callable=AsyncMock) as mock_init:
+                                mock_init.return_value = {}
 
-                            with patch("daily.cli.run_session", side_effect=mock_run_session):
-                                with patch("daily.cli.Redis", mock_redis_class):
-                                    with patch("daily.cli.async_session", mock_async_session):
-                                        runner.invoke(app, ["chat"], input="tell me about my emails\nexit\n")
+                                with patch("daily.cli.run_session", side_effect=mock_run_session):
+                                    with patch("daily.cli.Redis", mock_redis_class):
+                                        with patch("daily.cli.async_session", mock_async_session):
+                                            runner.invoke(app, ["chat"], input="tell me about my emails\nexit\n")
 
         assert "tell me about my emails" in captured_inputs
 
@@ -296,29 +320,31 @@ class TestChatInteractiveLoop:
 
         mock_redis_class, _ = _mock_redis()
         mock_async_session = _mock_async_session_ctx()
+        mock_saver = _mock_checkpointer_saver()
 
-        with patch("daily.cli._resolve_email_adapters", new_callable=AsyncMock) as mock_resolve:
-            mock_resolve.return_value = []
+        with patch("langgraph.checkpoint.postgres.aio.AsyncPostgresSaver", mock_saver):
+            with patch("daily.cli._resolve_email_adapters", new_callable=AsyncMock) as mock_resolve:
+                mock_resolve.return_value = []
 
-            with patch("daily.cli.set_email_adapters"):
-                with patch("daily.cli.build_graph") as mock_build:
-                    mock_graph = _make_mock_graph()
-                    mock_build.return_value = mock_graph
+                with patch("daily.cli.set_email_adapters"):
+                    with patch("daily.cli.build_graph") as mock_build:
+                        mock_graph = _make_mock_graph()
+                        mock_build.return_value = mock_graph
 
-                    with patch("daily.cli.create_session_config", new_callable=AsyncMock) as mock_cfg:
-                        mock_cfg.return_value = {"configurable": {"thread_id": "user-1-2026-04-07"}}
+                        with patch("daily.cli.create_session_config", new_callable=AsyncMock) as mock_cfg:
+                            mock_cfg.return_value = {"configurable": {"thread_id": "user-1-2026-04-07"}}
 
-                        with patch("daily.cli.initialize_session_state", new_callable=AsyncMock) as mock_init:
-                            mock_init.return_value = {}
+                            with patch("daily.cli.initialize_session_state", new_callable=AsyncMock) as mock_init:
+                                mock_init.return_value = {}
 
-                            with patch("daily.cli.run_session", new_callable=AsyncMock) as mock_run:
-                                mock_run.return_value = {
-                                    "messages": [AIMessage(content="You have 3 emails today.")]
-                                }
+                                with patch("daily.cli.run_session", new_callable=AsyncMock) as mock_run:
+                                    mock_run.return_value = {
+                                        "messages": [AIMessage(content="You have 3 emails today.")]
+                                    }
 
-                                with patch("daily.cli.Redis", mock_redis_class):
-                                    with patch("daily.cli.async_session", mock_async_session):
-                                        result = runner.invoke(app, ["chat"], input="what emails\nexit\n")
+                                    with patch("daily.cli.Redis", mock_redis_class):
+                                        with patch("daily.cli.async_session", mock_async_session):
+                                            result = runner.invoke(app, ["chat"], input="what emails\nexit\n")
 
         assert "You have 3 emails today." in result.output
 
