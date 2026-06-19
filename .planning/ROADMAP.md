@@ -154,7 +154,14 @@ Plans:
 
 **Goal:** Retire the half-finished voice migration and remove duplicated/premature surface BEFORE building Phase 21.5 on top of it. Closes the unresolved STATE.md decision ("keep Python voice loop alive as desktop fallback, or stub it") by deleting it. This is **Option A** from the 2026-06-19 integration-friction review (`.planning/reviews/2026-06-19-integration-friction-review.md`). No user-facing feature is removed — only duplicated implementations and premature infra.
 **Depends on:** Phase 21.4
-**Plans:** TBD (run `/gsd-plan-phase 21.45` to break down)
+**Plans:** 5 plans (2 waves)
+
+Plans:
+- [ ] 21.45-01-PLAN.md — Voice-path consolidation: import-gate, delete `src/daily/voice/`, remove `daily voice` CLI command, collapse to AsyncPostgresSaver (wave 1)
+- [ ] 21.45-02-PLAN.md — Config drift fix: regenerate `.env.example` (24 vars) + fail-fast required-var validation in config.py (wave 1)
+- [ ] 21.45-03-PLAN.md — Cleanup + decision: delete 199 `* 2.*` iCloud duplicates, record Android-freeze in ROADMAP/STATE (wave 1)
+- [ ] 21.45-04-PLAN.md — iOS hardening: token-refresh exponential backoff + retry affordance, scenePhase pause/reconnect (wave 1, has checkpoint)
+- [ ] 21.45-05-PLAN.md — E2E smoke test: extend pairing→voice smoke with agent greeting + approval round-trip on the real graph (wave 2, depends on 21.45-01)
 
 Scope (high-ROI 20%):
 - [ ] Delete `src/daily/voice/` (1,316 LOC local CLI audio pipeline) + the `cli.py` voice command; unify all voice on the `worker/` livekit-agents path; collapse to a single checkpointer (`AsyncPostgresSaver`). Confirm nothing in the production mobile flow depends on `voice/` before deleting.
