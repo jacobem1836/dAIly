@@ -48,6 +48,7 @@ struct ConnectionIndicator: View {
              .reconnecting: return Color.yellow
         case .listening:    return Color.green
         case .speaking:     return Color.blue
+        case .retryable:    return Color.orange
         case .error:        return Color.red
         }
     }
@@ -59,6 +60,9 @@ struct ConnectionIndicator: View {
         case .reconnecting:  return "Reconnecting\u{2026}"
         case .listening:     return "Listening"
         case .speaking:      return "Speaking"
+        case .retryable(let msg):
+            let display = msg.count > 40 ? String(msg.prefix(40)) + "\u{2026}" : msg
+            return "Connection lost: \(display)\nTap Retry to reconnect."
         case .error(let msg):
             let display = msg.count > 40 ? String(msg.prefix(40)) + "\u{2026}" : msg
             return "Error: \(display)\nTap Retry to reconnect."

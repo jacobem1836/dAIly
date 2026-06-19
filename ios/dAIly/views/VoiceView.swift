@@ -18,6 +18,8 @@ struct VoiceView: View {
             ConnectionIndicator(state: session.state)
             if case .error(let msg) = session.state {
                 errorMessage(msg)
+            } else if case .retryable(let msg) = session.state {
+                errorMessage(msg)
             }
             actionButton
             Spacer()
@@ -52,6 +54,12 @@ struct VoiceView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(.red)
+
+        case .retryable:
+            Button("Retry") {
+                Task { await session.retry() }
+            }
+            .buttonStyle(.borderedProminent)
 
         case .connecting, .listening, .speaking, .reconnecting:
             Button("End") {
