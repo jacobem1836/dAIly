@@ -10,6 +10,9 @@ public enum VoiceSessionState: Equatable {
     case listening
     case speaking
     case reconnecting
+    /// Transient failure — user can tap Retry to re-run connect().
+    /// Distinct from `.error` which is a terminal state routing to onboarding.
+    case retryable(String)
     case error(String)
 }
 
@@ -26,11 +29,14 @@ public enum VoiceSessionError: Error, Equatable {
 /// Connection flow:
 ///   1. Loads access JWT from Keychain
 ///   2. Fetches a LiveKit room token from POST /livekit/token via LiveKitTokenSource
-///   3. On 401: calls auth.refresh() once and retries; second 401 surfaces .error
+///   3. On 401: calls RefreshBackoff.refreshWithBackoff() (3 attempts: 0→0.5s→1s)
+///      - Transient exhaustion → .retryable state + user-facing Retry affordance
+///      - Hard 401 (invalid refresh token) → .error("re_pair_required") → routes to onboarding
 ///   4. Connects to LiveKit room with mic enabled (ConnectOptions.enableMicrophone: true)
 ///   5. An 8-second timeout fires if the room never reaches .listening state (T-19-22)
 ///   6. A 30-second timeout fires if reconnecting does not recover (T-19-28)
 ///   7. roomDidDisconnect with non-nil error surfaces .error("disconnected: …") (T-19-29)
+///   8. scenePhase transitions: handleBackground() pauses; handleForeground() reconnects if live
 ///
 /// IMPORTANT: Do NOT disable AudioManager's automatic audio session configuration.
 /// The LiveKit SDK auto-configures AVAudioSession to .playAndRecord + .voiceChat, activating
@@ -47,6 +53,11 @@ public final class VoiceSession: ObservableObject {
     private var listeningTimeoutTask: Task<Void, Never>?
     private var agentJoinTimeoutTask: Task<Void, Never>?
     private var reconnectTimeoutTask: Task<Void, Never>?
+
+    /// Tracks whether a live session was interrupted by backgrounding.
+    /// Set by handleBackground() when the app leaves foreground with an active session.
+    /// Cleared by handleForeground() after a reconnect attempt or when already idle.
+    private var shouldResume: Bool = false
 
     public init(tokenSource: LiveKitTokenSource,
                 auth: AuthService,
@@ -69,22 +80,30 @@ public final class VoiceSession: ObservableObject {
         do {
             lkToken = try await tokenSource.fetchToken(accessJWT: jwt)
         } catch LiveKitTokenError.unauthorized {
-            // Attempt exactly one auth refresh before giving up (T-19-21)
+            // Refresh with exponential backoff: 3 attempts (0 → 0.5 s → 1 s).
+            // See RefreshBackoff for constants. Hard 401 throws AuthError.unauthorized
+            // immediately; transient exhaustion throws the last network error.
             do {
-                try await auth.refresh()
+                try await RefreshBackoff.refreshWithBackoff(auth)
+            } catch AuthError.unauthorized {
+                // Invalid refresh token — terminal failure, user must re-pair.
+                state = .error("re_pair_required")
+                throw VoiceSessionError.notAuthenticated
             } catch {
-                state = .error("auth_refresh_failed")
+                // Transient network failure after all backoff attempts exhausted.
+                // Surface a retryable state so the UI can offer a Retry button.
+                state = .retryable("auth_refresh_failed")
                 throw VoiceSessionError.notAuthenticated
             }
             guard let newJwt = keychain.load(key: "access_token") else {
-                state = .error("auth_refresh_failed")
+                state = .retryable("auth_refresh_failed")
                 throw VoiceSessionError.notAuthenticated
             }
             jwt = newJwt
             do {
                 lkToken = try await tokenSource.fetchToken(accessJWT: jwt)
             } catch {
-                state = .error("token_unauthorized")
+                state = .retryable("token_fetch_after_refresh_failed")
                 throw VoiceSessionError.tokenFetchFailed
             }
         } catch {
@@ -124,6 +143,7 @@ public final class VoiceSession: ObservableObject {
     }
 
     public func disconnect() async {
+        shouldResume = false
         listeningTimeoutTask?.cancel()
         listeningTimeoutTask = nil
         agentJoinTimeoutTask?.cancel()
@@ -134,6 +154,53 @@ public final class VoiceSession: ObservableObject {
         room = nil
         roomDelegate = nil
         state = .idle
+    }
+
+    /// Retry a failed connection after a `.retryable` state.
+    /// No-ops if the session is not in a retryable state.
+    public func retry() async {
+        guard case .retryable = state else { return }
+        try? await connect()
+    }
+
+    // MARK: - scenePhase lifecycle handling
+
+    /// Called when the app transitions to the background.
+    /// Tears down the LiveKit room gracefully and records that a session was live
+    /// so `handleForeground()` can reconnect when the app returns.
+    /// Cancels all in-flight timers to prevent spurious timeout errors while suspended.
+    public func handleBackground() async {
+        let wasActive: Bool
+        switch state {
+        case .listening, .speaking, .connecting, .reconnecting:
+            wasActive = true
+        default:
+            wasActive = false
+        }
+        // Cancel timers before disconnect so they do not fire during suspension
+        listeningTimeoutTask?.cancel()
+        listeningTimeoutTask = nil
+        agentJoinTimeoutTask?.cancel()
+        agentJoinTimeoutTask = nil
+        reconnectTimeoutTask?.cancel()
+        reconnectTimeoutTask = nil
+        if wasActive {
+            // Gracefully close room without clearing shouldResume
+            await room?.disconnect()
+            room = nil
+            roomDelegate = nil
+            state = .idle
+            shouldResume = true
+        }
+    }
+
+    /// Called when the app returns to the foreground.
+    /// If a session was live before backgrounding, attempts to reconnect using
+    /// the existing connect() path (which includes backoff token refresh).
+    public func handleForeground() async {
+        guard shouldResume else { return }
+        shouldResume = false
+        try? await connect()
     }
 
     // MARK: - Debug PTT (D-07) — never surfaced in production UI
@@ -282,6 +349,9 @@ public final class VoiceSession: ObservableObject {
 
     /// Trigger handleDisconnect with an error — for unit tests only.
     public func _testHandleDisconnect(error: Error?) { handleDisconnect(error: error) }
+
+    /// Read shouldResume flag — for unit tests only.
+    public var _testShouldResume: Bool { shouldResume }
     #endif
 }
 

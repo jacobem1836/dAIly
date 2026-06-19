@@ -8,9 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		06FCE76FD1AD451CB54F2C20 /* AppStateRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6989341588C74537990BB9AC /* AppStateRoutingTests.swift */; };
-		4F4122F75BF74BB08B593D4B /* OnboardingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9514CBCD9FD4AE5A37C7BFB /* OnboardingCoordinator.swift */; };
-		7B2745C54D6040178B403C20 /* DeepLinkRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A38FB64BD3734F189FDA86A7 /* DeepLinkRoutingTests.swift */; };
-		8994FAF414C44B4992233EAA /* OnboardingFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D1748BBC36444A580375A44 /* OnboardingFlowTests.swift */; };
 		0E7E89C994E7811A7344C4EC /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB66279C1B5AA22E33DB5E56 /* Config.swift */; };
 		195B0F5C66CBD24D2EFB985C /* CompletionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D42B097F642A40B8C7D3F7D /* CompletionView.swift */; };
 		1C262F97344F87E6F28A87A8 /* VoiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B119761300EB73F212A2134B /* VoiceView.swift */; };
@@ -24,13 +21,16 @@
 		3946CD6636C8F7EB952304ED /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA7F17E8D526949DF0201E1A /* WelcomeView.swift */; };
 		3E8275649EBEA6F9A3DA1489 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D03C70CD16F956BE3B9EC05 /* PairingView.swift */; };
 		4561CA0F184C6E410ABE26F6 /* AppStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD11228C8AC0B4CFF3B70A1F /* AppStateTests.swift */; };
+		4F4122F75BF74BB08B593D4B /* OnboardingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9514CBCD9FD4AE5A37C7BFB /* OnboardingCoordinator.swift */; };
 		55B77669B07F765B165F6F5C /* ScheduleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7D74E7100A5D1A77D37F239 /* ScheduleView.swift */; };
 		58084FD15403238F97585355 /* LiveKit in Frameworks */ = {isa = PBXBuildFile; productRef = FDA98E751AA2B195AF62EBD7 /* LiveKit */; };
 		5E807B72B008409CCD16F3F4 /* IntegrationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54697A3721AF38B72C8F3522 /* IntegrationState.swift */; };
 		668FD845898D68C790FEC6B2 /* DebugFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D83FBE1B852E8BFA14606B4 /* DebugFlags.swift */; };
 		6A816971AB62199A6B306CFE /* IntegrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249ECFDC86274A5984231382 /* IntegrationView.swift */; };
 		71BB147FB278331E1E9E287A /* IntegrationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40312E64303E6BF388106413 /* IntegrationProvider.swift */; };
+		7B2745C54D6040178B403C20 /* DeepLinkRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A38FB64BD3734F189FDA86A7 /* DeepLinkRoutingTests.swift */; };
 		7B2E6E0EAF13E2799D788DE5 /* PermissionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020902C286EAB115BD744429 /* PermissionsView.swift */; };
+		8994FAF414C44B4992233EAA /* OnboardingFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D1748BBC36444A580375A44 /* OnboardingFlowTests.swift */; };
 		8A3CE4E4AB845F7CFE6C051A /* OAuthCallbackParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D27764E579A6DD44E12F443C /* OAuthCallbackParserTests.swift */; };
 		A375473F61E9A3815E5A3F95 /* dAIlyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CD0CA433CC154B3501CA978 /* dAIlyApp.swift */; };
 		A9B0200868CE63424891417B /* ConnectionIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FF0CAF31772FD0606347860 /* ConnectionIndicator.swift */; };
@@ -43,6 +43,7 @@
 		D7EEE8CD9AEB246EA91C52E6 /* IntegrationStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78933C431583629FAAC7890 /* IntegrationStateTests.swift */; };
 		DECBC55FB31F01EC556A929E /* VoiceSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41A7E87BCC8D2E7A5BB2C692 /* VoiceSessionTests.swift */; };
 		EE9F234FB7B96B1975796F74 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09696478AAFFADE8A00958E9 /* OnboardingView.swift */; };
+		F1A2B3C4D5E6F7A8B9C0D1E2 /* RefreshBackoffTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* RefreshBackoffTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -65,21 +66,25 @@
 		1D03C70CD16F956BE3B9EC05 /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
 		1D42B097F642A40B8C7D3F7D /* CompletionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionView.swift; sourceTree = "<group>"; };
 		249ECFDC86274A5984231382 /* IntegrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationView.swift; sourceTree = "<group>"; };
-		26925FD04998254E0D725EDD /* dAIly.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = dAIly.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		26925FD04998254E0D725EDD /* dAIly.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = dAIly.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3CD0CA433CC154B3501CA978 /* dAIlyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = dAIlyApp.swift; sourceTree = "<group>"; };
 		40312E64303E6BF388106413 /* IntegrationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationProvider.swift; sourceTree = "<group>"; };
 		41A7E87BCC8D2E7A5BB2C692 /* VoiceSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionTests.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* RefreshBackoffTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefreshBackoffTests.swift; sourceTree = "<group>"; };
 		4CC5FFAD37184173FC5A9F73 /* LiveKitTokenSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveKitTokenSource.swift; sourceTree = "<group>"; };
 		52E0D2DF5ABB52AAABC4D067 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		54697A3721AF38B72C8F3522 /* IntegrationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationState.swift; sourceTree = "<group>"; };
 		5D83FBE1B852E8BFA14606B4 /* DebugFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugFlags.swift; sourceTree = "<group>"; };
+		6989341588C74537990BB9AC /* AppStateRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateRoutingTests.swift; sourceTree = "<group>"; };
 		752A7AE4D33B140ACD8803AC /* VoiceSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSession.swift; sourceTree = "<group>"; };
 		87A4A357CC8389F02A323D8A /* AuthServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthServiceTests.swift; sourceTree = "<group>"; };
+		8D1748BBC36444A580375A44 /* OnboardingFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowTests.swift; sourceTree = "<group>"; };
 		8FCCBD1B33C83F6088357E80 /* PairCodeURLParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairCodeURLParserTests.swift; sourceTree = "<group>"; };
 		9097C659B7F26D5AB338B21B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		9B87F815C25AF4CAF8C5C451 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		9F9B12A6C59D5FEDFABE7E13 /* dAIlyTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = dAIlyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9FF0CAF31772FD0606347860 /* ConnectionIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionIndicator.swift; sourceTree = "<group>"; };
+		A38FB64BD3734F189FDA86A7 /* DeepLinkRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRoutingTests.swift; sourceTree = "<group>"; };
 		ADD7C9B88737FB0EDCDA8089 /* OAuthCallbackParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthCallbackParser.swift; sourceTree = "<group>"; };
 		B119761300EB73F212A2134B /* VoiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceView.swift; sourceTree = "<group>"; };
 		B7221F6BBA162783A30506D6 /* VoiceSessionErrorMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionErrorMappingTests.swift; sourceTree = "<group>"; };
@@ -89,9 +94,6 @@
 		CD11228C8AC0B4CFF3B70A1F /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
 		D27764E579A6DD44E12F443C /* OAuthCallbackParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthCallbackParserTests.swift; sourceTree = "<group>"; };
 		D7C6DC5730F20B69F8FE9A10 /* PairCodeURLParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairCodeURLParser.swift; sourceTree = "<group>"; };
-		6989341588C74537990BB9AC /* AppStateRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateRoutingTests.swift; sourceTree = "<group>"; };
-		8D1748BBC36444A580375A44 /* OnboardingFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowTests.swift; sourceTree = "<group>"; };
-		A38FB64BD3734F189FDA86A7 /* DeepLinkRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRoutingTests.swift; sourceTree = "<group>"; };
 		D9514CBCD9FD4AE5A37C7BFB /* OnboardingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingCoordinator.swift; sourceTree = "<group>"; };
 		ED48D3604DD5BE66A4FFFCF3 /* OnboardingKeychainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingKeychainTests.swift; sourceTree = "<group>"; };
 		F7D74E7100A5D1A77D37F239 /* ScheduleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleView.swift; sourceTree = "<group>"; };
@@ -204,6 +206,7 @@
 				ED48D3604DD5BE66A4FFFCF3 /* OnboardingKeychainTests.swift */,
 				8D1748BBC36444A580375A44 /* OnboardingFlowTests.swift */,
 				8FCCBD1B33C83F6088357E80 /* PairCodeURLParserTests.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* RefreshBackoffTests.swift */,
 				B7221F6BBA162783A30506D6 /* VoiceSessionErrorMappingTests.swift */,
 				41A7E87BCC8D2E7A5BB2C692 /* VoiceSessionTests.swift */,
 			);
@@ -258,8 +261,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
-				TargetAttributes = {
-				};
 			};
 			buildConfigurationList = C3B39126B43B6AFC5E45FBDB /* Build configuration list for PBXProject "dAIly" */;
 			developmentRegion = en;
@@ -329,6 +330,7 @@
 				BB6F4624CCF0F05F06A65E3F /* OnboardingKeychainTests.swift in Sources */,
 				8994FAF414C44B4992233EAA /* OnboardingFlowTests.swift in Sources */,
 				C8549386EE090F1698EDA339 /* PairCodeURLParserTests.swift in Sources */,
+				F1A2B3C4D5E6F7A8B9C0D1E2 /* RefreshBackoffTests.swift in Sources */,
 				366C2529E906448AD887BB8C /* VoiceSessionErrorMappingTests.swift in Sources */,
 				DECBC55FB31F01EC556A929E /* VoiceSessionTests.swift in Sources */,
 			);
@@ -487,6 +489,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = dAIly/dAIly.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 68DR9C9ZKL;
 				INFOPLIST_FILE = dAIly/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -505,6 +508,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = dAIly/dAIly.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 68DR9C9ZKL;
 				INFOPLIST_FILE = dAIly/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

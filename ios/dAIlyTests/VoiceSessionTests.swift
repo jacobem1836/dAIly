@@ -178,13 +178,13 @@ final class VoiceSessionStateTests: XCTestCase {
         }
     }
 
-    // Test 6: 401 from token source triggers auth.refresh() then ONE retry; second 401 surfaces .error
-    // (tested via state: after double-401 connect fails with .error)
-    func testDouble401SurfacesError() async {
+    // Test 6: hard 401 on both token fetch AND token refresh → .error("re_pair_required")
+    // The refresh token is invalid — terminal failure routes to re-pair, not a retryable state.
+    func testHard401SurfacesRePairRequiredError() async {
         let keychain = KeychainStore(service: "test.voice.401.\(UUID().uuidString)")
         try? keychain.save(key: "access_token", value: "expired_jwt")
-        try? keychain.save(key: "refresh_token", value: "refresh_tok")
-        // All calls return 401
+        try? keychain.save(key: "refresh_token", value: "invalid_refresh_tok")
+        // All calls return 401 (both /livekit/token and /auth/token/refresh)
         VoiceStubURLProtocol.handler = { _ in (401, Data()) }
         let source = LiveKitTokenSource(baseURL: baseURL, session: makeStubSession())
         let auth = AuthService(baseURL: baseURL, session: makeStubSession(), keychain: keychain)
@@ -195,8 +195,40 @@ final class VoiceSessionStateTests: XCTestCase {
         } catch {
             // expected
         }
-        if case .error = session.state { } else {
-            XCTFail("Expected .error after double-401, got \(session.state)")
+        // Hard 401 on refresh must surface re_pair_required (.error), not .retryable
+        if case .error(let reason) = session.state {
+            XCTAssertEqual(reason, "re_pair_required",
+                           "Hard 401 must route to re_pair_required, got '\(reason)'")
+        } else {
+            XCTFail("Expected .error(re_pair_required) after hard 401 refresh, got \(session.state)")
+        }
+    }
+
+    // Test 6b: transient network failure on refresh (not a 401) → .retryable state
+    func testTransientRefreshFailureSurfacesRetryableState() async {
+        let keychain = KeychainStore(service: "test.voice.transient.\(UUID().uuidString)")
+        try? keychain.save(key: "access_token", value: "expired_jwt")
+        try? keychain.save(key: "refresh_token", value: "valid_refresh_tok")
+        // Token fetch returns 401 (triggers refresh); refresh endpoint returns 503 (transient)
+        VoiceStubURLProtocol.handler = { req in
+            if req.url?.path.contains("/livekit/token") == true {
+                return (401, Data())
+            }
+            // /auth/token/refresh → transient server error
+            return (503, Data())
+        }
+        let source = LiveKitTokenSource(baseURL: baseURL, session: makeStubSession())
+        let auth = AuthService(baseURL: baseURL, session: makeStubSession(), keychain: keychain)
+        let session = VoiceSession(tokenSource: source, auth: auth, keychain: keychain)
+        do {
+            try await session.connect()
+            XCTFail("Expected error")
+        } catch {
+            // expected
+        }
+        // Transient exhaustion must land in .retryable, not .error
+        if case .retryable = session.state { } else {
+            XCTFail("Expected .retryable after transient refresh failure, got \(session.state)")
         }
     }
 
@@ -211,5 +243,75 @@ final class VoiceSessionStateTests: XCTestCase {
         if case .listening = session.state { } else {
             XCTFail("Expected .listening after .connected, got \(session.state)")
         }
+    }
+
+    // Test 8: retry() no-ops when state is not .retryable
+    func testRetryNoOpsWhenNotRetryable() async {
+        let keychain = KeychainStore(service: "test.voice.retry.noop.\(UUID().uuidString)")
+        let source = LiveKitTokenSource(baseURL: baseURL, session: makeStubSession())
+        let auth = AuthService(baseURL: baseURL, session: makeStubSession(), keychain: keychain)
+        let session = VoiceSession(tokenSource: source, auth: auth, keychain: keychain)
+        session._testForceState(.idle)
+        await session.retry()  // should be a no-op
+        if case .idle = session.state { } else {
+            XCTFail("Expected .idle (no-op) after retry() when not in .retryable, got \(session.state)")
+        }
+    }
+
+    // Test 9: handleBackground() with an active session sets shouldResume; idle does not
+    func testHandleBackgroundSetsResumeWhenActive() async {
+        let keychain = KeychainStore(service: "test.voice.bg.active.\(UUID().uuidString)")
+        let source = LiveKitTokenSource(baseURL: baseURL, session: makeStubSession())
+        let auth = AuthService(baseURL: baseURL, session: makeStubSession(), keychain: keychain)
+        let session = VoiceSession(tokenSource: source, auth: auth, keychain: keychain)
+        session._testForceState(.listening)
+        await session.handleBackground()
+        XCTAssertTrue(session._testShouldResume,
+                      "shouldResume must be true after backgrounding from .listening")
+        if case .idle = session.state { } else {
+            XCTFail("Expected .idle after handleBackground(), got \(session.state)")
+        }
+    }
+
+    // Test 10: handleBackground() when idle does NOT set shouldResume
+    func testHandleBackgroundWhenIdleDoesNotSetResume() async {
+        let keychain = KeychainStore(service: "test.voice.bg.idle.\(UUID().uuidString)")
+        let source = LiveKitTokenSource(baseURL: baseURL, session: makeStubSession())
+        let auth = AuthService(baseURL: baseURL, session: makeStubSession(), keychain: keychain)
+        let session = VoiceSession(tokenSource: source, auth: auth, keychain: keychain)
+        // state is .idle by default
+        await session.handleBackground()
+        XCTAssertFalse(session._testShouldResume,
+                       "shouldResume must be false when backgrounding from .idle")
+    }
+
+    // Test 11: handleForeground() clears shouldResume and does not loop infinitely on no-JWT
+    func testHandleForegroundClearsShouldResumeOnAttempt() async {
+        let keychain = KeychainStore(service: "test.voice.fg.resume.\(UUID().uuidString)")
+        let source = LiveKitTokenSource(baseURL: baseURL, session: makeStubSession())
+        let auth = AuthService(baseURL: baseURL, session: makeStubSession(), keychain: keychain)
+        let session = VoiceSession(tokenSource: source, auth: auth, keychain: keychain)
+        // Simulate: session was live when backgrounded
+        session._testForceState(.listening)
+        await session.handleBackground()
+        XCTAssertTrue(session._testShouldResume)
+        // No JWT in keychain — connect() will fail cleanly; shouldResume is cleared before attempt
+        await session.handleForeground()
+        XCTAssertFalse(session._testShouldResume,
+                       "shouldResume must be cleared after handleForeground() attempt")
+    }
+
+    // Test 12: disconnect() clears shouldResume
+    func testDisconnectClearsShouldResume() async {
+        let keychain = KeychainStore(service: "test.voice.disconnect.resume.\(UUID().uuidString)")
+        let source = LiveKitTokenSource(baseURL: baseURL, session: makeStubSession())
+        let auth = AuthService(baseURL: baseURL, session: makeStubSession(), keychain: keychain)
+        let session = VoiceSession(tokenSource: source, auth: auth, keychain: keychain)
+        session._testForceState(.listening)
+        await session.handleBackground()
+        XCTAssertTrue(session._testShouldResume)
+        await session.disconnect()
+        XCTAssertFalse(session._testShouldResume,
+                       "disconnect() must clear shouldResume")
     }
 }
