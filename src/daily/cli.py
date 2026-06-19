@@ -648,8 +648,8 @@ async def _run_chat_session(user_id: int = 1) -> None:
     """Async helper for interactive orchestrator chat session.
 
     Wires real email adapters from stored tokens so BRIEF-07 thread
-    summarisation works end-to-end (per D-10). Uses MemorySaver for Phase 3
-    CLI; AsyncPostgresSaver will be wired in Phase 5 (FastAPI lifespan).
+    summarisation works end-to-end (per D-10). Uses AsyncPostgresSaver so
+    session state persists across turns (same checkpointer as the LiveKit worker).
 
     Phase 4: Handles approval flow when the graph is interrupted at approval_node.
     Displays the draft card, prompts for confirm/reject/edit, and resumes via
@@ -773,30 +773,12 @@ def chat():
 
 
 @app.command()
-def voice():
-    """Start an interactive voice session with the orchestrator.
-
-    Uses microphone for input (Deepgram Nova-3 STT) and speaker for output
-    (Cartesia Sonic-3 TTS). Supports barge-in (interrupt mid-sentence) and
-    the full approval workflow by voice.
-
-    Requires DEEPGRAM_API_KEY and CARTESIA_API_KEY in .env.
-    Requires Docker services running: docker compose up -d
-
-    Example:
-      daily voice
-    """
-    from daily.voice.loop import run_voice_session
-    asyncio.run(run_voice_session(user_id=1))
-
-
-@app.command()
 def briefing():
     """Force-generate a briefing now and cache it in Redis.
 
     Runs the full briefing pipeline immediately (fetch emails/calendar,
     summarise, render TTS audio) and stores the result in Redis so that
-    'daily voice' and 'daily chat' can load it.
+    'daily chat' or the LiveKit voice worker can load it.
 
     Example:
       daily briefing
@@ -808,7 +790,7 @@ def briefing():
         typer.echo("Generating briefing…")
         kwargs = await _build_pipeline_kwargs(user_id=1, settings=settings)
         await run_briefing_pipeline(user_id=1, **kwargs)
-        typer.echo("Briefing cached. Run 'daily voice' or 'daily chat'.")
+        typer.echo("Briefing cached. Run 'daily chat' or start the LiveKit worker.")
 
     asyncio.run(_run())
 

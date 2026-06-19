@@ -1,10 +1,14 @@
 """Per-user session bootstrap for the LiveKit agent worker.
 
-Mirrors the setup phase of `daily.voice.loop.run_voice_session` (lines 130–195):
+Performs per-session setup for the LiveKit voice agent:
 - resolve email adapters
 - build graph with AsyncPostgresSaver
 - create session config
 - load initial state from Redis briefing cache + profile
+
+Historical note: the local CLI voice pipeline (the legacy voice/loop.py module)
+was the original reference implementation for this setup sequence. It was deleted in
+Phase 21.45 (voice path consolidation). This module is the sole bootstrap path.
 """
 import logging
 from contextlib import asynccontextmanager
@@ -41,8 +45,6 @@ async def load_user_session_state(
     settings: Settings | None = None,
 ) -> AsyncIterator[SessionBundle]:
     """Load graph + config + initial state for a user. Async context manager.
-
-    Mirrors daily.voice.loop.run_voice_session lines 141–158.
 
     Yields:
         SessionBundle with graph, config, initial_state, and briefing_narrative.

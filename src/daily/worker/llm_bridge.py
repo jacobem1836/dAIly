@@ -2,14 +2,17 @@
 
 Wraps `daily.orchestrator.session.astream_session` / `run_session` so the
 LiveKit agent can call a single `stream_response(text)` and get an async
-iterator of token deltas — same streaming pattern as
-`daily.voice.loop.run_voice_session` lines 222-286.
+iterator of token deltas.
 
 Approval sub-loop: when the graph pauses at approval_node.interrupt() (e.g.
 after the user asks to draft/reply to an email), stream_response detects the
 interrupt, yields a spoken prompt to the user, and exposes
 `pending_approval: bool` so the caller can route the next utterance through
 `resume_approval(decision)` instead of a new graph turn.
+
+Historical note: the local CLI voice pipeline (the legacy voice/loop.py module)
+implemented an equivalent streaming loop. It was deleted in Phase 21.45 (voice path
+consolidation). This module is the sole LLM-to-voice adapter.
 """
 import logging
 from collections.abc import AsyncIterator
