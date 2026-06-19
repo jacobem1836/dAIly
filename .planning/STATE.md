@@ -66,11 +66,14 @@ See `KEY_DECISIONS` in PROJECT.md and `.planning/research/voice-strategy-decisio
 
 - LiveKit Cloud vs self-hosted — Cloud is simpler for dev/testing (~$4.50/user/month transport); self-host (Apache 2.0) saves cost at scale (~$50-100/mo VPS)
 - Prompt caching strategy for Realtime API — mandatory if that path is used ($6-8/user/month with caching vs $18-40 without)
-- Whether to keep Python voice loop alive as desktop fallback during Phase 18, or stub it out immediately
+- ~~Whether to keep Python voice loop alive as desktop fallback during Phase 18, or stub it out immediately~~ **RESOLVED 2026-06-19 (Phase 21.45): delete it.** Keeping it created two parallel voice architectures (the dual-path friction surfaced in the integration-friction review). Desktop fallback is deferred to Phase 24 (LiveKit web SDK), not the Python loop.
 
 ### Roadmap Evolution
 
 - Phase 20.1 inserted after Phase 20: LiveKit Agent Worker (INSERTED) — server-side agent that speaks into LiveKit rooms; prerequisite for mobile apps being functional end-to-end
+- Phase 21.2, 21.3 marked complete (were done, roadmap not updated)
+- Phase 21.5 inserted after 21.4: Adaptive Learning and Memory — voice preference detection, signal-driven ranking, mem0 cross-session memory; core product promise, required before TestFlight
+- Phase 21.45 inserted between 21.4 and 21.5: Architecture Consolidation (URGENT) — Option A of the 2026-06-19 integration-friction review. Delete legacy `voice/` + CLI voice path (resolves the open Phase-18 decision below — **decision: stub/delete, do not keep**), single checkpointer, add E2E voice smoke test, fix .env drift, iOS lifecycle/refresh hardening, freeze Android for TestFlight. 21.5 now depends on 21.45. Full report: `.planning/reviews/2026-06-19-integration-friction-review.md`.
 
 ### Blockers/Concerns
 

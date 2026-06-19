@@ -143,12 +143,35 @@ Plans:
 
 **Goal:** Comprehensive test suite for production readiness. Python backend: pytest for auth, integrations router, briefing pipeline, and new trigger endpoint. iOS unit tests: VoiceSession state machine, OAuthCallbackParser, AuthService. iOS onboarding flow and deep link routing tests. E2E smoke test covering pairing → onboarding → voice connect happy path. Target 80%+ backend coverage, all critical iOS state machines covered.
 **Depends on:** Phase 21.2, Phase 21.3
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 21.4-01-PLAN.md — Backend OAuth + auth router coverage uplift to 80%+ per module, enforce coverage floor
 - [x] 21.4-02-PLAN.md — iOS onboarding flow, deep-link routing, AppState routing tests
-- [ ] 21.4-03-PLAN.md — Backend E2E smoke test: pairing → onboarding → voice connect
+- [x] 21.4-03-PLAN.md — Backend E2E smoke test: pairing → onboarding → voice connect
+
+### Phase 21.45: Architecture Consolidation (INSERTED)
+
+**Goal:** Retire the half-finished voice migration and remove duplicated/premature surface BEFORE building Phase 21.5 on top of it. Closes the unresolved STATE.md decision ("keep Python voice loop alive as desktop fallback, or stub it") by deleting it. This is **Option A** from the 2026-06-19 integration-friction review (`.planning/reviews/2026-06-19-integration-friction-review.md`). No user-facing feature is removed — only duplicated implementations and premature infra.
+**Depends on:** Phase 21.4
+**Plans:** TBD (run `/gsd-plan-phase 21.45` to break down)
+
+Scope (high-ROI 20%):
+- [ ] Delete `src/daily/voice/` (1,316 LOC local CLI audio pipeline) + the `cli.py` voice command; unify all voice on the `worker/` livekit-agents path; collapse to a single checkpointer (`AsyncPostgresSaver`). Confirm nothing in the production mobile flow depends on `voice/` before deleting.
+- [ ] Add one E2E smoke test for the production mobile voice path (pair → `/livekit/token` → LiveKit room → worker agent greeting → one approval round-trip) so live-session bugs become CI signal, not manual whack-a-mole.
+- [ ] Fix config drift: regenerate `.env.example` from the actual 25 required vars (10 currently documented) + startup validation that fails fast on missing required env.
+- [ ] iOS hardening: token-refresh exponential backoff + user-facing retry; iOS `scenePhase` lifecycle handling so backgrounding/network-drop don't silently kill the LiveKit session.
+- [ ] Decisions recorded: freeze Android (iOS-only for TestFlight); remove the ~199 `* 2.*` iCloud sync-conflict duplicate files.
+
+**Out of scope (Option B / later):** LiveKit Cloud migration + drop coturn, flatten LangGraph ceremony, extract marketing/content/automation to its own repo, api+worker consolidation. Captured as follow-ups.
+
+### Phase 21.5: Adaptive Learning and Memory (INSERTED)
+
+**Goal:** Make dAIly actually learn about the user over time — the core product promise. Voice-expressed preference detection and persistence ("make it shorter", "skip weather", "I don't use Slack"), briefing adapting to stored preferences on next run, signal-driven ranking using already-captured skip/expand/correction signals to re-order briefing sections, cross-session memory via mem0 (extract facts from conversations and inject into future briefing context).
+**Depends on:** Phase 21.45 (build the differentiator on the consolidated base, not the dual-path one)
+**Plans:** TBD
+
+- [ ] TBD (run /gsd-plan-phase 21.5 to break down)
 
 ### Phase 22: Apple Integrations
 
@@ -229,9 +252,11 @@ Plans:
 | 20. Native Android App | v2.0 | 5/5 | ✅ Complete | 2026-04-30 |
 | 21. Per-User Onboarding | v2.1 | 5/5 | ✅ Complete | 2026-05-01 |
 | 21.1. Per-User Onboarding UI | v2.1 | 4/4 | ✅ Complete | 2026-05-10 |
-| 21.2. Bug Fixes and Polish | v2.1 | — | ○ Not started | — |
-| 21.3. UI Tidy-Up | v2.1 | — | ○ Not started | — |
-| 21.4. Test Coverage | v2.1 | 2/3 | In Progress|  |
+| 21.2. Bug Fixes and Polish | v2.1 | 4/4 | ✅ Complete | 2026-05-12 |
+| 21.3. UI Tidy-Up | v2.1 | 1/1 | ✅ Complete | 2026-05-12 |
+| 21.4. Test Coverage | v2.1 | 3/3 | ✅ Complete | 2026-05-11 |
+| 21.45. Architecture Consolidation | v2.1 | — | ○ Not started | — |
+| 21.5. Adaptive Learning and Memory | v2.1 | — | ○ Not started | — |
 | 22. Apple Integrations | v2.1 | — | ○ Not started | — |
 | 23. Production Backend Deploy | v2.1 | — | ○ Not started | — |
 | 24. Desktop Web Fallback | v2.2 | — | ○ Not started | — |
