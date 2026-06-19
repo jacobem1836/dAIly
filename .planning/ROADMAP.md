@@ -158,13 +158,13 @@ Plans:
 
 **Goal:** Retire the half-finished voice migration and remove duplicated/premature surface BEFORE building Phase 21.5 on top of it. Closes the unresolved STATE.md decision ("keep Python voice loop alive as desktop fallback, or stub it") by deleting it. This is **Option A** from the 2026-06-19 integration-friction review (`.planning/reviews/2026-06-19-integration-friction-review.md`). No user-facing feature is removed — only duplicated implementations and premature infra.
 **Depends on:** Phase 21.4
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 
 Plans:
 - [x] 21.45-01-PLAN.md — Voice-path consolidation: import-gate, delete `src/daily/voice/`, remove `daily voice` CLI command, collapse to AsyncPostgresSaver (wave 1)
 - [x] 21.45-02-PLAN.md — Config drift fix: regenerate `.env.example` (24 vars) + fail-fast required-var validation in config.py (wave 1)
 - [x] 21.45-03-PLAN.md — Cleanup + decision: delete 199 `* 2.*` iCloud duplicates, record Android-freeze in ROADMAP/STATE (wave 1)
-- [ ] 21.45-04-PLAN.md — iOS hardening: token-refresh exponential backoff + retry affordance, scenePhase pause/reconnect (wave 1, has checkpoint)
+- [x] 21.45-04-PLAN.md — iOS hardening: token-refresh exponential backoff + retry affordance, scenePhase pause/reconnect (wave 1, has checkpoint)
 - [ ] 21.45-05-PLAN.md — E2E smoke test: extend pairing→voice smoke with agent greeting + approval round-trip on the real graph (wave 2, depends on 21.45-01)
 
 Scope (high-ROI 20%):
@@ -266,7 +266,7 @@ Scope (high-ROI 20%):
 | 21.2. Bug Fixes and Polish | v2.1 | 4/4 | ✅ Complete | 2026-05-12 |
 | 21.3. UI Tidy-Up | v2.1 | 1/1 | ✅ Complete | 2026-05-12 |
 | 21.4. Test Coverage | v2.1 | 3/3 | ✅ Complete | 2026-05-11 |
-| 21.45. Architecture Consolidation | v2.1 | 3/5 | In Progress|  |
+| 21.45. Architecture Consolidation | v2.1 | 4/5 | In Progress|  |
 | 21.5. Adaptive Learning and Memory | v2.1 | — | ○ Not started | — |
 | 22. Apple Integrations | v2.1 | — | ○ Not started | — |
 | 23. Production Backend Deploy | v2.1 | — | ○ Not started | — |
