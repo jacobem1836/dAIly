@@ -49,6 +49,7 @@ Last activity: 2026-06-19
 | LiveKit for transport | 2026-04-27 | WebRTC, ML barge-in, livekit-plugins-langchain bridges to existing LangGraph backend |
 | Tier structure | 2026-04-27 | Pro ($15/mo) = voice briefing read-back; Premium ($30-35/mo) = full conversational voice |
 | OpenAI Realtime deferred | 2026-04-27 | LiveKit gives model flexibility; Realtime API still viable for Premium tier later |
+| Freeze Android (iOS-only TestFlight) | 2026-06-19 | iOS is the sole TestFlight target for v2.1. Android voice plumbing exists but onboarding/integration/permissions UI absent; parity deferred until iOS validated with real users. iOS-hardening in Phase 21.45 is NOT mirrored to Android. Per ADR-003 (2026-06-19 integration-friction review). |
 
 See `KEY_DECISIONS` in PROJECT.md and `.planning/research/voice-strategy-decision.md` for full rationale.
 
@@ -74,6 +75,7 @@ See `KEY_DECISIONS` in PROJECT.md and `.planning/research/voice-strategy-decisio
 - Phase 21.2, 21.3 marked complete (were done, roadmap not updated)
 - Phase 21.5 inserted after 21.4: Adaptive Learning and Memory — voice preference detection, signal-driven ranking, mem0 cross-session memory; core product promise, required before TestFlight
 - Phase 21.45 inserted between 21.4 and 21.5: Architecture Consolidation (URGENT) — Option A of the 2026-06-19 integration-friction review. Delete legacy `voice/` + CLI voice path (resolves the open Phase-18 decision below — **decision: stub/delete, do not keep**), single checkpointer, add E2E voice smoke test, fix .env drift, iOS lifecycle/refresh hardening, freeze Android for TestFlight. 21.5 now depends on 21.45. Full report: `.planning/reviews/2026-06-19-integration-friction-review.md`.
+- Android frozen for v2.1 TestFlight (2026-06-19, Phase 21.45-03): iOS is the sole active mobile platform through TestFlight validation. Android resumes after. 221 iCloud `* 2.*` sync-conflict duplicates purged from repo in same plan. iCloud-path move deferred (open follow-up).
 
 ### Blockers/Concerns
 

@@ -81,6 +81,10 @@ See `.planning/milestones/v1.2-ROADMAP.md` for full phase details.
 
 - [x] Phase 20: Native Android App — Kotlin + LiveKit Android SDK, Oboe hardware AEC, minimal voice UI matching iOS (completed 2026-04-30)
 
+> **FROZEN for v2.1 (ADR-003, 2026-06-19):** Android is NOT the TestFlight target for the v2.1 milestone. iOS is the only active platform. Android voice plumbing exists but onboarding, integration connect, and permissions UI are absent. Maintaining parity before iOS is validated with real users is a tax we are not paying. Android parity resumes after TestFlight validation. iOS-hardening changes in Phase 21.45 are NOT mirrored to Android. Per the 2026-06-19 integration-friction review (ADR-003).
+>
+> **Deferred follow-up (out of scope for 21.45):** Move the repo off the iCloud-synced path to prevent sync-conflict duplicates from reoccurring. This was the root cause of the 221 `* 2.*` files removed in 21.45-03.
+
 ---
 
 ### 📋 v2.1 TestFlight Ready (Planned)
