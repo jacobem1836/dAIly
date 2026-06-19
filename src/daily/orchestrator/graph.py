@@ -20,8 +20,8 @@ Route priority (most specific first):
 Model selection happens inside the node functions (nodes.py), not here.
 
 Checkpointer note:
-  build_graph() accepts any LangGraph checkpointer. Pass MemorySaver for
-  tests, AsyncPostgresSaver for production. Phase 3 CLI uses MemorySaver.
+  build_graph() accepts any LangGraph checkpointer. Production and CLI use
+  AsyncPostgresSaver. Tests may pass a lightweight checkpointer (e.g. InMemory).
 """
 
 from langgraph.graph import END, START, StateGraph
@@ -104,8 +104,8 @@ def build_graph(checkpointer=None):
     There is NO direct edge from START to execute — approval cannot be bypassed.
 
     Args:
-        checkpointer: LangGraph checkpointer instance. Use MemorySaver for
-                     tests, AsyncPostgresSaver for production.
+        checkpointer: LangGraph checkpointer instance. AsyncPostgresSaver for
+                     production and CLI; a lightweight checkpointer for tests.
 
     Returns:
         CompiledStateGraph ready for ainvoke/astream calls.

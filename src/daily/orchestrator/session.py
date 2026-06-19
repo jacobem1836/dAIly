@@ -165,7 +165,7 @@ async def run_session(
     """Run a single turn through the orchestrator graph.
 
     Uses ainvoke (not invoke) to avoid hanging with async checkpointer (Pitfall 2).
-    The checkpointer (MemorySaver or AsyncPostgresSaver) persists state between
+    The checkpointer (AsyncPostgresSaver) persists state between
     calls using the thread_id from config — session memory is automatic.
 
     Args:

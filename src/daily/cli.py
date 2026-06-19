@@ -659,6 +659,7 @@ async def _run_chat_session(user_id: int = 1) -> None:
         user_id: User ID for the session. Defaults to 1 (single-user Phase 3).
     """
     from daily.config import Settings
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver  # noqa: PLC0415
 
     settings = Settings()
 
@@ -666,96 +667,97 @@ async def _run_chat_session(user_id: int = 1) -> None:
     adapters = await _resolve_email_adapters(user_id, settings)
     set_email_adapters(adapters)
 
-    # 2. Build graph (MemorySaver for Phase 3 CLI — no Postgres checkpointing yet)
-    from langgraph.checkpoint.memory import MemorySaver  # noqa: PLC0415
-    graph = build_graph(checkpointer=MemorySaver())
+    # 2. Build graph with AsyncPostgresSaver (same checkpointer as the LiveKit worker)
+    async with AsyncPostgresSaver.from_conn_string(settings.database_url_psycopg) as checkpointer:
+        await checkpointer.setup()
+        graph = build_graph(checkpointer=checkpointer)
 
-    # 3. Create session config and load initial state from cache + profile
-    config = await create_session_config(user_id)
-    redis = Redis.from_url(settings.redis_url)
-    try:
-        async with async_session() as db_sess:
-            initial_state = await initialize_session_state(user_id, redis, db_sess)
-    finally:
-        await redis.aclose()
-
-    # 4. Interactive loop
-    print("dAIly chat session started. Type 'exit' or 'quit' to end.")
-    if adapters:
-        print(f"  {len(adapters)} email adapter(s) connected.")
-    else:
-        print("  No email adapters connected. Thread summaries won't work.")
-        print("  Run 'daily connect gmail' or 'daily connect outlook' first.")
-    print()
-
-    first_turn = True
-    while True:
-        user_input = input("You: ").strip()
-        if not user_input:
-            continue
-        if user_input.lower() in ("exit", "quit"):
-            print("Session ended.")
-            break
-
+        # 3. Create session config and load initial state from cache + profile
+        config = await create_session_config(user_id)
+        redis = Redis.from_url(settings.redis_url)
         try:
-            result = await run_session(
-                graph,
-                user_input,
-                config,
-                initial_state=initial_state if first_turn else None,
-            )
-        except Exception as exc:
-            from openai import OpenAIError  # noqa: PLC0415
-            if isinstance(exc, OpenAIError):
-                print(f"Error: OpenAI API error: {exc}")
-                break
-            raise
-        first_turn = False
+            async with async_session() as db_sess:
+                initial_state = await initialize_session_state(user_id, redis, db_sess)
+        finally:
+            await redis.aclose()
 
-        # Check if graph was interrupted (approval gate fired)
-        graph_state = await graph.aget_state(config)
-        if graph_state.next:
-            # Approval interrupt: handle approval sub-loop (D-01 unlimited edit rounds)
-            # Loop until the user confirms or rejects — edit decisions loop back
-            # through draft -> approval via the graph's conditional edge.
-            while True:
-                approval_result = await _handle_approval_flow(
-                    graph=graph,
-                    state=graph_state,
-                    config=config,
-                )
-
-                edit_instruction = approval_result.get("edit_instruction")
-                if not edit_instruction:
-                    # Confirm or reject — display result and break
-                    ap_messages = approval_result.get("messages", [])
-                    if ap_messages:
-                        last_msg = ap_messages[-1]
-                        content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-                        print(f"dAIly: {content}")
-                    break
-
-                # Edit decision: graph routes back to draft -> approval automatically.
-                # The graph.ainvoke(Command(resume=...)) in _handle_approval_flow
-                # already resumed the graph. Check if it interrupted again at approval.
-                graph_state = await graph.aget_state(config)
-                if not graph_state.next:
-                    # Graph completed without interrupting — shouldn't happen on edit,
-                    # but handle gracefully
-                    ap_messages = approval_result.get("messages", [])
-                    if ap_messages:
-                        last_msg = ap_messages[-1]
-                        content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-                        print(f"dAIly: {content}")
-                    break
+        # 4. Interactive loop
+        print("dAIly chat session started. Type 'exit' or 'quit' to end.")
+        if adapters:
+            print(f"  {len(adapters)} email adapter(s) connected.")
         else:
-            # Normal (non-interrupted) response
-            messages = result.get("messages", [])
-            if messages:
-                last_msg = messages[-1]
-                content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-                print(f"dAIly: {content}")
+            print("  No email adapters connected. Thread summaries won't work.")
+            print("  Run 'daily connect gmail' or 'daily connect outlook' first.")
         print()
+
+        first_turn = True
+        while True:
+            user_input = input("You: ").strip()
+            if not user_input:
+                continue
+            if user_input.lower() in ("exit", "quit"):
+                print("Session ended.")
+                break
+
+            try:
+                result = await run_session(
+                    graph,
+                    user_input,
+                    config,
+                    initial_state=initial_state if first_turn else None,
+                )
+            except Exception as exc:
+                from openai import OpenAIError  # noqa: PLC0415
+                if isinstance(exc, OpenAIError):
+                    print(f"Error: OpenAI API error: {exc}")
+                    break
+                raise
+            first_turn = False
+
+            # Check if graph was interrupted (approval gate fired)
+            graph_state = await graph.aget_state(config)
+            if graph_state.next:
+                # Approval interrupt: handle approval sub-loop (D-01 unlimited edit rounds)
+                # Loop until the user confirms or rejects — edit decisions loop back
+                # through draft -> approval via the graph's conditional edge.
+                while True:
+                    approval_result = await _handle_approval_flow(
+                        graph=graph,
+                        state=graph_state,
+                        config=config,
+                    )
+
+                    edit_instruction = approval_result.get("edit_instruction")
+                    if not edit_instruction:
+                        # Confirm or reject — display result and break
+                        ap_messages = approval_result.get("messages", [])
+                        if ap_messages:
+                            last_msg = ap_messages[-1]
+                            content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+                            print(f"dAIly: {content}")
+                        break
+
+                    # Edit decision: graph routes back to draft -> approval automatically.
+                    # The graph.ainvoke(Command(resume=...)) in _handle_approval_flow
+                    # already resumed the graph. Check if it interrupted again at approval.
+                    graph_state = await graph.aget_state(config)
+                    if not graph_state.next:
+                        # Graph completed without interrupting — shouldn't happen on edit,
+                        # but handle gracefully
+                        ap_messages = approval_result.get("messages", [])
+                        if ap_messages:
+                            last_msg = ap_messages[-1]
+                            content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+                            print(f"dAIly: {content}")
+                        break
+            else:
+                # Normal (non-interrupted) response
+                messages = result.get("messages", [])
+                if messages:
+                    last_msg = messages[-1]
+                    content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+                    print(f"dAIly: {content}")
+            print()
 
 
 @app.command()
