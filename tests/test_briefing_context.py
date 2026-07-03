@@ -283,6 +283,58 @@ async def test_build_slack_context(sample_messages):
 
 
 @pytest.mark.asyncio
+async def test_build_context_threads_configured_slack_channels_to_adapter(sample_messages):
+    """A configured slack_channels list reaches adapter.list_messages (audit C1).
+
+    Before the fix, context_builder._fetch_all_messages hardcoded channels=[]
+    regardless of what the caller passed in, so a user's configured priority
+    channel list never actually reached the Slack adapter. This test fails
+    without the fix (list_messages would be called with channels=[]) and
+    passes with it (channels=["C01PRIORITY", "C02PRIORITY"]).
+    """
+    adapter = MockMessageAdapter(pages=[(sample_messages, None)])
+    adapter.list_messages = AsyncMock(
+        return_value=MessagePage(messages=sample_messages, next_cursor=None)
+    )
+
+    await build_context(
+        user_id=1,
+        email_adapters=[],
+        calendar_adapters=[],
+        message_adapters=[adapter],
+        vip_senders=frozenset(),
+        user_email="me@example.com",
+        slack_channels=["C01PRIORITY", "C02PRIORITY"],
+    )
+
+    adapter.list_messages.assert_awaited_once()
+    call_kwargs = adapter.list_messages.call_args.kwargs
+    assert call_kwargs["channels"] == ["C01PRIORITY", "C02PRIORITY"]
+
+
+@pytest.mark.asyncio
+async def test_build_context_defaults_to_empty_channels_when_unset(sample_messages):
+    """When slack_channels is not passed, the adapter still receives channels=[]
+    (not None) — the adapter itself decides what an empty list means."""
+    adapter = MockMessageAdapter(pages=[(sample_messages, None)])
+    adapter.list_messages = AsyncMock(
+        return_value=MessagePage(messages=sample_messages, next_cursor=None)
+    )
+
+    await build_context(
+        user_id=1,
+        email_adapters=[],
+        calendar_adapters=[],
+        message_adapters=[adapter],
+        vip_senders=frozenset(),
+        user_email="me@example.com",
+    )
+
+    call_kwargs = adapter.list_messages.call_args.kwargs
+    assert call_kwargs["channels"] == []
+
+
+@pytest.mark.asyncio
 async def test_partial_failure():
     """If one adapter raises, pipeline continues with other sources."""
 

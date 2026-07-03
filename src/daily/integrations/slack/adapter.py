@@ -27,6 +27,30 @@ class SlackAdapter(MessageAdapter):
     def __init__(self, bot_token: str) -> None:
         self._client = WebClient(token=bot_token)
 
+    async def _resolve_default_channels(self) -> list[str]:
+        """Resolve a default channel set when the caller has configured none.
+
+        Audit finding C1: BriefingConfig.slack_channels defaults to an empty
+        list, and prior code treated "empty" as "fetch nothing", which meant
+        Slack briefings were silently dead for every user who never set an
+        explicit channel list. Per BRIEF-05's original M1 intent ("empty list
+        = all accessible channels"), empty now means "every channel this bot
+        is a member of" instead of "no channels" — so Slack briefing works
+        out of the box, and setting slack_channels only narrows the scope.
+
+        Returns:
+            List of channel IDs the bot is currently a member of (public and
+            private conversations only — excludes archived channels).
+        """
+        response = await asyncio.to_thread(
+            self._client.conversations_list,
+            types="public_channel,private_channel",
+            exclude_archived=True,
+            limit=200,
+        )
+        channels_data = response.get("channels", []) or []
+        return [c["id"] for c in channels_data if c.get("is_member")]
+
     async def list_messages(
         self, channels: list[str], since: datetime
     ) -> MessagePage:
@@ -40,11 +64,17 @@ class SlackAdapter(MessageAdapter):
 
         Args:
             channels: List of Slack channel IDs (e.g. ["C01CHANNEL", "D01DM"]).
+                Empty list resolves to the bot's default channel membership
+                (see _resolve_default_channels) rather than fetching nothing —
+                see audit finding C1.
             since: Only return messages after this timestamp.
 
         Returns:
             MessagePage with aggregated MessageMetadata and optional next_cursor.
         """
+        if not channels:
+            channels = await self._resolve_default_channels()
+
         if not channels:
             return MessagePage(messages=[], next_cursor=None)
 

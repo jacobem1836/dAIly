@@ -45,6 +45,7 @@ async def run_briefing_pipeline(
     redis: Redis,
     openai_client: AsyncOpenAI,
     preferences: UserPreferences | None = None,
+    slack_channels: list[str] | None = None,
 ) -> BriefingOutput:
     """Full pipeline: ingest -> rank -> fetch bodies -> redact -> narrate -> cache.
 
@@ -71,6 +72,9 @@ async def run_briefing_pipeline(
         openai_client: Async OpenAI client for redaction and narration.
         preferences: Optional user preferences for tone/length/order. If None,
                      narrator uses defaults.
+        slack_channels: Per-user configured Slack channel IDs (BriefingConfig.
+                     slack_channels). Threaded through to build_context so a
+                     configured channel list actually affects the fetch (audit C1).
 
     Returns:
         BriefingOutput with narrative, generated_at, and version.
@@ -87,6 +91,7 @@ async def run_briefing_pipeline(
         vip_senders=vip_senders,
         user_email=user_email,
         top_n=top_n,
+        slack_channels=slack_channels,
     )
 
     # Step 2: Redact -- summarise + credential strip per-item (SEC-02)

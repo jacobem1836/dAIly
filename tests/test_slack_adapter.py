@@ -207,12 +207,22 @@ class TestSlackAdapterListMessages:
         assert result.next_cursor is None
 
     @pytest.mark.asyncio
-    async def test_list_messages_empty_channel_list_returns_empty_page(self):
-        """SlackAdapter.list_messages with empty channels returns empty MessagePage."""
+    async def test_list_messages_empty_channel_list_returns_empty_page_when_no_membership(self):
+        """SlackAdapter.list_messages with empty channels and no bot membership returns empty page.
+
+        Audit C1 fix: empty channels no longer short-circuits to "nothing" — it
+        resolves the bot's channel membership first. This test covers the case
+        where that resolution also comes back empty (bot is in no channels).
+        """
         from daily.integrations.slack.adapter import SlackAdapter
 
+        client = _make_slack_client()
+        client.conversations_list.return_value = _make_mock_response(
+            {"ok": True, "channels": []}
+        )
+
         with patch("daily.integrations.slack.adapter.WebClient") as mock_wc:
-            mock_wc.return_value = _make_slack_client()
+            mock_wc.return_value = client
             adapter = SlackAdapter(bot_token="xoxb-test")
 
         since = datetime(2024, 1, 1, tzinfo=timezone.utc)
@@ -221,6 +231,47 @@ class TestSlackAdapterListMessages:
         assert isinstance(result, MessagePage)
         assert result.messages == []
         assert result.next_cursor is None
+        client.conversations_list.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_list_messages_empty_channels_resolves_default_membership(self):
+        """SlackAdapter.list_messages with empty channels fetches from the bot's
+        member channels instead of silently returning nothing (audit C1: the
+        "configured empty channel list" case that made Slack briefing dead).
+        """
+        from daily.integrations.slack.adapter import SlackAdapter
+
+        client = MagicMock()
+        client.conversations_list.return_value = _make_mock_response(
+            {
+                "ok": True,
+                "channels": [
+                    {"id": "C01CHANNEL", "is_member": True},
+                    {"id": "C02NOTMEMBER", "is_member": False},
+                ],
+            }
+        )
+
+        def _channel_history(**kwargs):
+            channel = kwargs.get("channel", "")
+            if channel == "C01CHANNEL":
+                return _make_mock_response(SLACK_HISTORY_RESPONSE_NO_CURSOR)
+            raise AssertionError(f"Should not fetch history for {channel}")
+
+        client.conversations_history.side_effect = _channel_history
+
+        with patch("daily.integrations.slack.adapter.WebClient") as mock_wc:
+            mock_wc.return_value = client
+            adapter = SlackAdapter(bot_token="xoxb-test")
+
+        since = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        result = await adapter.list_messages(channels=[], since=since)
+
+        # Only the member channel (C01CHANNEL) is fetched; C02NOTMEMBER is skipped.
+        assert len(result.messages) == 1
+        client.conversations_history.assert_called_once_with(
+            channel="C01CHANNEL", oldest=since.timestamp(), limit=100
+        )
 
     @pytest.mark.asyncio
     async def test_list_messages_dm_channel_flagged_as_dm(self):
