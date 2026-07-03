@@ -210,7 +210,13 @@ public final class AuthService {
                 throw AuthError.server(http.statusCode)
             }
             if T.self == EmptyResponse.self {
-                return EmptyResponse() as! T  // swiftlint:disable:this force_cast
+                guard let empty = EmptyResponse() as? T else {
+                    // Unreachable in practice (T.self == EmptyResponse.self was
+                    // just checked), but avoids a force-cast crash if that
+                    // invariant is ever violated by a future refactor.
+                    throw AuthError.decoding
+                }
+                return empty
             }
             do {
                 return try JSONDecoder().decode(T.self, from: data)
