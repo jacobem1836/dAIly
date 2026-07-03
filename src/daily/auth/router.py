@@ -4,8 +4,9 @@ import hmac
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
+from redis.asyncio import Redis
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +17,7 @@ from daily.auth.pairing import (
     generate_pairing_code,
     generate_refresh_token,
 )
+from daily.auth.ratelimit import RateLimiter, client_ip, get_redis
 from daily.config import Settings
 from daily.db.engine import async_session
 from daily.db.models import DeviceToken, PairingCode, User
@@ -25,6 +27,20 @@ from daily.vault.crypto import decrypt_token, encrypt_token
 _logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Security fix (wave 1 audit remediation, CRITICAL): a 6-digit pairing code
+# has a 900k-value search space and a 5-minute TTL — brute-forceable without
+# rate limiting. These limits are deliberately generous for legitimate users
+# (typos, retries) while making brute force impractical.
+_SEND_LINK_RATE_LIMIT = RateLimiter("pair_send_link", limit=10, window_seconds=60)
+_PAIR_COMPLETE_RATE_LIMIT = RateLimiter("pair_complete", limit=20, window_seconds=300)
+_TOKEN_REFRESH_RATE_LIMIT = RateLimiter("token_refresh", limit=20, window_seconds=300)
+
+# After this many failed pairing-code guesses from the same client within
+# one pairing-code lifetime, proactively invalidate all currently pending
+# (unused, unexpired) pairing codes — forces re-issuance rather than letting
+# an attacker keep guessing against a live window.
+_MAX_FAILED_PAIR_ATTEMPTS = 5
 
 
 async def _get_db() -> AsyncSession:
@@ -60,7 +76,11 @@ class RefreshResponse(BaseModel):
     expires_in: int
 
 
-@router.post("/pair/send-link", status_code=204)
+@router.post(
+    "/pair/send-link",
+    status_code=204,
+    dependencies=[Depends(_SEND_LINK_RATE_LIMIT)],
+)
 async def pair_send_link(
     req: SendLinkRequest,
     session: AsyncSession = Depends(_get_db),
@@ -91,11 +111,43 @@ async def pair_send_link(
     return None
 
 
-@router.post("/pair/complete", response_model=CompleteResponse)
+async def _register_failed_pair_attempt(redis: Redis, request: Request, session: AsyncSession) -> None:
+    """Track failed pairing-code guesses per client IP.
+
+    Security fix (wave 1 audit remediation): beyond generic rate limiting,
+    once a client racks up too many wrong guesses within one pairing-code
+    lifetime, we proactively invalidate every currently pending (unused,
+    unexpired) PairingCode row. The request has no way to identify which
+    code was actually being targeted, so this trades some legitimate-user
+    friction (forced re-issuance) for closing the window an attacker is
+    brute-forcing against.
+    """
+    key = f"pairfail:{client_ip(request)}"
+    count = await redis.incr(key)
+    if count == 1:
+        await redis.expire(key, PAIRING_CODE_TTL_SECONDS)
+    if count >= _MAX_FAILED_PAIR_ATTEMPTS:
+        now = datetime.now(timezone.utc)
+        await session.execute(
+            update(PairingCode)
+            .where(PairingCode.used.is_(False), PairingCode.expires_at > now)
+            .values(used=True)
+        )
+        await session.commit()
+        await redis.delete(key)
+
+
+@router.post(
+    "/pair/complete",
+    response_model=CompleteResponse,
+    dependencies=[Depends(_PAIR_COMPLETE_RATE_LIMIT)],
+)
 async def pair_complete(
+    request: Request,
     body: CompleteRequest,
     session: AsyncSession = Depends(_get_db),
     settings: Settings = Depends(_get_settings),
+    redis: Redis = Depends(get_redis),
 ) -> CompleteResponse:
     # Atomic compare-and-swap to prevent race (RESEARCH.md Pitfall 4)
     now = datetime.now(timezone.utc)
@@ -113,6 +165,7 @@ async def pair_complete(
     row = result.first()
     if row is None:
         await session.rollback()
+        await _register_failed_pair_attempt(redis, request, session)
         raise HTTPException(status_code=400, detail="Invalid, used, or expired pairing code")
     _, user_id, pairing_email = row
 
@@ -158,7 +211,11 @@ async def pair_complete(
     )
 
 
-@router.post("/token/refresh", response_model=RefreshResponse)
+@router.post(
+    "/token/refresh",
+    response_model=RefreshResponse,
+    dependencies=[Depends(_TOKEN_REFRESH_RATE_LIMIT)],
+)
 async def token_refresh(
     body: RefreshRequest,
     session: AsyncSession = Depends(_get_db),

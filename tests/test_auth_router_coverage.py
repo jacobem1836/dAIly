@@ -52,6 +52,29 @@ def settings():
     return Settings()
 
 
+@pytest.fixture
+async def fake_redis():
+    """fakeredis instance for pair_complete's failed-attempt tracking.
+
+    pair_complete now takes a ``redis`` parameter (security fix, wave 1 —
+    failed pairing-code guess counter). Direct function calls in this file
+    bypass FastAPI's dependency injection, so it must be passed explicitly.
+    """
+    import fakeredis.aioredis as fake_aioredis
+
+    client = fake_aioredis.FakeRedis()
+    yield client
+    await client.aclose()
+
+
+@pytest.fixture
+def fake_request():
+    """Minimal stand-in for FastAPI's Request — only .client.host is used."""
+    request = MagicMock()
+    request.client.host = "127.0.0.1"
+    return request
+
+
 async def _seed_pairing_code(db_factory, user_id: int) -> str:
     """Create a User + an unused, unexpired PairingCode row for that user.
 
@@ -107,7 +130,7 @@ async def test_send_link_resend_error_swallowed(db_factory, settings):
 
 
 @pytest.mark.asyncio
-async def test_pair_complete_invalid_code_raises_400(db_factory, settings):
+async def test_pair_complete_invalid_code_raises_400(db_factory, settings, fake_redis, fake_request):
     """pair_complete with wrong code → HTTPException 400."""
     from fastapi import HTTPException
     from daily.auth.router import CompleteRequest, pair_complete
@@ -115,12 +138,12 @@ async def test_pair_complete_invalid_code_raises_400(db_factory, settings):
     async with db_factory() as session:
         req = CompleteRequest(code="000000")
         with pytest.raises(HTTPException) as exc:
-            await pair_complete(req, session=session, settings=settings)
+            await pair_complete(fake_request, req, session=session, settings=settings, redis=fake_redis)
         assert exc.value.status_code == 400
 
 
 @pytest.mark.asyncio
-async def test_pair_complete_magic_link_new_user(db_factory, settings):
+async def test_pair_complete_magic_link_new_user(db_factory, settings, fake_redis, fake_request):
     """pair_complete magic-link flow creates new User when none exists for email."""
     from daily.auth.pairing import generate_pairing_code, code_expiry
     from daily.auth.router import CompleteRequest, pair_complete
@@ -133,13 +156,13 @@ async def test_pair_complete_magic_link_new_user(db_factory, settings):
 
     async with db_factory() as session:
         req = CompleteRequest(code=code)
-        resp = await pair_complete(req, session=session, settings=settings)
+        resp = await pair_complete(fake_request, req, session=session, settings=settings, redis=fake_redis)
         assert resp.access_token
         assert resp.refresh_token
 
 
 @pytest.mark.asyncio
-async def test_pair_complete_magic_link_existing_user(db_factory, settings):
+async def test_pair_complete_magic_link_existing_user(db_factory, settings, fake_redis, fake_request):
     """pair_complete magic-link flow reuses existing user found via prior pairing codes."""
     from daily.auth.pairing import generate_pairing_code, code_expiry
     from daily.auth.router import CompleteRequest, pair_complete
@@ -159,12 +182,12 @@ async def test_pair_complete_magic_link_existing_user(db_factory, settings):
 
     async with db_factory() as session:
         req = CompleteRequest(code=code)
-        resp = await pair_complete(req, session=session, settings=settings)
+        resp = await pair_complete(fake_request, req, session=session, settings=settings, redis=fake_redis)
         assert resp.access_token
 
 
 @pytest.mark.asyncio
-async def test_pair_complete_expired_code_raises_400(db_factory, settings):
+async def test_pair_complete_expired_code_raises_400(db_factory, settings, fake_redis, fake_request):
     """pair_complete with expired pairing code → HTTPException 400."""
     from fastapi import HTTPException
     from daily.auth.pairing import generate_pairing_code
@@ -180,7 +203,7 @@ async def test_pair_complete_expired_code_raises_400(db_factory, settings):
     async with db_factory() as session:
         req = CompleteRequest(code=code)
         with pytest.raises(HTTPException) as exc:
-            await pair_complete(req, session=session, settings=settings)
+            await pair_complete(fake_request, req, session=session, settings=settings, redis=fake_redis)
         assert exc.value.status_code == 400
 
 
@@ -190,14 +213,16 @@ async def test_pair_complete_expired_code_raises_400(db_factory, settings):
 
 
 @pytest.mark.asyncio
-async def test_token_refresh_success(db_factory, settings):
+async def test_token_refresh_success(db_factory, settings, fake_redis, fake_request):
     """token_refresh finds matching token and returns new access token."""
     from daily.auth.router import CompleteRequest, RefreshRequest, pair_complete, token_refresh
 
     code = await _seed_pairing_code(db_factory, user_id=55)
 
     async with db_factory() as session:
-        complete_resp = await pair_complete(CompleteRequest(code=code), session=session, settings=settings)
+        complete_resp = await pair_complete(
+            fake_request, CompleteRequest(code=code), session=session, settings=settings, redis=fake_redis
+        )
 
     async with db_factory() as session:
         resp = await token_refresh(RefreshRequest(refresh_token=complete_resp.refresh_token), session=session, settings=settings)
@@ -218,7 +243,7 @@ async def test_token_refresh_invalid_token_raises_401(db_factory, settings):
 
 
 @pytest.mark.asyncio
-async def test_token_refresh_revoked_token_raises_401(db_factory, settings):
+async def test_token_refresh_revoked_token_raises_401(db_factory, settings, fake_redis, fake_request):
     """token_refresh with revoked DeviceToken → HTTPException 401."""
     from fastapi import HTTPException
     from sqlalchemy import update
@@ -227,7 +252,9 @@ async def test_token_refresh_revoked_token_raises_401(db_factory, settings):
     code = await _seed_pairing_code(db_factory, user_id=66)
 
     async with db_factory() as session:
-        complete_resp = await pair_complete(CompleteRequest(code=code), session=session, settings=settings)
+        complete_resp = await pair_complete(
+            fake_request, CompleteRequest(code=code), session=session, settings=settings, redis=fake_redis
+        )
 
     async with db_factory() as session:
         await session.execute(update(DeviceToken).where(DeviceToken.user_id == 66).values(revoked=True))

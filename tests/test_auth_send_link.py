@@ -42,15 +42,30 @@ async def db_session_factory():
 
 
 @pytest.fixture
-async def client(db_session_factory, monkeypatch):
+async def client(db_session_factory, mock_redis, monkeypatch):
+    """FastAPI test client with mocked DB session + fakeredis-backed rate limiter.
+
+    /auth/pair/send-link now carries a Redis-backed rate limiter (security
+    fix, wave 1 audit remediation), so the ASGI transport needs a fakeredis
+    override (mock_redis, from tests/conftest.py) rather than a live Redis.
+    """
+    import daily.auth.ratelimit as ratelimit_module
     import daily.auth.router as auth_router_module
 
     monkeypatch.setattr(auth_router_module, "async_session", db_session_factory)
 
     from daily.main import app
+
+    async def _fake_get_redis():
+        yield mock_redis
+
+    app.dependency_overrides[ratelimit_module.get_redis] = _fake_get_redis
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac, db_session_factory
+
+    app.dependency_overrides.clear()
 
 
 # ---------------------------------------------------------------------------

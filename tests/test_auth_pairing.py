@@ -71,19 +71,33 @@ async def _seed_pairing_code(db_session_factory, user_id: int) -> str:
 
 
 @pytest.fixture
-async def client(db_session_factory, monkeypatch):
-    """FastAPI test client with mocked DB session using in-memory SQLite."""
-    import daily.auth.router as auth_router_module
+async def client(db_session_factory, mock_redis, monkeypatch):
+    """FastAPI test client with mocked DB session using in-memory SQLite.
+
+    Also overrides the rate limiter's Redis dependency with fakeredis
+    (mock_redis, from tests/conftest.py) so these tests don't need a live
+    Redis instance.
+    """
     import daily.auth.deps as deps_module
+    import daily.auth.ratelimit as ratelimit_module
+    import daily.auth.router as auth_router_module
 
     # Patch the async_session in auth router and deps to use our test DB
     monkeypatch.setattr(auth_router_module, "async_session", db_session_factory)
     monkeypatch.setattr(deps_module, "async_session", db_session_factory)
 
     from daily.main import app
+
+    async def _fake_get_redis():
+        yield mock_redis
+
+    app.dependency_overrides[ratelimit_module.get_redis] = _fake_get_redis
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac, db_session_factory
+
+    app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -150,3 +164,49 @@ async def test_refresh_token_stored_encrypted(client):
         assert rows, "DeviceToken row not created"
         for dt in rows:
             assert dt.encrypted_refresh_token != refresh, "Refresh token stored plaintext!"
+
+
+@pytest.mark.asyncio
+async def test_pair_complete_rate_limited_after_threshold(client):
+    """20 requests/5min limit on /auth/pair/complete — the 21st must 429.
+
+    Security fix, wave 1: this endpoint guards a brute-forceable 6-digit
+    code (900k values) and previously had no rate limiting at all.
+    """
+    ac, _ = client
+    responses = [
+        await ac.post("/auth/pair/complete", json={"code": "000000"}) for _ in range(21)
+    ]
+    assert responses[-1].status_code == 429
+    assert all(r.status_code == 400 for r in responses[:20])
+
+
+@pytest.mark.asyncio
+async def test_pair_send_link_rate_limited_after_threshold(client):
+    """10 requests/min limit on /auth/pair/send-link — the 11th must 429."""
+    ac, _ = client
+    responses = [
+        await ac.post("/auth/pair/send-link", json={"email": "flood@example.com"})
+        for _ in range(11)
+    ]
+    assert responses[-1].status_code == 429
+
+
+@pytest.mark.asyncio
+async def test_failed_attempts_invalidate_pending_codes(client):
+    """After 5 failed pair/complete guesses from one client, pending codes die.
+
+    Security fix, wave 1: defense-in-depth beyond generic rate limiting —
+    a sustained wrong-guess streak burns down currently pending pairing
+    codes rather than leaving them guessable for the rest of the window.
+    """
+    ac, db_factory = client
+    code = await _seed_pairing_code(db_factory, user_id=5)
+
+    for _ in range(5):
+        r = await ac.post("/auth/pair/complete", json={"code": "999999"})
+        assert r.status_code == 400
+
+    # The legitimately-issued code must now be invalidated too.
+    r = await ac.post("/auth/pair/complete", json={"code": code})
+    assert r.status_code == 400
