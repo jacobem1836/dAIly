@@ -115,12 +115,19 @@ struct IntegrationView: View {
         errorMessage = nil
         do {
             let authURL = try await auth.getIntegrationConnectURL(provider: provider.rawValue)
-            try auth.openOAuthSession(url: authURL)
+            // Captures the Binding (stable across view re-renders), not self,
+            // so the closure can safely outlive this call to connect().
+            let errorBinding = $errorMessage
+            try auth.openOAuthSession(url: authURL) { error in
+                errorBinding.wrappedValue = "Sign-in failed: \(error.localizedDescription)"
+            }
             // Reset isConnecting after the session launches. If a deep link
             // arrives (/oauth/success), the .onChange on connectedProviders
             // handles marking the provider connected. If no deep link arrives
             // (e.g. personal dev team with no Universal Links configured), the
-            // button resets so the user can retry or tap Skip.
+            // button resets so the user can retry or tap Skip. If the session
+            // fails for a reason other than a user-initiated cancel, the
+            // onFailure closure above surfaces a visible error.
             isConnecting = false
         } catch {
             errorMessage = "Connection failed. Please try again."
