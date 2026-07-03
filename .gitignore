@@ -25,3 +25,8 @@ graphify-out/
 landing/
 marketing/
 scripts/
+
+# Coverage + editor artifacts
+.coverage
+ios/dAIly.xcodeproj/xcuserdata/
+ios/dAIly.xcodeproj/project.xcworkspace/xcuserdata/
