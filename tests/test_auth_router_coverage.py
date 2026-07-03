@@ -264,3 +264,127 @@ async def test_token_refresh_revoked_token_raises_401(db_factory, settings, fake
         with pytest.raises(HTTPException) as exc:
             await token_refresh(RefreshRequest(refresh_token=complete_resp.refresh_token), session=session, settings=settings)
         assert exc.value.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# refresh_token_hash indexed lookup + legacy NULL-hash fallback (audit C4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_pair_complete_populates_refresh_token_hash(db_factory, settings, fake_redis, fake_request):
+    """pair_complete stores a SHA-256 hash of the raw refresh token alongside the ciphertext."""
+    import hashlib
+    from sqlalchemy import select
+    from daily.auth.router import CompleteRequest, pair_complete
+
+    code = await _seed_pairing_code(db_factory, user_id=77)
+
+    async with db_factory() as session:
+        complete_resp = await pair_complete(
+            fake_request, CompleteRequest(code=code), session=session, settings=settings, redis=fake_redis
+        )
+
+    expected_hash = hashlib.sha256(complete_resp.refresh_token.encode()).hexdigest()
+    async with db_factory() as session:
+        row = (
+            await session.execute(select(DeviceToken).where(DeviceToken.user_id == 77))
+        ).scalar_one()
+    assert row.refresh_token_hash == expected_hash
+
+
+@pytest.mark.asyncio
+async def test_token_refresh_uses_indexed_hash_fast_path(db_factory, settings, fake_redis, fake_request):
+    """token_refresh finds the row via refresh_token_hash without needing to decrypt any other row."""
+    from daily.auth.router import CompleteRequest, RefreshRequest, pair_complete, token_refresh
+
+    # Seed several decoy devices plus the target device — if the fast path
+    # regressed to a full scan, this would still pass; the point is that the
+    # hash-matched row is the one and only one returned by the indexed query.
+    for uid in (81, 82, 83):
+        code = await _seed_pairing_code(db_factory, user_id=uid)
+        async with db_factory() as session:
+            await pair_complete(
+                fake_request, CompleteRequest(code=code), session=session, settings=settings, redis=fake_redis
+            )
+
+    code = await _seed_pairing_code(db_factory, user_id=84)
+    async with db_factory() as session:
+        complete_resp = await pair_complete(
+            fake_request, CompleteRequest(code=code), session=session, settings=settings, redis=fake_redis
+        )
+
+    async with db_factory() as session:
+        resp = await token_refresh(
+            RefreshRequest(refresh_token=complete_resp.refresh_token), session=session, settings=settings
+        )
+    assert resp.access_token
+
+
+@pytest.mark.asyncio
+async def test_token_refresh_falls_back_to_legacy_null_hash_row(db_factory, settings):
+    """A pre-migration DeviceToken row (refresh_token_hash=NULL) is still refreshable.
+
+    Simulates a device paired before the refresh_token_hash column existed.
+    token_refresh must fall back to decrypting NULL-hash rows to find a
+    match, then backfill the hash so the next refresh hits the fast path.
+    """
+    import hashlib
+    from sqlalchemy import select
+    from daily.auth.router import RefreshRequest, token_refresh
+    from daily.vault.crypto import encrypt_token, load_vault_key
+
+    raw_refresh = "legacy-raw-refresh-token-value"
+    key = load_vault_key(settings.vault_key)
+
+    async with db_factory() as session:
+        session.add(User(id=91))
+        session.add(
+            DeviceToken(
+                user_id=91,
+                encrypted_refresh_token=encrypt_token(raw_refresh, key),
+                refresh_token_hash=None,  # pre-migration row
+                expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+                revoked=False,
+            )
+        )
+        await session.commit()
+
+    async with db_factory() as session:
+        resp = await token_refresh(RefreshRequest(refresh_token=raw_refresh), session=session, settings=settings)
+    assert resp.access_token
+
+    expected_hash = hashlib.sha256(raw_refresh.encode()).hexdigest()
+    async with db_factory() as session:
+        row = (
+            await session.execute(select(DeviceToken).where(DeviceToken.user_id == 91))
+        ).scalar_one()
+    assert row.refresh_token_hash == expected_hash
+
+
+@pytest.mark.asyncio
+async def test_token_refresh_legacy_null_hash_row_wrong_token_raises_401(db_factory, settings):
+    """A NULL-hash row that doesn't match the presented token still results in 401."""
+    from fastapi import HTTPException
+    from daily.auth.router import RefreshRequest, token_refresh
+    from daily.vault.crypto import encrypt_token, load_vault_key
+
+    key = load_vault_key(settings.vault_key)
+
+    async with db_factory() as session:
+        session.add(User(id=92))
+        session.add(
+            DeviceToken(
+                user_id=92,
+                encrypted_refresh_token=encrypt_token("some-other-token", key),
+                refresh_token_hash=None,
+                expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+                revoked=False,
+            )
+        )
+        await session.commit()
+
+    async with db_factory() as session:
+        with pytest.raises(HTTPException) as exc:
+            await token_refresh(RefreshRequest(refresh_token="wrong-token"), session=session, settings=settings)
+        assert exc.value.status_code == 401

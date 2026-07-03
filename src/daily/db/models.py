@@ -96,6 +96,11 @@ class DeviceToken(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     device_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     encrypted_refresh_token: Mapped[str] = mapped_column(Text)
+    # SHA-256 hex digest of the raw (unencrypted) refresh token (audit C4).
+    # Enables an indexed lookup in /auth/token/refresh instead of a full-table
+    # decrypt scan. Nullable — existing rows are backfilled lazily on next
+    # successful refresh (see migration 009_add_refresh_token_hash).
+    refresh_token_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(

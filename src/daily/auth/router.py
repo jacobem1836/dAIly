@@ -1,4 +1,5 @@
 """Auth endpoints: pairing + token refresh (Phase 18, D-01..D-04)."""
+import hashlib
 import hmac
 import logging
 from datetime import datetime, timedelta, timezone
@@ -40,6 +41,18 @@ _TOKEN_REFRESH_RATE_LIMIT = RateLimiter("token_refresh", limit=20, window_second
 # (unused, unexpired) pairing codes — forces re-issuance rather than letting
 # an attacker keep guessing against a live window.
 _MAX_FAILED_PAIR_ATTEMPTS = 5
+
+
+def _hash_refresh_token(raw_token: str) -> str:
+    """SHA-256 hex digest of a raw refresh token (audit C4).
+
+    Stored alongside the encrypted ciphertext so /auth/token/refresh can do
+    an indexed equality lookup instead of decrypting every device token in
+    the table. Not a secret itself (one-way, and the raw token is required
+    to derive it) so plain SHA-256 is sufficient here — this is a lookup
+    key, not a password hash.
+    """
+    return hashlib.sha256(raw_token.encode()).hexdigest()
 
 
 async def _get_db() -> AsyncSession:
@@ -197,6 +210,7 @@ async def pair_complete(
         user_id=user_id,
         device_name=body.device_name,
         encrypted_refresh_token=encrypted,
+        refresh_token_hash=_hash_refresh_token(refresh),
         expires_at=expires_at,
     )
     session.add(dt)
@@ -220,16 +234,33 @@ async def token_refresh(
     session: AsyncSession = Depends(_get_db),
     settings: Settings = Depends(_get_settings),
 ) -> RefreshResponse:
+    """Exchange a refresh token for a new access token.
+
+    Audit C4 fix: previously this scanned every unrevoked, unexpired
+    DeviceToken row and AES-decrypted each one in a Python loop to find a
+    match — O(all devices) per call. Now does an indexed lookup by
+    refresh_token_hash (SHA-256 of the raw token) first, decrypting only
+    the single matched row to confirm via constant-time compare.
+
+    Legacy rows created before refresh_token_hash existed have it as NULL
+    (the hash can't be derived from ciphertext without decrypting first).
+    Those fall back to the old per-row scan, but ONLY among NULL-hash rows
+    — and a successful match backfills the hash so the device hits the
+    fast indexed path on every subsequent refresh.
+    """
     now = datetime.now(timezone.utc)
-    # Scan unrevoked, unexpired tokens; decrypt and compare.
-    # Acceptable for v1.4 scale; for higher scale, store a hash alongside ciphertext.
+    key = load_vault_key(settings.vault_key)
+    target_hash = _hash_refresh_token(body.refresh_token)
+
+    # Fast path: indexed lookup by refresh_token_hash.
     stmt = select(DeviceToken).where(
+        DeviceToken.refresh_token_hash == target_hash,
         DeviceToken.revoked.is_(False),
         DeviceToken.expires_at > now,
     )
     result = await session.execute(stmt)
-    key = load_vault_key(settings.vault_key)
-    for dt in result.scalars():
+    dt = result.scalar_one_or_none()
+    if dt is not None:
         try:
             if hmac.compare_digest(decrypt_token(dt.encrypted_refresh_token, key), body.refresh_token):
                 dt.last_used_at = now
@@ -240,7 +271,34 @@ async def token_refresh(
                     expires_in=settings.jwt_access_ttl_minutes * 60,
                 )
         except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or revoked refresh token",
+        )
+
+    # Fallback: legacy rows with no hash yet (nullable, backfilled lazily).
+    # Scans only NULL-hash rows, never the whole table.
+    legacy_stmt = select(DeviceToken).where(
+        DeviceToken.refresh_token_hash.is_(None),
+        DeviceToken.revoked.is_(False),
+        DeviceToken.expires_at > now,
+    )
+    legacy_result = await session.execute(legacy_stmt)
+    for legacy_dt in legacy_result.scalars():
+        try:
+            if hmac.compare_digest(decrypt_token(legacy_dt.encrypted_refresh_token, key), body.refresh_token):
+                legacy_dt.last_used_at = now
+                legacy_dt.refresh_token_hash = target_hash
+                await session.commit()
+                access = encode_access_token(legacy_dt.user_id, settings)
+                return RefreshResponse(
+                    access_token=access,
+                    expires_in=settings.jwt_access_ttl_minutes * 60,
+                )
+        except Exception:
             continue
+
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid or revoked refresh token",
