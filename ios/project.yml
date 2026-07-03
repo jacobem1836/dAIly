@@ -31,7 +31,7 @@ targets:
           - UIInterfaceOrientationPortrait
         UIBackgroundModes: [audio]
         NSMicrophoneUsageDescription: "dAIly uses your microphone for the voice briefing."
-        NSLocalNetworkUsageDescription: "dAIly connects to your local LiveKit dev server."
+        NSLocalNetworkUsageDescription: "dAIly uses your local network to establish a fast, low-latency connection for real-time voice conversations."
         DailyBackendBaseURL: "$(DAILY_BACKEND_BASE_URL)"
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false

@@ -23,7 +23,7 @@
 	<key>DailyBackendBaseURL</key>
 	<string>$(DAILY_BACKEND_BASE_URL)</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>dAIly connects to your local LiveKit dev server.</string>
+	<string>dAIly uses your local network to establish a fast, low-latency connection for real-time voice conversations.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>dAIly uses your microphone for the voice briefing.</string>
 	<key>UIApplicationSceneManifest</key>
