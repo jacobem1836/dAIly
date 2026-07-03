@@ -865,7 +865,6 @@ async def _log_action(
                 user_id=state.active_user_id,
                 action_type=action.action_type.value,
                 target=target,
-                content_summary=action.body,
                 full_body=action.body,
                 approval_status=status,
                 outcome=outcome,

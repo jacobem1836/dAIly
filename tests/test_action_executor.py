@@ -216,13 +216,25 @@ class TestActionLogORM:
             "user_id",
             "action_type",
             "target",
-            "content_summary",
             "body_hash",
             "approval_status",
             "outcome",
             "created_at",
         }
         assert required.issubset(cols)
+
+    def test_action_log_does_not_store_content_summary(self):
+        """ActionLog no longer has a content_summary column (audit M-1).
+
+        content_summary previously stored the first 200 chars of the raw
+        outgoing body in plaintext, permanently — contradicting the "no raw
+        bodies stored" constraint. Nothing read it; body_hash covers
+        audit/integrity needs, so it was dropped.
+        """
+        from daily.actions.models import ActionLog
+
+        cols = {c.key for c in ActionLog.__table__.columns}
+        assert "content_summary" not in cols
 
     def test_approval_status_enum_values(self):
         """ApprovalStatus enum has pending, approved, rejected."""

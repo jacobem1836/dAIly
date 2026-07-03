@@ -1,14 +1,12 @@
 """Tests for append_action_log() service function.
 
-TDD RED phase — tests must fail until log.py is implemented.
-
 Tests:
 - SHA-256 body_hash matches hashlib output
-- content_summary truncated to 200 chars
-- Long body stores only first 200 chars in content_summary
+- full_body is never persisted onto the row (audit M-1: no content_summary
+  or any other plaintext/truncated body field is stored — only body_hash)
 """
 import hashlib
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,7 +26,6 @@ async def test_body_hash_is_sha256_of_full_body():
         user_id=1,
         action_type="draft_email",
         target="bob@example.com",
-        content_summary=full_body[:200],
         full_body=full_body,
         approval_status="approved",
         outcome="sent",
@@ -39,55 +36,6 @@ async def test_body_hash_is_sha256_of_full_body():
     row = session.add.call_args[0][0]
     assert isinstance(row, ActionLog)
     assert row.body_hash == expected_hash
-
-
-@pytest.mark.asyncio
-async def test_content_summary_truncated_to_200_chars():
-    """append_action_log truncates content_summary to 200 chars."""
-    from daily.actions.log import append_action_log
-    from daily.actions.models import ActionLog
-
-    session = AsyncMock(spec=AsyncSession)
-    long_summary = "A" * 500
-
-    await append_action_log(
-        user_id=1,
-        action_type="draft_email",
-        target="alice@example.com",
-        content_summary=long_summary,
-        full_body=long_summary,
-        approval_status="approved",
-        outcome=None,
-        session=session,
-    )
-
-    row = session.add.call_args[0][0]
-    assert len(row.content_summary) == 200
-    assert row.content_summary == "A" * 200
-
-
-@pytest.mark.asyncio
-async def test_content_summary_short_body_stored_as_is():
-    """append_action_log stores content_summary unchanged when under 200 chars."""
-    from daily.actions.log import append_action_log
-    from daily.actions.models import ActionLog
-
-    session = AsyncMock(spec=AsyncSession)
-    short_body = "Short message"
-
-    await append_action_log(
-        user_id=1,
-        action_type="draft_message",
-        target="C01GENERAL",
-        content_summary=short_body,
-        full_body=short_body,
-        approval_status="rejected",
-        outcome=None,
-        session=session,
-    )
-
-    row = session.add.call_args[0][0]
-    assert row.content_summary == short_body
 
 
 @pytest.mark.asyncio
@@ -104,7 +52,6 @@ async def test_body_hash_matches_hashlib_sha256():
         user_id=42,
         action_type="compose_email",
         target="ceo@example.com",
-        content_summary=body[:200],
         full_body=body,
         approval_status="approved",
         outcome="sent",
@@ -114,6 +61,38 @@ async def test_body_hash_matches_hashlib_sha256():
     row = session.add.call_args[0][0]
     assert row.body_hash == expected
     assert len(row.body_hash) == 64  # SHA-256 hex = 64 chars
+
+
+@pytest.mark.asyncio
+async def test_append_action_log_never_persists_raw_body_or_summary():
+    """append_action_log's ActionLog row has no attribute holding the raw body text.
+
+    Audit M-1 regression guard: previously content_summary stored the first
+    200 chars of the raw body in plaintext. Assert the persisted row has no
+    column value equal to (or containing) the full body text.
+    """
+    from daily.actions.log import append_action_log
+    from daily.actions.models import ActionLog
+
+    session = AsyncMock(spec=AsyncSession)
+    full_body = "Secret meeting notes: the acquisition closes Friday."
+
+    await append_action_log(
+        user_id=1,
+        action_type="draft_email",
+        target="alice@example.com",
+        full_body=full_body,
+        approval_status="approved",
+        outcome=None,
+        session=session,
+    )
+
+    row = session.add.call_args[0][0]
+    assert not hasattr(row, "content_summary")
+    for column in ActionLog.__table__.columns:
+        value = getattr(row, column.key, None)
+        if isinstance(value, str):
+            assert full_body not in value
 
 
 @pytest.mark.asyncio
@@ -127,7 +106,6 @@ async def test_append_action_log_commits_session():
         user_id=1,
         action_type="draft_email",
         target="test@example.com",
-        content_summary="Test",
         full_body="Test body",
         approval_status="pending",
         outcome=None,
@@ -149,7 +127,6 @@ async def test_action_log_row_stores_correct_fields():
         user_id=7,
         action_type="schedule_event",
         target="evt-001",
-        content_summary="Team sync",
         full_body="Team sync at 9am",
         approval_status="approved",
         outcome="sent",
