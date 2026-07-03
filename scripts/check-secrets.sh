@@ -49,7 +49,8 @@ check_pattern \
 check_pattern \
   'REPLACE_TURN_SECRET|REPLACE_DOMAIN' \
   'an unsubstituted coturn placeholder outside its source template' \
-  'turnserver.conf' 'scripts/check-secrets.sh' 'scripts/coturn-entrypoint.sh' '.planning/' '.env.example'
+  'turnserver.conf' 'scripts/check-secrets.sh' 'scripts/coturn-entrypoint.sh' '.planning/' '.env.example' \
+  'docs/deployment/ops-runbook.md'
 
 check_pattern \
   '\bsk-[A-Za-z0-9_-]{20,}\b' \
