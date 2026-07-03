@@ -6,6 +6,7 @@ import XCTest
 ///
 /// These tests drive the step machine directly — no SwiftUI rendering required.
 /// Mirrors the style of IntegrationStateTests.swift.
+@MainActor
 final class OnboardingFlowTests: XCTestCase {
 
     private var coordinator: OnboardingCoordinator!
