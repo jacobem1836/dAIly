@@ -12,6 +12,7 @@ struct ConnectionIndicator: View {
                 Circle()
                     .stroke(circleColor.opacity(0.12), lineWidth: 2)
                     .frame(width: 144, height: 144)
+                    .accessibilityHidden(true)
 
                 // Pulse ring — animates outward when connecting/reconnecting.
                 Circle()
@@ -24,11 +25,13 @@ struct ConnectionIndicator: View {
                             : .default,
                         value: pulseActive
                     )
+                    .accessibilityHidden(true)
 
                 // Main circle.
                 Circle()
                     .fill(circleColor)
                     .frame(width: 96, height: 96)
+                    .accessibilityHidden(true)
             }
 
             Text(label)
@@ -37,6 +40,12 @@ struct ConnectionIndicator: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 240)
         }
+        // Expose the whole indicator as a single accessibility element with
+        // the status label as its value, instead of VoiceOver reading three
+        // unlabeled decorative circles plus the text separately.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Voice status")
+        .accessibilityValue(label)
     }
 
     // MARK: - Derived Properties
