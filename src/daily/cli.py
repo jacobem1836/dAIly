@@ -46,6 +46,7 @@ async def _upsert_profile(user_id: int, key: str, value: str) -> str:
     Supported keys: tone, briefing_length, category_order (T-03-09: validated before DB write)
     """
     from daily.db.engine import async_session
+    from daily.profile.models import VALID_CATEGORIES
     from daily.profile.service import upsert_preference
 
     valid_keys = {"tone", "briefing_length", "category_order"}
@@ -56,6 +57,19 @@ async def _upsert_profile(user_id: int, key: str, value: str) -> str:
         return f"Invalid tone: {value}. Must be: formal, casual, conversational"
     if key == "briefing_length" and value not in ("concise", "standard", "detailed"):
         return f"Invalid briefing_length: {value}. Must be: concise, standard, detailed"
+    if key == "category_order":
+        # Audit M-4: category_order is joined straight into the narrator
+        # LLM's system prompt — reject unknown categories before the DB
+        # write, same as tone/briefing_length above. upsert_preference()
+        # enforces this too (the actual persistence boundary), but failing
+        # fast here avoids opening a DB session for known-bad input.
+        items = [item.strip() for item in value.split(",")]
+        invalid = [item for item in items if item not in VALID_CATEGORIES]
+        if invalid:
+            return (
+                f"Invalid category_order value(s): {', '.join(invalid)}. "
+                f"Valid categories: {', '.join(sorted(VALID_CATEGORIES))}"
+            )
 
     async with async_session() as session:
         await upsert_preference(user_id, key, value, session)

@@ -29,6 +29,17 @@ class UserProfile(Base):
     )
 
 
+# Audit M-4: canonical set of briefing sections. category_order was
+# previously unvalidated free text that gets joined straight into the
+# narrator LLM's system prompt (see briefing/narrator.py -
+# build_narrator_system_prompt's "Section order: {order}" preamble) — any
+# value outside this set must be rejected before it is persisted or used,
+# rather than trusted as arbitrary prompt content. Matches the three actual
+# briefing sections the narrator prompt structures its output around
+# (emails / calendar / slack — see narrator.py's NARRATOR_SYSTEM_PROMPT).
+VALID_CATEGORIES: frozenset[str] = frozenset({"emails", "calendar", "slack"})
+
+
 class UserPreferences(BaseModel):
     """Typed view of the JSONB preferences blob stored in UserProfile.
 

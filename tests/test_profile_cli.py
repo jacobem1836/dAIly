@@ -126,6 +126,26 @@ class TestConfigSetProfileCategoryOrder:
             user_id=1, key="category_order", value="calendar,emails,slack"
         )
 
+    @pytest.mark.asyncio
+    async def test_upsert_profile_rejects_unknown_category_without_db_write(self):
+        """_upsert_profile (real, unmocked) rejects an unrecognised category_order item.
+
+        Audit M-4: category_order is joined straight into the narrator LLM's
+        system prompt — an unknown value must be rejected with a clear error
+        string (matching the tone/briefing_length validation pattern) before
+        any DB session is opened.
+        """
+        from daily.cli import _upsert_profile
+
+        with patch("daily.db.engine.async_session") as mock_async_session:
+            result = await _upsert_profile(
+                user_id=1, key="category_order", value="emails,dropbox,slack"
+            )
+
+        assert "invalid" in result.lower()
+        assert "dropbox" in result
+        mock_async_session.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # config set unknown profile key
