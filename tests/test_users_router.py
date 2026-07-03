@@ -183,11 +183,13 @@ async def test_integration_status_no_auth(client):
 
 @pytest.mark.asyncio
 async def test_update_preferences(client, auth_user):
-    """USR-02: PUT /users/me/preferences upserts BriefingConfig with UTC conversion.
+    """USR-02: PUT /users/me/preferences upserts BriefingConfig with LOCAL time + tz.
 
-    07:00 Australia/Brisbane (UTC+10, no DST) => 21:00 UTC previous logical day,
-    i.e., utc_hour=21, utc_minute=0.  Use ZoneInfo to compute expected values
-    in the test so the assertion is DST-correct regardless of test run date.
+    Audit M1 fix: schedule_hour/schedule_minute now store the LOCAL wall-clock
+    time verbatim (not a UTC-converted value computed once at write time) —
+    APScheduler's CronTrigger resolves them against the stored timezone on
+    every fire, so DST transitions are handled correctly (see
+    users/router.py::_parse_local_hm and scheduler.setup_scheduler_for_user).
     """
     from daily.db.models import BriefingConfig
 
@@ -196,16 +198,6 @@ async def test_update_preferences(client, auth_user):
     tz_name = "Australia/Brisbane"
     local_time = "07:00"
 
-    # Compute expected UTC values the same way the endpoint does
-    from datetime import datetime, timezone as _tz
-
-    tz = ZoneInfo(tz_name)
-    h, m = 7, 0
-    local_now = datetime.now(tz).replace(hour=h, minute=m, second=0, microsecond=0)
-    utc = local_now.astimezone(_tz.utc)
-    expected_hour = utc.hour
-    expected_minute = utc.minute
-
     r = await ac.put(
         "/users/me/preferences",
         json={"briefing_time": local_time, "timezone": tz_name},
@@ -213,7 +205,7 @@ async def test_update_preferences(client, auth_user):
     )
     assert r.status_code == 204, r.text
 
-    # Verify DB row
+    # Verify DB row — local hour/minute stored as-is, not UTC-converted.
     async with db() as s:
         result = await s.execute(
             __import__("sqlalchemy", fromlist=["select"]).select(BriefingConfig).where(
@@ -221,8 +213,8 @@ async def test_update_preferences(client, auth_user):
             )
         )
         config = result.scalar_one()
-        assert config.schedule_hour == expected_hour
-        assert config.schedule_minute == expected_minute
+        assert config.schedule_hour == 7
+        assert config.schedule_minute == 0
         assert config.timezone == tz_name
 
     # Second PUT with different time — should upsert (no duplicate row)
@@ -242,6 +234,44 @@ async def test_update_preferences(client, auth_user):
             )
         )
         assert count_result.scalar() == 1, "Expected exactly one BriefingConfig row (upsert)"
+
+
+@pytest.mark.asyncio
+async def test_update_preferences_live_reschedules_running_job(client, auth_user, monkeypatch):
+    """USR-02 / audit M1: PUT /users/me/preferences reschedules the live APScheduler
+    job immediately, instead of only writing to the DB and waiting for a restart.
+
+    Fails without the fix (setup_scheduler_for_user is never called from the
+    endpoint) and passes with it.
+    """
+    import daily.users.router as users_router_module
+
+    called_with = {}
+
+    def _fake_setup_scheduler_for_user(hour, minute, user_id, timezone="UTC"):
+        called_with["hour"] = hour
+        called_with["minute"] = minute
+        called_with["user_id"] = user_id
+        called_with["timezone"] = timezone
+
+    monkeypatch.setattr(
+        users_router_module, "setup_scheduler_for_user", _fake_setup_scheduler_for_user
+    )
+
+    ac, _ = client
+    r = await ac.put(
+        "/users/me/preferences",
+        json={"briefing_time": "06:15", "timezone": "Australia/Brisbane"},
+        headers=_bearer(auth_user),
+    )
+    assert r.status_code == 204, r.text
+
+    assert called_with == {
+        "hour": 6,
+        "minute": 15,
+        "user_id": auth_user,
+        "timezone": "Australia/Brisbane",
+    }
 
 
 @pytest.mark.asyncio

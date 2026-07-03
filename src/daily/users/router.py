@@ -1,5 +1,4 @@
 """Per-user preferences and integration-status endpoints (Phase 21)."""
-from datetime import datetime, timezone as _tz
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daily.auth.deps import get_current_user
+from daily.briefing.scheduler import setup_scheduler_for_user
 from daily.db.engine import async_session
 from daily.db.models import BriefingConfig, IntegrationToken, User
 
@@ -79,19 +79,28 @@ class PreferencesUpdateRequest(BaseModel):
         return v
 
 
-def _local_to_utc_hm(time_str: str, tz_name: str) -> tuple[int, int]:
-    """Convert local HH:MM + IANA timezone to UTC (hour, minute).
+def _parse_local_hm(time_str: str, tz_name: str) -> tuple[int, int]:
+    """Validate the IANA timezone and parse HH:MM into (hour, minute).
+
+    Audit M1 fix: this used to convert local HH:MM to a fixed UTC hour/minute
+    at write time (see git history for `_local_to_utc_hm`). That fixed UTC
+    value goes stale the moment the local zone crosses a DST boundary — e.g. a
+    7am Sydney briefing computed as 21:00 UTC (prev day) during AEST silently
+    fires at 8am local once AEDT starts, because the stored UTC hour never
+    changes. Storing the LOCAL hour/minute + IANA timezone instead, and
+    letting APScheduler's CronTrigger resolve them against that zone on every
+    fire (see scheduler.setup_scheduler_for_user), makes DST handling correct
+    by construction — the timezone rule lives in one place (zoneinfo), not
+    baked into a stale offset.
 
     Raises HTTPException 422 for unknown timezone strings.
     """
     try:
-        tz = ZoneInfo(tz_name)
+        ZoneInfo(tz_name)
     except ZoneInfoNotFoundError as exc:
         raise HTTPException(status_code=422, detail=f"Unknown timezone: {tz_name}") from exc
     h, m = map(int, time_str.split(":"))
-    local_now = datetime.now(tz).replace(hour=h, minute=m, second=0, microsecond=0)
-    utc = local_now.astimezone(_tz.utc)
-    return utc.hour, utc.minute
+    return h, m
 
 
 @router.put("/me/preferences", status_code=204)
@@ -100,13 +109,22 @@ async def update_preferences(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(_get_db),
 ) -> None:
-    """Upsert BriefingConfig with UTC-converted schedule time + IANA timezone.
+    """Upsert BriefingConfig with LOCAL schedule time + IANA timezone (DST-safe).
 
-    Converts the user-supplied local briefing time to UTC using zoneinfo.ZoneInfo.
-    Stores the IANA timezone string verbatim for display/DST purposes.
+    Stores the user-supplied briefing time as-is (local wall-clock hour/minute)
+    alongside the IANA timezone string — see _parse_local_hm for why this
+    replaced the previous "convert to UTC at write time" approach (audit M1:
+    that approach went stale across DST transitions).
+
+    Audit M1 fix: also live-reschedules the running APScheduler job right
+    after the DB commit, via setup_scheduler_for_user. Previously this endpoint
+    only wrote to the DB — the in-process scheduler kept firing at the OLD
+    time until the next app restart, so a changed briefing time silently had
+    no effect until someone happened to redeploy.
+
     Returns 204 No Content on success; 422 if timezone is unknown.
     """
-    utc_hour, utc_minute = _local_to_utc_hm(body.briefing_time, body.timezone)
+    hour, minute = _parse_local_hm(body.briefing_time, body.timezone)
 
     result = await session.execute(
         select(BriefingConfig).where(BriefingConfig.user_id == current_user.id)
@@ -115,8 +133,13 @@ async def update_preferences(
     if config is None:
         config = BriefingConfig(user_id=current_user.id)
         session.add(config)
-    config.schedule_hour = utc_hour
-    config.schedule_minute = utc_minute
+    config.schedule_hour = hour
+    config.schedule_minute = minute
     config.timezone = body.timezone
     await session.commit()
+
+    # Live reschedule (audit M1) — apply immediately, no app restart required.
+    setup_scheduler_for_user(
+        hour=hour, minute=minute, user_id=current_user.id, timezone=body.timezone
+    )
     return None
