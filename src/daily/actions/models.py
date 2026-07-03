@@ -47,7 +47,7 @@ class ActionLog(Base):
     __tablename__ = "action_log"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     action_type: Mapped[str] = mapped_column(String(50))
     target: Mapped[str] = mapped_column(String(500))
     content_summary: Mapped[str] = mapped_column(Text)

@@ -24,7 +24,7 @@ class IntegrationToken(Base):
     __tablename__ = "integration_tokens"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     provider: Mapped[str] = mapped_column(String(50))
     encrypted_access_token: Mapped[str] = mapped_column(Text)
     encrypted_refresh_token: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -79,7 +79,7 @@ class PairingCode(Base):
     __tablename__ = "pairing_codes"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     code: Mapped[str] = mapped_column(String(6), index=True)
     used: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -93,7 +93,7 @@ class DeviceToken(Base):
     __tablename__ = "device_tokens"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     device_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     encrypted_refresh_token: Mapped[str] = mapped_column(Text)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
