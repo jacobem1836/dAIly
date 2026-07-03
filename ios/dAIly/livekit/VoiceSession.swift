@@ -53,6 +53,10 @@ public final class VoiceSession: ObservableObject {
     private var agentJoinTimeoutTask: Task<Void, Never>?
     private var reconnectTimeoutTask: Task<Void, Never>?
 
+    /// How long to wait, after the room connects, for the agent to join and
+    /// start speaking before surfacing an actionable error (T-22-01).
+    private static let agentJoinTimeout: Duration = .seconds(20)
+
     public init(tokenSource: LiveKitTokenSource,
                 auth: AuthService,
                 keychain: KeychainStore = .shared) {
@@ -169,13 +173,14 @@ public final class VoiceSession: ObservableObject {
             reconnectTimeoutTask?.cancel()
             reconnectTimeoutTask = nil
             state = .listening
-            // 15-second agent-join timeout: if no agent participant speaks within
-            // 15s of the room connecting, surface an actionable error. This guards
-            // against the worker not running or pointing at a different LiveKit
-            // server — without this the UI stays in .listening forever (T-22-01).
+            // Agent-join timeout: if no agent participant speaks within
+            // Self.agentJoinTimeout of the room connecting, surface an actionable
+            // error. This guards against the worker not running or pointing at a
+            // different LiveKit server — without this the UI stays in .listening
+            // forever (T-22-01).
             agentJoinTimeoutTask?.cancel()
             agentJoinTimeoutTask = Task { [weak self] in
-                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                try? await Task.sleep(for: Self.agentJoinTimeout)
                 await MainActor.run { [weak self] in
                     guard let self else { return }
                     if case .listening = self.state {
