@@ -19,7 +19,10 @@ Architecture:
     concern) and the write-only BriefingConfig.email_top_n / slack_channels fields
     (audit C1).
   - `_scheduled_pipeline_run(user_id)`: cron job entry point; calls
-    _build_pipeline_kwargs then run_briefing_pipeline.
+    _build_pipeline_kwargs then run_briefing_pipeline. Guarded by a
+    Redis-backed distributed lock (audit M2) so that if the API scales to
+    multiple replicas, only one replica actually runs a given user's
+    pipeline per day — the others skip, avoiding duplicate OpenAI spend.
   - `setup_token_refresh_job()` / `_run_token_refresh_job()`: periodic job that
     proactively refreshes expiring Google/Microsoft OAuth tokens (audit C2) —
     without this, Outlook/Graph calls 401 forever once the access token expires,
@@ -30,6 +33,7 @@ adapters. Tokens are never logged. OpenAI API key read from Settings (env var on
 """
 
 import logging
+import secrets
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -50,6 +54,46 @@ scheduler = AsyncIOScheduler(timezone="UTC")
 
 # How often the proactive token-refresh job runs (audit C2).
 TOKEN_REFRESH_INTERVAL_MINUTES = 30
+
+# TTL for the distributed run-lock (audit M2). Comfortably longer than a
+# single briefing pipeline run should ever take, so a crashed holder doesn't
+# permanently wedge the lock for the rest of the day.
+BRIEFING_LOCK_TTL_SECONDS = 30 * 60
+
+
+async def _try_acquire_run_lock(lock_key: str, ttl_seconds: int, settings: Settings) -> bool:
+    """Attempt to acquire a short-lived distributed lock via Redis SET NX EX.
+
+    Audit M2: if the API scales to >1 replica, every replica's APScheduler
+    would otherwise fire the same cron job at the same time, duplicating
+    OpenAI spend (and, for the token-refresh job, racing writes). Only the
+    replica that wins the SET NX EX proceeds; others skip this run.
+
+    Fails OPEN: if Redis is unreachable, this returns True (lock "acquired")
+    so a single-replica deployment — or a transient Redis outage — never
+    silently skips a scheduled briefing. The lock is a multi-replica
+    optimization, not a correctness requirement for the common case.
+
+    Args:
+        lock_key: Redis key, e.g. "lock:briefing:{user_id}:{utc_date}".
+        ttl_seconds: Lock TTL — must outlive the guarded work.
+        settings: Application settings (for redis_url).
+
+    Returns:
+        True if this caller should proceed with the guarded work.
+    """
+    redis = Redis.from_url(settings.redis_url)
+    try:
+        token = secrets.token_hex(16)
+        acquired = await redis.set(lock_key, token, nx=True, ex=ttl_seconds)
+        return bool(acquired)
+    except Exception:
+        logger.warning(
+            "Distributed lock unavailable for %s; proceeding without it", lock_key
+        )
+        return True
+    finally:
+        await redis.aclose()
 
 
 async def _build_pipeline_kwargs(user_id: int, settings: Settings) -> dict:
@@ -180,10 +224,25 @@ async def _scheduled_pipeline_run(user_id: int) -> None:
     calls run_briefing_pipeline. This is the bridge between the scheduler
     (which only knows user_id) and the pipeline (which needs everything).
 
+    Audit M2: guarded by a per-user, per-day distributed lock so that if
+    the API scales to multiple replicas, only one actually runs the
+    pipeline (avoiding duplicate OpenAI spend). See _try_acquire_run_lock.
+
     Redis connection created in _build_pipeline_kwargs is closed in finally
     to avoid connection leaks.
     """
+    from datetime import datetime, timezone  # noqa: PLC0415
+
     settings = Settings()
+    utc_date = datetime.now(timezone.utc).date().isoformat()
+    lock_key = f"lock:briefing:{user_id}:{utc_date}"
+    if not await _try_acquire_run_lock(lock_key, BRIEFING_LOCK_TTL_SECONDS, settings):
+        logger.info(
+            "Skipping scheduled briefing for user %d — lock held by another replica",
+            user_id,
+        )
+        return
+
     kwargs: dict = {}
     try:
         kwargs = await _build_pipeline_kwargs(user_id, settings)
@@ -285,11 +344,28 @@ async def _run_token_refresh_job() -> None:
     Failures for individual tokens are handled inside refresh_expiring_tokens
     (T-1-21) and never raise here; a failure to even load the vault key is
     caught so a bad/missing VAULT_KEY doesn't crash the scheduler thread.
+
+    Audit M2: also guarded by the distributed lock. A double-run here is
+    mostly harmless (each replica just re-derives/re-writes the same
+    refreshed token), but the lock avoids two replicas racing a write to
+    the same IntegrationToken row for the duration of one refresh tick.
     """
+    from datetime import datetime, timezone  # noqa: PLC0415
+
     from daily.vault.crypto import load_vault_key
     from daily.vault.refresh import refresh_expiring_tokens
 
     settings = Settings()
+    # Bucketed by interval so overlapping replica ticks share one lock key;
+    # TTL is intentionally shorter than the interval so the lock always
+    # clears well before the next legitimate run is due.
+    tick_bucket = int(datetime.now(timezone.utc).timestamp() // (TOKEN_REFRESH_INTERVAL_MINUTES * 60))
+    lock_key = f"lock:token_refresh:{tick_bucket}"
+    lock_ttl = max(60, TOKEN_REFRESH_INTERVAL_MINUTES * 60 - 60)
+    if not await _try_acquire_run_lock(lock_key, lock_ttl, settings):
+        logger.info("Skipping token refresh job — lock held by another replica")
+        return
+
     try:
         vault_key = load_vault_key(settings.vault_key)
     except Exception:
