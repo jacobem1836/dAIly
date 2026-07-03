@@ -6,6 +6,20 @@ import pytest
 
 from daily.integrations.models import CalendarEvent, EmailMetadata, MessageMetadata
 
+# Global safe fallback for LiveKit credentials (security fix, wave 1 audit
+# remediation): daily.config.Settings now fails fast if LIVEKIT_API_KEY /
+# LIVEKIT_API_SECRET are missing OR match LiveKit's known-public quickstart
+# devkey/devsecret pair (see daily.config._require_critical_vars). The
+# project's local .env intentionally ships that quickstart pair for local
+# dev convenience, so any test that constructs Settings()/hits the app
+# without explicitly setting these two vars would otherwise trip that
+# guard. Real os.environ vars outrank the .env file in pydantic-settings'
+# source precedence, so this provides a safe, non-blocklisted fallback.
+# Tests that need their own values still win via monkeypatch.setenv, which
+# runs later (per-test) than this module-level statement (collection time).
+os.environ.setdefault("LIVEKIT_API_KEY", "test-fallback-livekit-key")
+os.environ.setdefault("LIVEKIT_API_SECRET", "test-fallback-livekit-secret-32ch")
+
 
 @pytest.fixture
 def vault_key() -> bytes:
