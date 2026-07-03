@@ -51,11 +51,21 @@ def _extract_email(header_value: str) -> str:
     return m.group(0) if m else header_value
 
 
+# Explicit timeout/max_retries (audit H7) so a slow or transiently-failing
+# OpenAI call can't hang a graph node indefinitely or abort on one blip.
+_OPENAI_CLIENT_TIMEOUT_SECONDS = 30
+_OPENAI_CLIENT_MAX_RETRIES = 2
+
+
 def _openai_client() -> AsyncOpenAI:
     """Build AsyncOpenAI with explicit key from Settings (never relies on env)."""
     from daily.config import Settings  # noqa: PLC0415
 
-    return AsyncOpenAI(api_key=Settings().openai_api_key)
+    return AsyncOpenAI(
+        api_key=Settings().openai_api_key,
+        timeout=_OPENAI_CLIENT_TIMEOUT_SECONDS,
+        max_retries=_OPENAI_CLIENT_MAX_RETRIES,
+    )
 
 
 # ---------------------------------------------------------------------------

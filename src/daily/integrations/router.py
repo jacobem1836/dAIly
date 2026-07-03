@@ -13,6 +13,7 @@ Security:
   T-21-03-07: Redirect target built from settings.magic_link_base_url (env-controlled).
   T-21-03-08: Microsoft stored as provider="outlook" to match existing CLI convention.
 """
+import asyncio
 import base64
 import hashlib
 import secrets
@@ -41,6 +42,15 @@ from daily.vault.crypto import encrypt_token, load_vault_key
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
 OAUTH_STATE_TTL_SECONDS = 600
+
+# Audit C3/H7: the code-exchange calls below (google_auth_oauthlib's
+# Flow.fetch_token, MSAL's acquire_token_by_authorization_code) are
+# synchronous/blocking — they make their own HTTP request under the hood
+# using the requests library, not httpx/asyncio. Run inside asyncio.to_thread
+# so a slow IdP response doesn't stall the shared event loop for every other
+# request, and bound it with asyncio.wait_for so a hanging IdP can't hold
+# this request open indefinitely either.
+OAUTH_TOKEN_EXCHANGE_TIMEOUT_SECONDS = 15
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +109,32 @@ async def _consume_oauth_state(redis: Redis, state: str) -> int:
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
     await redis.delete(f"oauth_state:{state}")
     return int(raw.decode() if isinstance(raw, bytes) else raw)
+
+
+async def _run_blocking_token_exchange(func, /, *args, **kwargs):
+    """Run a blocking OAuth code-exchange call off the event loop, with a timeout.
+
+    Audit C3/H7: Flow.fetch_token (google-auth-oauthlib) and MSAL's
+    acquire_token_by_authorization_code both make a synchronous HTTP request
+    internally — called directly inside an async handler, that would block
+    the entire event loop (every other in-flight request) for as long as the
+    IdP takes to respond. asyncio.to_thread offloads it to a worker thread;
+    asyncio.wait_for bounds how long this request waits for it.
+
+    Raises:
+        HTTPException 504: If the exchange does not complete within
+            OAUTH_TOKEN_EXCHANGE_TIMEOUT_SECONDS.
+    """
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(func, *args, **kwargs),
+            timeout=OAUTH_TOKEN_EXCHANGE_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail="OAuth token exchange timed out",
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +228,7 @@ async def google_callback(
     fetch_kwargs: dict = {"code": code}
     if code_verifier:
         fetch_kwargs["code_verifier"] = code_verifier
-    flow.fetch_token(**fetch_kwargs)
+    await _run_blocking_token_exchange(flow.fetch_token, **fetch_kwargs)
     creds = flow.credentials
 
     key = _vault_key(settings)
@@ -279,7 +315,8 @@ async def microsoft_callback(
 
     redirect_uri = f"{settings.magic_link_base_url}/integrations/microsoft/callback"
     msal_app = _msal_app(settings)
-    result = msal_app.acquire_token_by_authorization_code(
+    result = await _run_blocking_token_exchange(
+        msal_app.acquire_token_by_authorization_code,
         code,
         scopes=MICROSOFT_READONLY_SCOPES,
         redirect_uri=redirect_uri,

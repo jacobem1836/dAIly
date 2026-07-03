@@ -60,6 +60,13 @@ TOKEN_REFRESH_INTERVAL_MINUTES = 30
 # permanently wedge the lock for the rest of the day.
 BRIEFING_LOCK_TTL_SECONDS = 30 * 60
 
+# OpenAI client timeout/retry defaults (audit H7). Without these the SDK's
+# own (very long) defaults apply, so a slow/hanging OpenAI call could stall
+# a scheduled run far longer than acceptable, or abort outright on a single
+# transient network error.
+OPENAI_CLIENT_TIMEOUT_SECONDS = 30
+OPENAI_CLIENT_MAX_RETRIES = 2
+
 
 async def _try_acquire_run_lock(lock_key: str, ttl_seconds: int, settings: Settings) -> bool:
     """Attempt to acquire a short-lived distributed lock via Redis SET NX EX.
@@ -199,9 +206,15 @@ async def _build_pipeline_kwargs(user_id: int, settings: Settings) -> dict:
     async with async_session() as session:
         preferences = await load_profile(user_id, session)
 
-    # Create Redis and OpenAI clients
+    # Create Redis and OpenAI clients. Explicit timeout/max_retries (audit H7)
+    # so a slow or transiently-failing OpenAI call can't hang a scheduled run
+    # indefinitely or abort on the first blip.
     redis = Redis.from_url(settings.redis_url)
-    openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+    openai_client = AsyncOpenAI(
+        api_key=settings.openai_api_key,
+        timeout=OPENAI_CLIENT_TIMEOUT_SECONDS,
+        max_retries=OPENAI_CLIENT_MAX_RETRIES,
+    )
 
     return {
         "email_adapters": email_adapters,
