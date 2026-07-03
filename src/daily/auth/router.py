@@ -1,5 +1,6 @@
 """Auth endpoints: pairing + token refresh (Phase 18, D-01..D-04)."""
 import base64
+import hmac
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -202,7 +203,7 @@ async def token_refresh(
     key = base64.b64decode(settings.vault_key) if isinstance(settings.vault_key, str) else settings.vault_key
     for dt in result.scalars():
         try:
-            if decrypt_token(dt.encrypted_refresh_token, key) == body.refresh_token:
+            if hmac.compare_digest(decrypt_token(dt.encrypted_refresh_token, key), body.refresh_token):
                 dt.last_used_at = now
                 await session.commit()
                 access = encode_access_token(dt.user_id, settings)
