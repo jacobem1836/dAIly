@@ -21,6 +21,7 @@ struct dAIlyApp: App {
     init() {
         FirstLaunchCleanup.runIfNeeded()
         tokenRefresher = TokenRefresher(auth: auth)
+        MetricsReporter.shared.start()
     }
 
     var body: some Scene {
@@ -75,7 +76,7 @@ struct dAIlyApp: App {
                         to: nil, from: nil, for: nil
                     )
                 } catch {
-                    print("[dAIly] pair complete failed: \(error)")
+                    Self.logger.error("Pair complete failed: \(String(describing: error), privacy: .public)")
                 }
             }
         }

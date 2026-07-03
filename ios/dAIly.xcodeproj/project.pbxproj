@@ -13,6 +13,7 @@
 		1C262F97344F87E6F28A87A8 /* VoiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B119761300EB73F212A2134B /* VoiceView.swift */; };
 		1FEBD0F3DB93546D9C070F68 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07C798D6555FE9ABDBDB467D /* KeychainStore.swift */; };
 		233581FF4ED8736C505007C8 /* KeychainStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D6C857947FC8F86D4FDBF2 /* KeychainStoreTests.swift */; };
+		282DA3D43FE88B67AA050EF4 /* MetricsReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB7CF0DCF75C95FD5AAAE328 /* MetricsReporter.swift */; };
 		285344D647A52AE40434922A /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B87F815C25AF4CAF8C5C451 /* AppState.swift */; };
 		2F03D8B3DBD648780EE83606 /* PairCodeURLParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7C6DC5730F20B69F8FE9A10 /* PairCodeURLParser.swift */; };
 		329AA777AA8869BBBE5A8D48 /* AuthServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87A4A357CC8389F02A323D8A /* AuthServiceTests.swift */; };
@@ -96,6 +97,7 @@
 		CD11228C8AC0B4CFF3B70A1F /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
 		D27764E579A6DD44E12F443C /* OAuthCallbackParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthCallbackParserTests.swift; sourceTree = "<group>"; };
 		D7C6DC5730F20B69F8FE9A10 /* PairCodeURLParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairCodeURLParser.swift; sourceTree = "<group>"; };
+		DB7CF0DCF75C95FD5AAAE328 /* MetricsReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsReporter.swift; sourceTree = "<group>"; };
 		DE68B2AD91559DD5EFF536B9 /* OnboardingFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowTests.swift; sourceTree = "<group>"; };
 		ED48D3604DD5BE66A4FFFCF3 /* OnboardingKeychainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingKeychainTests.swift; sourceTree = "<group>"; };
 		F7D74E7100A5D1A77D37F239 /* ScheduleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleView.swift; sourceTree = "<group>"; };
@@ -150,6 +152,14 @@
 			path = auth;
 			sourceTree = "<group>";
 		};
+		4A96AC4E19FE65C11D2E6716 /* observability */ = {
+			isa = PBXGroup;
+			children = (
+				DB7CF0DCF75C95FD5AAAE328 /* MetricsReporter.swift */,
+			);
+			path = observability;
+			sourceTree = "<group>";
+		};
 		69A44BA341725C6D13E277D5 = {
 			isa = PBXGroup;
 			children = (
@@ -181,6 +191,7 @@
 				8D0EFACF3D90EC4968C089F1 /* PrivacyInfo.xcprivacy */,
 				4951E5F37A2F2B6446714ADA /* auth */,
 				CF120E0B0CC53F93FD3265D3 /* livekit */,
+				4A96AC4E19FE65C11D2E6716 /* observability */,
 				1D51BB90F43CBB3C243B1B18 /* onboarding */,
 				A11AF02E3C09B198098B87CA /* views */,
 			);
@@ -319,6 +330,7 @@
 				6A816971AB62199A6B306CFE /* IntegrationView.swift in Sources */,
 				1FEBD0F3DB93546D9C070F68 /* KeychainStore.swift in Sources */,
 				C5C621311DC61B6F0DC914C0 /* LiveKitTokenSource.swift in Sources */,
+				282DA3D43FE88B67AA050EF4 /* MetricsReporter.swift in Sources */,
 				37D221EB7FE5B70AB0A2BEF7 /* OAuthCallbackParser.swift in Sources */,
 				4FAB568E5AC1A3CB8C5A8B82 /* OnboardingCoordinator.swift in Sources */,
 				EE9F234FB7B96B1975796F74 /* OnboardingView.swift in Sources */,
