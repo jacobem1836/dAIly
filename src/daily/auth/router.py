@@ -40,15 +40,6 @@ class SendLinkRequest(BaseModel):
     email: EmailStr
 
 
-class InitiateRequest(BaseModel):
-    user_id: int
-
-
-class InitiateResponse(BaseModel):
-    code: str
-    expires_in: int
-
-
 class CompleteRequest(BaseModel):
     code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
     device_name: str | None = None
@@ -98,25 +89,6 @@ async def pair_send_link(
             str(exc),
         )
     return None
-
-
-@router.post("/pair/initiate", response_model=InitiateResponse)
-async def pair_initiate(
-    body: InitiateRequest,
-    session: AsyncSession = Depends(_get_db),
-) -> InitiateResponse:
-    # Auto-create user if missing (per Open Question 1 recommendation in RESEARCH.md)
-    user = await session.get(User, body.user_id)
-    if user is None:
-        user = User(id=body.user_id)
-        session.add(user)
-        await session.flush()
-
-    code = generate_pairing_code()
-    pc = PairingCode(user_id=user.id, code=code, expires_at=code_expiry())
-    session.add(pc)
-    await session.commit()
-    return InitiateResponse(code=code, expires_in=PAIRING_CODE_TTL_SECONDS)
 
 
 @router.post("/pair/complete", response_model=CompleteResponse)

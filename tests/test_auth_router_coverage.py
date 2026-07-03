@@ -52,6 +52,23 @@ def settings():
     return Settings()
 
 
+async def _seed_pairing_code(db_factory, user_id: int) -> str:
+    """Create a User + an unused, unexpired PairingCode row for that user.
+
+    Replaces the deleted pair_initiate endpoint for test setup (security
+    fix, wave 1 audit remediation — pair_initiate allowed unauthenticated
+    account takeover and was unused by the iOS app).
+    """
+    from daily.auth.pairing import code_expiry, generate_pairing_code
+
+    code = generate_pairing_code()
+    async with db_factory() as session:
+        session.add(User(id=user_id))
+        session.add(PairingCode(user_id=user_id, code=code, expires_at=code_expiry()))
+        await session.commit()
+    return code
+
+
 # ---------------------------------------------------------------------------
 # pair_send_link — try/except block (lines 91-99)
 # ---------------------------------------------------------------------------
@@ -82,43 +99,6 @@ async def test_send_link_resend_error_swallowed(db_factory, settings):
             mock_send.side_effect = ResendError("Resend down")
             result = await pair_send_link(req, session=session, settings=settings)
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# pair_initiate — user creation branch (line 109-118)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_pair_initiate_creates_user_on_missing(db_factory):
-    """pair_initiate auto-creates a User row when user_id doesn't exist."""
-    from sqlalchemy import select
-    from daily.auth.router import InitiateRequest, pair_initiate
-
-    async with db_factory() as session:
-        req = InitiateRequest(user_id=99)
-        resp = await pair_initiate(req, session=session)
-        assert len(resp.code) == 6 and resp.code.isdigit()
-
-    async with db_factory() as session:
-        row = await session.get(User, 99)
-        assert row is not None
-
-
-@pytest.mark.asyncio
-async def test_pair_initiate_reuses_existing_user(db_factory):
-    """pair_initiate uses existing User row, doesn't create duplicate."""
-    from daily.auth.router import InitiateRequest, pair_initiate
-
-    async with db_factory() as session:
-        user = User(id=42)
-        session.add(user)
-        await session.commit()
-
-    async with db_factory() as session:
-        req = InitiateRequest(user_id=42)
-        resp = await pair_initiate(req, session=session)
-        assert resp.code
 
 
 # ---------------------------------------------------------------------------
@@ -212,16 +192,9 @@ async def test_pair_complete_expired_code_raises_400(db_factory, settings):
 @pytest.mark.asyncio
 async def test_token_refresh_success(db_factory, settings):
     """token_refresh finds matching token and returns new access token."""
-    from daily.auth.router import CompleteRequest, InitiateRequest, RefreshRequest, pair_initiate, pair_complete, token_refresh
+    from daily.auth.router import CompleteRequest, RefreshRequest, pair_complete, token_refresh
 
-    async with db_factory() as session:
-        await pair_initiate(InitiateRequest(user_id=55), session=session)
-
-    from sqlalchemy import select
-    async with db_factory() as session:
-        result = await session.execute(select(PairingCode).where(PairingCode.user_id == 55))
-        pc = result.scalar_one()
-        code = pc.code
+    code = await _seed_pairing_code(db_factory, user_id=55)
 
     async with db_factory() as session:
         complete_resp = await pair_complete(CompleteRequest(code=code), session=session, settings=settings)
@@ -249,16 +222,9 @@ async def test_token_refresh_revoked_token_raises_401(db_factory, settings):
     """token_refresh with revoked DeviceToken → HTTPException 401."""
     from fastapi import HTTPException
     from sqlalchemy import update
-    from daily.auth.router import CompleteRequest, InitiateRequest, RefreshRequest, pair_initiate, pair_complete, token_refresh
+    from daily.auth.router import CompleteRequest, RefreshRequest, pair_complete, token_refresh
 
-    async with db_factory() as session:
-        await pair_initiate(InitiateRequest(user_id=66), session=session)
-
-    from sqlalchemy import select
-    async with db_factory() as session:
-        result = await session.execute(select(PairingCode).where(PairingCode.user_id == 66))
-        pc = result.scalar_one()
-        code = pc.code
+    code = await _seed_pairing_code(db_factory, user_id=66)
 
     async with db_factory() as session:
         complete_resp = await pair_complete(CompleteRequest(code=code), session=session, settings=settings)

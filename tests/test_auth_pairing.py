@@ -2,12 +2,21 @@
 
 Uses SQLite in-memory database to test the auth endpoints end-to-end without
 requiring a live PostgreSQL instance.
+
+NOTE (security fix, wave 1 audit remediation): POST /auth/pair/initiate was
+removed — it let anyone auto-create a user and mint a valid pairing code for
+an arbitrary user_id with zero auth (unauthenticated account takeover). It
+was unused by the iOS app (the real flow is /auth/pair/send-link, a magic
+link). These tests now seed PairingCode rows directly via the DB session,
+mirroring how the magic-link flow already does this in
+test_auth_router_coverage.py.
 """
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from daily.db.models import Base
+from daily.auth.pairing import code_expiry, generate_pairing_code
+from daily.db.models import Base, PairingCode, User
 
 
 @pytest.fixture(autouse=True)
@@ -46,6 +55,21 @@ async def db_session_factory():
     await engine.dispose()
 
 
+async def _seed_pairing_code(db_session_factory, user_id: int) -> str:
+    """Create a User + an unused, unexpired PairingCode row for that user.
+
+    Replaces the deleted /auth/pair/initiate endpoint for test setup.
+    """
+    code = generate_pairing_code()
+    async with db_session_factory() as session:
+        user = await session.get(User, user_id)
+        if user is None:
+            session.add(User(id=user_id))
+        session.add(PairingCode(user_id=user_id, code=code, expires_at=code_expiry()))
+        await session.commit()
+    return code
+
+
 @pytest.fixture
 async def client(db_session_factory, monkeypatch):
     """FastAPI test client with mocked DB session using in-memory SQLite."""
@@ -64,10 +88,8 @@ async def client(db_session_factory, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_full_pairing_flow(client):
-    ac, _ = client
-    r = await ac.post("/auth/pair/initiate", json={"user_id": 1})
-    assert r.status_code == 200
-    code = r.json()["code"]
+    ac, db_factory = client
+    code = await _seed_pairing_code(db_factory, user_id=1)
     assert len(code) == 6 and code.isdigit()
 
     r2 = await ac.post("/auth/pair/complete", json={"code": code, "device_name": "test"})
@@ -85,9 +107,8 @@ async def test_invalid_code_rejected(client):
 
 @pytest.mark.asyncio
 async def test_used_code_rejected(client):
-    ac, _ = client
-    r = await ac.post("/auth/pair/initiate", json={"user_id": 2})
-    code = r.json()["code"]
+    ac, db_factory = client
+    code = await _seed_pairing_code(db_factory, user_id=2)
     r1 = await ac.post("/auth/pair/complete", json={"code": code})
     assert r1.status_code == 200
     r2 = await ac.post("/auth/pair/complete", json={"code": code})
@@ -96,9 +117,8 @@ async def test_used_code_rejected(client):
 
 @pytest.mark.asyncio
 async def test_refresh_token_exchange(client):
-    ac, _ = client
-    r = await ac.post("/auth/pair/initiate", json={"user_id": 3})
-    code = r.json()["code"]
+    ac, db_factory = client
+    code = await _seed_pairing_code(db_factory, user_id=3)
     r1 = await ac.post("/auth/pair/complete", json={"code": code})
     refresh = r1.json()["refresh_token"]
     r2 = await ac.post("/auth/token/refresh", json={"refresh_token": refresh})
@@ -120,8 +140,7 @@ async def test_refresh_token_stored_encrypted(client):
     from daily.db.models import DeviceToken
 
     ac, db_factory = client
-    r = await ac.post("/auth/pair/initiate", json={"user_id": 4})
-    code = r.json()["code"]
+    code = await _seed_pairing_code(db_factory, user_id=4)
     r1 = await ac.post("/auth/pair/complete", json={"code": code})
     refresh = r1.json()["refresh_token"]
 
