@@ -19,7 +19,6 @@ needing a separate sync engine or psycopg2 dependency (per D-16 review).
 """
 
 import asyncio
-import base64
 
 import typer
 
@@ -284,6 +283,7 @@ def gmail():
         run_google_oauth_flow,
         store_google_tokens,
     )
+    from daily.vault.crypto import load_vault_key
 
     settings = Settings()
 
@@ -294,12 +294,13 @@ def gmail():
         )
         raise typer.Exit(1)
 
-    vault_key = base64.b64decode(settings.vault_key) if settings.vault_key else b""
-    if len(vault_key) != 32:
+    try:
+        vault_key = load_vault_key(settings.vault_key)
+    except ValueError:
         typer.echo(
             "Error: VAULT_KEY must be a 32-byte base64-encoded key", err=True
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     typer.echo("Opening browser for Google OAuth authorization...")
     typer.echo("Scopes: Gmail (read + send) + Google Calendar (read + write)")
@@ -348,6 +349,7 @@ def slack():
         run_slack_oauth_flow,
         store_slack_token,
     )
+    from daily.vault.crypto import load_vault_key
 
     settings = Settings()
 
@@ -358,12 +360,13 @@ def slack():
         )
         raise typer.Exit(1)
 
-    vault_key = base64.b64decode(settings.vault_key) if settings.vault_key else b""
-    if len(vault_key) != 32:
+    try:
+        vault_key = load_vault_key(settings.vault_key)
+    except ValueError:
         typer.echo(
             "Error: VAULT_KEY must be a 32-byte base64-encoded key", err=True
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     scopes_display = ", ".join(SLACK_BOT_SCOPES)
     typer.echo("Opening browser for Slack OAuth authorization...")
@@ -400,6 +403,7 @@ def outlook():
         run_microsoft_oauth_flow,
         store_microsoft_tokens,
     )
+    from daily.vault.crypto import load_vault_key
 
     settings = Settings()
 
@@ -410,12 +414,13 @@ def outlook():
         )
         raise typer.Exit(1)
 
-    vault_key = base64.b64decode(settings.vault_key) if settings.vault_key else b""
-    if len(vault_key) != 32:
+    try:
+        vault_key = load_vault_key(settings.vault_key)
+    except ValueError:
         typer.echo(
             "Error: VAULT_KEY must be a 32-byte base64-encoded key", err=True
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     scopes_display = ", ".join(MICROSOFT_READONLY_SCOPES)
     typer.echo("Opening browser for Microsoft OAuth authorization...")
@@ -606,9 +611,9 @@ async def _resolve_email_adapters(user_id: int, settings) -> list:
     from daily.db.models import IntegrationToken
     from daily.integrations.google.adapter import GmailAdapter
     from daily.integrations.microsoft.adapter import OutlookAdapter
-    from daily.vault.crypto import decrypt_token
+    from daily.vault.crypto import decrypt_token, load_vault_key
 
-    vault_key = base64.b64decode(settings.vault_key) if settings.vault_key else b""
+    vault_key = load_vault_key(settings.vault_key)
     adapters = []
 
     async with async_session() as session:

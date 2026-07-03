@@ -8,6 +8,7 @@ Strategy:
 - Monkeypatched Google Flow.fetch_token and MSAL acquire_token_by_authorization_code
 - respx for mocking async httpx POST to Slack
 """
+import base64
 import os
 from unittest.mock import MagicMock, patch
 
@@ -24,7 +25,12 @@ from daily.db.models import Base, IntegrationToken, User
 # ---------------------------------------------------------------------------
 
 JWT_SECRET = "x" * 32
-VAULT_KEY = "y" * 32  # 32 ASCII bytes — accepted by _vault_key() fallback
+# Standard base64 encoding of 32 raw bytes — decodes to exactly 32 bytes via
+# the canonical load_vault_key() decoder (CRIT-02 fix). Previously this was
+# the raw ASCII string "y" * 32, which relied on _vault_key()'s now-removed
+# raw-bytes fallback (32 ASCII chars is NOT valid base64 for 32 bytes — it
+# decodes to 24 bytes and would now raise ValueError).
+VAULT_KEY = base64.b64encode(b"y" * 32).decode()
 
 
 @pytest.fixture(autouse=True)

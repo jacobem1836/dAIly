@@ -61,8 +61,7 @@ async def _build_pipeline_kwargs(user_id: int, settings: Settings) -> dict:
     from daily.integrations.google.adapter import GmailAdapter, GoogleCalendarAdapter
     from daily.integrations.microsoft.adapter import OutlookAdapter
     from daily.integrations.slack.adapter import SlackAdapter
-    from daily.vault.crypto import decrypt_token
-    import base64
+    from daily.vault.crypto import decrypt_token, load_vault_key
 
     # Load VIP senders from DB
     async with async_session() as session:
@@ -83,7 +82,7 @@ async def _build_pipeline_kwargs(user_id: int, settings: Settings) -> dict:
     message_adapters = []
     user_email = ""
 
-    vault_key = base64.b64decode(settings.vault_key) if settings.vault_key else b""
+    vault_key = load_vault_key(settings.vault_key)
 
     for token in tokens:
         # Decrypt access token in-memory (SEC-T-02-16)

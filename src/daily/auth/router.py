@@ -1,5 +1,4 @@
 """Auth endpoints: pairing + token refresh (Phase 18, D-01..D-04)."""
-import base64
 import hmac
 import logging
 from datetime import datetime, timedelta, timezone
@@ -22,7 +21,7 @@ from daily.config import Settings
 from daily.db.engine import async_session
 from daily.db.models import DeviceToken, PairingCode, User
 from daily.email.resend_client import ResendError, send_magic_link
-from daily.vault.crypto import decrypt_token, encrypt_token
+from daily.vault.crypto import decrypt_token, encrypt_token, load_vault_key
 
 _logger = logging.getLogger(__name__)
 
@@ -191,7 +190,7 @@ async def pair_complete(
             user_id = user.id
 
     refresh = generate_refresh_token()
-    key = base64.b64decode(settings.vault_key) if isinstance(settings.vault_key, str) else settings.vault_key
+    key = load_vault_key(settings.vault_key)
     encrypted = encrypt_token(refresh, key)
     expires_at = now + timedelta(days=settings.jwt_refresh_ttl_days)
     dt = DeviceToken(
@@ -229,7 +228,7 @@ async def token_refresh(
         DeviceToken.expires_at > now,
     )
     result = await session.execute(stmt)
-    key = base64.b64decode(settings.vault_key) if isinstance(settings.vault_key, str) else settings.vault_key
+    key = load_vault_key(settings.vault_key)
     for dt in result.scalars():
         try:
             if hmac.compare_digest(decrypt_token(dt.encrypted_refresh_token, key), body.refresh_token):

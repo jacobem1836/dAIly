@@ -36,7 +36,7 @@ from daily.db.models import IntegrationToken, User
 from daily.integrations.google.auth import GOOGLE_ACTION_SCOPES
 from daily.integrations.microsoft.auth import MICROSOFT_READONLY_SCOPES
 from daily.integrations.slack.auth import SLACK_AUTHORIZE_URL, SLACK_BOT_SCOPES, SLACK_TOKEN_URL
-from daily.vault.crypto import encrypt_token
+from daily.vault.crypto import encrypt_token, load_vault_key
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
@@ -67,19 +67,16 @@ async def _get_redis():
 
 
 def _vault_key(settings: Settings) -> bytes:
-    """Decode the vault key from settings (base64 string or raw bytes)."""
-    raw = settings.vault_key
-    if isinstance(raw, bytes):
-        return raw
-    # Handle both base64-encoded and raw 32-char strings
-    try:
-        decoded = base64.b64decode(raw)
-        if len(decoded) == 32:
-            return decoded
-    except Exception:
-        pass
-    # Fall back to UTF-8 bytes (e.g. test fixtures using "y" * 32)
-    return raw.encode()
+    """Decode the vault key from settings via the canonical vault decoder.
+
+    Delegates to daily.vault.crypto.load_vault_key — the single decoder for
+    VAULT_KEY across the codebase (audit finding H-4 / CRIT-02). Previously
+    this function had its own try/except-with-raw-bytes-fallback decoder:
+    for a malformed or unexpected-length VAULT_KEY it would silently accept
+    a different key (raw ASCII bytes of the string) than the strict decoders
+    used in nodes.py / auth/router.py would derive from the same value.
+    """
+    return load_vault_key(settings.vault_key)
 
 
 async def _consume_oauth_state(redis: Redis, state: str) -> int:

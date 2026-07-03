@@ -599,11 +599,10 @@ async def _build_executor_for_type(
     from daily.config import Settings
     from daily.db.engine import async_session
     from daily.db.models import IntegrationToken
-    from daily.vault import decrypt_token
+    from daily.vault import decrypt_token, load_vault_key
 
     settings = Settings()
-    import base64
-    vault_key = base64.urlsafe_b64decode(settings.vault_key) if settings.vault_key else b""
+    vault_key = load_vault_key(settings.vault_key)
 
     if action_type in (ActionType.draft_email, ActionType.compose_email):
         async with async_session() as session:
