@@ -26,7 +26,12 @@ public enum VoiceSessionError: Error, Equatable {
 /// Connection flow:
 ///   1. Loads access JWT from Keychain
 ///   2. Fetches a LiveKit room token from POST /livekit/token via LiveKitTokenSource
-///   3. On 401: calls auth.refresh() once and retries; second 401 surfaces .error
+///   3. On 401: calls auth.refresh() once and retries; a hard failure (refresh token
+///      itself rejected, or the refreshed token is still unauthorized) surfaces
+///      .error("re_pair_required") — VoiceView observes this specific value and
+///      calls AppState.signOut() so the app root routes back to pairing instead of
+///      leaving the user stuck on a broken voice screen with a Retry that can never
+///      succeed (T-22-xx re-pair dead end fix).
 ///   4. Connects to LiveKit room with mic enabled (ConnectOptions.enableMicrophone: true)
 ///   5. An 8-second timeout fires if the room never reaches .listening state (T-19-22)
 ///   6. A 30-second timeout fires if reconnecting does not recover (T-19-28)
@@ -72,19 +77,29 @@ public final class VoiceSession: ObservableObject {
             // Attempt exactly one auth refresh before giving up (T-19-21)
             do {
                 try await auth.refresh()
+            } catch AuthError.unauthorized {
+                // Refresh token itself was rejected — re-pairing is the only way
+                // out. Route via the dedicated sentinel so the UI can sign the
+                // user out instead of offering a Retry that will fail forever.
+                state = .error("re_pair_required")
+                throw VoiceSessionError.notAuthenticated
             } catch {
+                // Any other refresh failure (e.g. network) is potentially
+                // transient — surface a plain retryable error.
                 state = .error("auth_refresh_failed")
                 throw VoiceSessionError.notAuthenticated
             }
             guard let newJwt = keychain.load(key: "access_token") else {
-                state = .error("auth_refresh_failed")
+                state = .error("re_pair_required")
                 throw VoiceSessionError.notAuthenticated
             }
             jwt = newJwt
             do {
                 lkToken = try await tokenSource.fetchToken(accessJWT: jwt)
             } catch {
-                state = .error("token_unauthorized")
+                // Refresh reported success but the new token is still rejected —
+                // the account needs to re-pair.
+                state = .error("re_pair_required")
                 throw VoiceSessionError.tokenFetchFailed
             }
         } catch {
