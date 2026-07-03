@@ -126,6 +126,7 @@ async def _build_pipeline_kwargs(user_id: int, settings: Settings) -> dict:
     # Import concrete adapters here to avoid circular imports at module level
     from daily.integrations.google.adapter import GmailAdapter, GoogleCalendarAdapter
     from daily.integrations.microsoft.adapter import OutlookAdapter
+    from daily.integrations.resolve import build_google_credentials
     from daily.integrations.slack.adapter import SlackAdapter
     from daily.vault.crypto import decrypt_token, load_vault_key
 
@@ -177,18 +178,17 @@ async def _build_pipeline_kwargs(user_id: int, settings: Settings) -> dict:
         provider = token.provider  # "google", "microsoft", "slack"
 
         if provider == "google":
-            from google.oauth2.credentials import Credentials
             decrypted_refresh = (
                 decrypt_token(token.encrypted_refresh_token, vault_key)
                 if token.encrypted_refresh_token
                 else None
             )
-            google_creds = Credentials(
-                token=decrypted,
+            # Shared with daily.integrations.resolve.resolve_email_adapters
+            # (audit H3) — one Credentials(...) construction, not three.
+            google_creds = build_google_credentials(
+                access_token=decrypted,
                 refresh_token=decrypted_refresh,
-                token_uri="https://oauth2.googleapis.com/token",
-                client_id=settings.google_client_id,
-                client_secret=settings.google_client_secret,
+                settings=settings,
                 scopes=token.scopes.split() if token.scopes else None,
             )
             gmail = GmailAdapter(credentials=google_creds)
@@ -196,10 +196,15 @@ async def _build_pipeline_kwargs(user_id: int, settings: Settings) -> dict:
             cal = GoogleCalendarAdapter(credentials=google_creds)
             calendar_adapters.append(cal)
         elif provider == "outlook":
-            outlook = OutlookAdapter(credentials=decrypted)
+            # NOTE: OutlookAdapter's constructor takes access_token=, not
+            # credentials= — the previous `OutlookAdapter(credentials=...)`
+            # call here would have raised TypeError against the real class
+            # (masked in tests by OutlookAdapter being mocked out).
+            outlook = OutlookAdapter(access_token=decrypted)
             email_adapters.append(outlook)
         elif provider == "slack":
-            slack = SlackAdapter(credentials=decrypted)
+            # Same fix as above — SlackAdapter takes bot_token=, not credentials=.
+            slack = SlackAdapter(bot_token=decrypted)
             message_adapters.append(slack)
 
     # Load user preferences for narrator (PERS-01)

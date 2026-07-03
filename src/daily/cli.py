@@ -463,6 +463,13 @@ from daily.orchestrator.session import (
     set_email_adapters,
 )
 
+# Audit H3: adapter resolution logic used to live here as a private function
+# (and the LiveKit worker imported it directly — see worker/state.py history).
+# It now lives in daily.integrations.resolve as a public, worker-safe
+# function. Imported under the original private name so existing patches
+# (`patch("daily.cli._resolve_email_adapters", ...)`) keep working unchanged.
+from daily.integrations.resolve import resolve_email_adapters as _resolve_email_adapters
+
 # ---------------------------------------------------------------------------
 # Approval flow helpers
 # ---------------------------------------------------------------------------
@@ -589,64 +596,6 @@ async def _handle_approval_flow(
     if decision.startswith("edit:"):
         output["edit_instruction"] = decision[len("edit:"):]
     return output
-
-
-async def _resolve_email_adapters(user_id: int, settings) -> list:
-    """Load integration tokens and instantiate real email adapters.
-
-    Follows same pattern as briefing/scheduler.py resolve_pipeline_kwargs.
-    Tokens are decrypted in-memory only — never logged (T-03-12).
-
-    Args:
-        user_id: User whose integration tokens to load.
-        settings: Settings instance providing vault_key.
-
-    Returns:
-        List of EmailAdapter instances (GmailAdapter, OutlookAdapter).
-        Empty list if no tokens are stored or vault_key is unset.
-    """
-    from sqlalchemy import select
-
-    from daily.db.engine import async_session
-    from daily.db.models import IntegrationToken
-    from daily.integrations.google.adapter import GmailAdapter
-    from daily.integrations.microsoft.adapter import OutlookAdapter
-    from daily.vault.crypto import decrypt_token, load_vault_key
-
-    vault_key = load_vault_key(settings.vault_key)
-    adapters = []
-
-    async with async_session() as session:
-        result = await session.execute(
-            select(IntegrationToken).where(IntegrationToken.user_id == user_id)
-        )
-        tokens = result.scalars().all()
-
-    for token in tokens:
-        try:
-            decrypted = decrypt_token(token.encrypted_access_token, vault_key)
-            if token.provider == "google":
-                from google.oauth2.credentials import Credentials as GoogleCredentials
-                refresh_token = (
-                    decrypt_token(token.encrypted_refresh_token, vault_key)
-                    if token.encrypted_refresh_token else None
-                )
-                creds = GoogleCredentials(
-                    token=decrypted,
-                    refresh_token=refresh_token,
-                    token_uri="https://oauth2.googleapis.com/token",
-                    client_id=settings.google_client_id,
-                    client_secret=settings.google_client_secret,
-                )
-                adapters.append(GmailAdapter(credentials=creds))
-            elif token.provider == "microsoft":
-                # OutlookAdapter expects access_token (str), not credentials=
-                adapters.append(OutlookAdapter(access_token=decrypted))
-        except Exception:
-            # Skip tokens that fail decryption — don't block the session
-            pass
-
-    return adapters
 
 
 async def _run_chat_session(user_id: int = 1) -> None:

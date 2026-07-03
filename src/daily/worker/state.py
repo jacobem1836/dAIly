@@ -9,6 +9,13 @@ Performs per-session setup for the LiveKit voice agent:
 Historical note: the local CLI voice pipeline (the legacy voice/loop.py module)
 was the original reference implementation for this setup sequence. It was deleted in
 Phase 21.45 (voice path consolidation). This module is the sole bootstrap path.
+
+Audit H3: this module previously imported a private helper from daily.cli
+(`_resolve_email_adapters`), which dragged Typer/input()/webbrowser (the
+interactive CLI's dependencies) into the production LiveKit worker process
+just to reuse one function. Adapter resolution now lives in the neutral
+daily.integrations.resolve module, which both daily.cli and this module
+import from — the worker no longer depends on the CLI at all.
 """
 import logging
 from contextlib import asynccontextmanager
@@ -18,9 +25,9 @@ from typing import AsyncIterator
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from redis.asyncio import Redis
 
-from daily.cli import _resolve_email_adapters
 from daily.config import Settings
 from daily.db.engine import async_session
+from daily.integrations.resolve import resolve_email_adapters as _resolve_email_adapters
 from daily.orchestrator.graph import build_graph
 from daily.orchestrator.session import (
     create_session_config,

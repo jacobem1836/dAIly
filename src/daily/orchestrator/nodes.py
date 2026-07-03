@@ -678,19 +678,18 @@ async def _build_executor_for_type(
                 granted_scopes=granted_scopes,
             )
         else:
-            from google.oauth2.credentials import Credentials
             from googleapiclient.discovery import build
+
+            from daily.integrations.resolve import build_google_credentials
 
             refresh_token = (
                 decrypt_token(token.encrypted_refresh_token, vault_key)
                 if token.encrypted_refresh_token else None
             )
-            creds = Credentials(
-                token=access_token,
+            creds = build_google_credentials(
+                access_token=access_token,
                 refresh_token=refresh_token,
-                token_uri="https://oauth2.googleapis.com/token",
-                client_id=settings.google_client_id,
-                client_secret=settings.google_client_secret,
+                settings=settings,
             )
             service = build("gmail", "v1", credentials=creds)
             return GmailExecutor(
@@ -747,15 +746,14 @@ async def _build_executor_for_type(
             if token.encrypted_refresh_token else None
         )
 
-        from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
 
-        creds = Credentials(
-            token=access_token,
+        from daily.integrations.resolve import build_google_credentials
+
+        creds = build_google_credentials(
+            access_token=access_token,
             refresh_token=refresh_token,
-            token_uri="https://oauth2.googleapis.com/token",
-            client_id=settings.google_client_id,
-            client_secret=settings.google_client_secret,
+            settings=settings,
         )
         service = build("calendar", "v3", credentials=creds)
 
