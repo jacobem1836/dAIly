@@ -1,5 +1,6 @@
 import SwiftUI
 import LiveKit
+import os
 
 @main
 struct dAIlyApp: App {
@@ -11,9 +12,15 @@ struct dAIlyApp: App {
     )
 
     private let auth = AuthService(baseURL: Config.backendBaseURL)
+    private let tokenRefresher: TokenRefresher
+
+    @Environment(\.scenePhase) private var scenePhase
+
+    private static let logger = Logger(subsystem: "com.jacobmarriott.daily", category: "app")
 
     init() {
         FirstLaunchCleanup.runIfNeeded()
+        tokenRefresher = TokenRefresher(auth: auth)
     }
 
     var body: some Scene {
@@ -36,6 +43,19 @@ struct dAIlyApp: App {
             .onReceive(NotificationCenter.default.publisher(for: .oauthCallbackReceived)) { notification in
                 if let url = notification.object as? URL {
                     handleDeepLink(url)
+                }
+            }
+        }
+        // Proactively refresh the access token whenever the app returns to the
+        // foreground, so a returning user pays the (cheap) proactive refresh
+        // path instead of the full reactive backoff on their first tap.
+        .onChange(of: scenePhase) { newPhase in
+            guard newPhase == .active else { return }
+            Task { @MainActor in
+                do {
+                    try await tokenRefresher.refreshIfNeeded()
+                } catch {
+                    Self.logger.notice("Proactive token refresh skipped/failed: \(String(describing: error), privacy: .public)")
                 }
             }
         }
