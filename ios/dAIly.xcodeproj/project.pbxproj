@@ -89,9 +89,11 @@
 		9FF0CAF31772FD0606347860 /* ConnectionIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionIndicator.swift; sourceTree = "<group>"; };
 		ADD7C9B88737FB0EDCDA8089 /* OAuthCallbackParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthCallbackParser.swift; sourceTree = "<group>"; };
 		B119761300EB73F212A2134B /* VoiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceView.swift; sourceTree = "<group>"; };
+		B51F599669A70C769BD22398 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		B7221F6BBA162783A30506D6 /* VoiceSessionErrorMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionErrorMappingTests.swift; sourceTree = "<group>"; };
 		B74490AFDD78703BCEFB2888 /* AppStateRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateRoutingTests.swift; sourceTree = "<group>"; };
 		B78933C431583629FAAC7890 /* IntegrationStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationStateTests.swift; sourceTree = "<group>"; };
+		B9816D906807F55467C7DE55 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		BA7F17E8D526949DF0201E1A /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		CB66279C1B5AA22E33DB5E56 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		CD11228C8AC0B4CFF3B70A1F /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
@@ -115,6 +117,16 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		15F95DBED6497EF41650ED26 /* ios */ = {
+			isa = PBXGroup;
+			children = (
+				B51F599669A70C769BD22398 /* Debug.xcconfig */,
+				B9816D906807F55467C7DE55 /* Release.xcconfig */,
+			);
+			name = ios;
+			path = .;
+			sourceTree = "<group>";
+		};
 		1D51BB90F43CBB3C243B1B18 /* onboarding */ = {
 			isa = PBXGroup;
 			children = (
@@ -165,6 +177,7 @@
 			children = (
 				AA605AF0DB353F30A578D150 /* dAIly */,
 				F0C806E01A5671C0EEDA75BF /* dAIlyTests */,
+				15F95DBED6497EF41650ED26 /* ios */,
 				4260E524FD1F0EE07C517553 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -378,6 +391,7 @@
 /* Begin XCBuildConfiguration section */
 		0D934FD1CABA1E74119982D9 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B9816D906807F55467C7DE55 /* Release.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -434,6 +448,7 @@
 		};
 		2DBFBDF912FDED241E5E5F3E /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B51F599669A70C769BD22398 /* Debug.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;

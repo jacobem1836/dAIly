@@ -4,6 +4,12 @@ options:
   deploymentTarget:
     iOS: "16.0"
   developmentLanguage: en
+configs:
+  Debug: debug
+  Release: release
+configFiles:
+  Debug: Debug.xcconfig
+  Release: Release.xcconfig
 packages:
   LiveKit:
     url: https://github.com/livekit/client-sdk-swift.git
@@ -26,6 +32,7 @@ targets:
         UIBackgroundModes: [audio]
         NSMicrophoneUsageDescription: "dAIly uses your microphone for the voice briefing."
         NSLocalNetworkUsageDescription: "dAIly connects to your local LiveKit dev server."
+        DailyBackendBaseURL: "$(DAILY_BACKEND_BASE_URL)"
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
           UISceneConfigurations: {}

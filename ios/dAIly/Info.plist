@@ -20,6 +20,8 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>DailyBackendBaseURL</key>
+	<string>$(DAILY_BACKEND_BASE_URL)</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>dAIly connects to your local LiveKit dev server.</string>
 	<key>NSMicrophoneUsageDescription</key>
