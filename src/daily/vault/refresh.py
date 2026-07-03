@@ -7,8 +7,21 @@ in the vault module so it is independently testable.
 T-1-19: Refresh tokens are decrypted in-memory only; re-encrypted immediately
         after a successful refresh. Decrypted tokens are never logged.
 T-1-21: Per-token error handling — one failed refresh does not block others.
+
+Audit C2: this module previously had no caller — nothing invoked
+refresh_expiring_tokens, so Google/Microsoft access tokens were never
+proactively refreshed and every integration eventually 401'd once its access
+token expired (Microsoft's OutlookAdapter._StaticTokenCredential has no way to
+self-refresh). It is now wired into APScheduler as a periodic job — see
+daily.briefing.scheduler.setup_token_refresh_job. The provider-specific
+refresh helpers (_refresh_google_token / _refresh_microsoft_token) perform
+blocking network I/O (google-auth and MSAL both use synchronous `requests`
+under the hood), so refresh_expiring_tokens offloads each call to a worker
+thread via asyncio.to_thread — otherwise a scheduled refresh run would stall
+the shared asyncio event loop for the duration of the HTTP round-trip.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -81,13 +94,20 @@ async def refresh_expiring_tokens(
                     token.encrypted_refresh_token, vault_key
                 )
 
-                # Dispatch to provider-specific refresh
+                # Dispatch to provider-specific refresh.
+                # _refresh_google_token/_refresh_microsoft_token do blocking
+                # requests-backed network I/O (google-auth / MSAL both use the
+                # synchronous `requests` library under the hood) — offload to a
+                # worker thread so this coroutine never stalls the shared
+                # asyncio event loop the APScheduler job runs on (audit C2).
                 if token.provider == "google":
-                    refresh_result = _refresh_google_token(refresh_token_plain)
+                    refresh_result = await asyncio.to_thread(
+                        _refresh_google_token, refresh_token_plain
+                    )
                 elif token.provider == "outlook":
                     scopes = token.scopes.split() if token.scopes else []
-                    refresh_result = _refresh_microsoft_token(
-                        refresh_token_plain, scopes=scopes
+                    refresh_result = await asyncio.to_thread(
+                        _refresh_microsoft_token, refresh_token_plain, scopes=scopes
                     )
                 else:
                     # Unknown provider — skip gracefully
@@ -194,6 +214,7 @@ def _refresh_microsoft_token(
     client_id: str = "",
     tenant_id: str = "",
     scopes: list[str] | None = None,
+    timeout: int = 30,
 ) -> dict:
     """Refresh a Microsoft OAuth access token using MSAL.
 
@@ -208,6 +229,9 @@ def _refresh_microsoft_token(
         client_id: Azure AD application client ID (read from Settings if not provided).
         tenant_id: Azure AD tenant ID (read from Settings if not provided).
         scopes: OAuth scopes for the new token (defaults to MICROSOFT_READONLY_SCOPES).
+        timeout: Seconds before the underlying HTTP call to Microsoft's token
+            endpoint times out. MSAL has no default timeout otherwise, which
+            would let a hung refresh block the calling thread indefinitely.
 
     Returns:
         Dict with access_token, refresh_token (may be None), and expires_in.
@@ -229,7 +253,7 @@ def _refresh_microsoft_token(
         scopes = MICROSOFT_READONLY_SCOPES
 
     authority = f"https://login.microsoftonline.com/{tenant_id}"
-    app = msal.PublicClientApplication(client_id, authority=authority)
+    app = msal.PublicClientApplication(client_id, authority=authority, timeout=timeout)
 
     result = app.acquire_token_by_refresh_token(
         refresh_token,

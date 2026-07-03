@@ -43,8 +43,14 @@ class BriefingConfig(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
-    schedule_hour: Mapped[int] = mapped_column(default=5)  # UTC hour
-    schedule_minute: Mapped[int] = mapped_column(default=0)  # UTC minute
+    # Local wall-clock hour/minute, interpreted in `timezone` below (audit M1:
+    # storing a fixed UTC hour/minute computed once at write time goes stale
+    # across DST transitions — APScheduler's CronTrigger resolves these two
+    # fields against `timezone` on every fire instead, so DST is handled by
+    # zoneinfo rather than a precomputed offset). Default "5, 0, UTC" reads
+    # as 05:00 UTC either way, so existing UTC-only callers are unaffected.
+    schedule_hour: Mapped[int] = mapped_column(default=5)
+    schedule_minute: Mapped[int] = mapped_column(default=0)
     timezone: Mapped[str] = mapped_column(String(64), default="UTC", server_default="UTC")
     email_top_n: Mapped[int] = mapped_column(default=5)
     slack_channels: Mapped[list[str]] = mapped_column(

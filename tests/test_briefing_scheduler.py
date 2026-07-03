@@ -48,9 +48,11 @@ async def test_build_pipeline_kwargs_returns_required_keys():
     mock_result_vip.fetchall.return_value = [("vip@example.com",)]
     mock_result_tokens = MagicMock()
     mock_result_tokens.scalars.return_value.all.return_value = []
+    mock_result_config = MagicMock()
+    mock_result_config.scalar_one_or_none.return_value = None
 
     mock_session.execute = AsyncMock(
-        side_effect=[mock_result_vip, mock_result_tokens]
+        side_effect=[mock_result_vip, mock_result_tokens, mock_result_config]
     )
 
     mock_ctx = AsyncMock()
@@ -78,12 +80,15 @@ async def test_build_pipeline_kwargs_returns_required_keys():
         "redis",
         "openai_client",
         "preferences",
+        "slack_channels",
     }
     assert required_keys == set(result.keys()), (
         f"Missing keys: {required_keys - set(result.keys())}"
     )
     assert "vip@example.com" in result["vip_senders"]
+    # No BriefingConfig row -> falls back to global settings default (audit C1)
     assert result["top_n"] == 5
+    assert result["slack_channels"] == []
 
 
 @pytest.mark.asyncio
@@ -99,6 +104,40 @@ async def test_setup_scheduler_for_user_adds_per_user_job():
         assert call_kwargs["replace_existing"] is True
         assert call_kwargs["kwargs"] == {"user_id": 1}
         assert mock_add_job.call_args[0][0] is _scheduled_pipeline_run
+
+
+@pytest.mark.asyncio
+async def test_setup_scheduler_for_user_defaults_to_utc():
+    """setup_scheduler_for_user with no timezone arg builds a CronTrigger in UTC
+    (backward compatible with existing UTC-only callers, e.g. the CLI)."""
+    from daily.briefing.scheduler import scheduler, setup_scheduler_for_user
+
+    with patch.object(scheduler, "add_job") as mock_add_job:
+        setup_scheduler_for_user(hour=5, minute=0, user_id=1)
+
+    trigger = mock_add_job.call_args[1]["trigger"]
+    assert str(trigger.timezone) == "UTC"
+
+
+@pytest.mark.asyncio
+async def test_setup_scheduler_for_user_uses_configured_timezone():
+    """setup_scheduler_for_user passes a non-UTC timezone straight to CronTrigger
+    so hour/minute are interpreted as LOCAL wall-clock time (audit M1 DST fix).
+
+    Fails without the fix (CronTrigger would always be built with timezone="UTC")
+    and passes with it (CronTrigger.timezone reflects the passed IANA zone).
+    """
+    from daily.briefing.scheduler import scheduler, setup_scheduler_for_user
+
+    with patch.object(scheduler, "add_job") as mock_add_job:
+        setup_scheduler_for_user(
+            hour=7, minute=0, user_id=1, timezone="Australia/Brisbane"
+        )
+
+    trigger = mock_add_job.call_args[1]["trigger"]
+    assert str(trigger.timezone) == "Australia/Brisbane"
+    hour_field_index = trigger.FIELD_NAMES.index("hour")
+    assert str(trigger.fields[hour_field_index]) == "7"
 
 
 @pytest.mark.asyncio
@@ -119,8 +158,12 @@ async def test_build_pipeline_kwargs_with_google_token():
     mock_result_vip.fetchall.return_value = []
     mock_result_tokens = MagicMock()
     mock_result_tokens.scalars.return_value.all.return_value = [mock_token]
+    mock_result_config = MagicMock()
+    mock_result_config.scalar_one_or_none.return_value = None
 
-    mock_session.execute = AsyncMock(side_effect=[mock_result_vip, mock_result_tokens])
+    mock_session.execute = AsyncMock(
+        side_effect=[mock_result_vip, mock_result_tokens, mock_result_config]
+    )
 
     mock_ctx = AsyncMock()
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
@@ -163,8 +206,12 @@ async def test_build_pipeline_kwargs_with_outlook_token():
     mock_result_vip.fetchall.return_value = []
     mock_result_tokens = MagicMock()
     mock_result_tokens.scalars.return_value.all.return_value = [mock_token]
+    mock_result_config = MagicMock()
+    mock_result_config.scalar_one_or_none.return_value = None
 
-    mock_session.execute = AsyncMock(side_effect=[mock_result_vip, mock_result_tokens])
+    mock_session.execute = AsyncMock(
+        side_effect=[mock_result_vip, mock_result_tokens, mock_result_config]
+    )
 
     mock_ctx = AsyncMock()
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
@@ -203,8 +250,12 @@ async def test_build_pipeline_kwargs_with_slack_token():
     mock_result_vip.fetchall.return_value = []
     mock_result_tokens = MagicMock()
     mock_result_tokens.scalars.return_value.all.return_value = [mock_token]
+    mock_result_config = MagicMock()
+    mock_result_config.scalar_one_or_none.return_value = None
 
-    mock_session.execute = AsyncMock(side_effect=[mock_result_vip, mock_result_tokens])
+    mock_session.execute = AsyncMock(
+        side_effect=[mock_result_vip, mock_result_tokens, mock_result_config]
+    )
 
     mock_ctx = AsyncMock()
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
@@ -260,14 +311,18 @@ def _make_token(provider: str, scopes: str = "") -> MagicMock:
     return t
 
 
-def _make_session_ctx(tokens: list) -> tuple:
-    """Return (mock_ctx, mock_session) wired for VIP + token queries."""
+def _make_session_ctx(tokens: list, briefing_config=None) -> tuple:
+    """Return (mock_ctx, mock_session) wired for VIP + token + BriefingConfig queries."""
     mock_session = AsyncMock()
     mock_result_vip = MagicMock()
     mock_result_vip.fetchall.return_value = []
     mock_result_tokens = MagicMock()
     mock_result_tokens.scalars.return_value.all.return_value = tokens
-    mock_session.execute = AsyncMock(side_effect=[mock_result_vip, mock_result_tokens])
+    mock_result_config = MagicMock()
+    mock_result_config.scalar_one_or_none.return_value = briefing_config
+    mock_session.execute = AsyncMock(
+        side_effect=[mock_result_vip, mock_result_tokens, mock_result_config]
+    )
     mock_ctx = AsyncMock()
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
     mock_ctx.__aexit__ = AsyncMock(return_value=False)
@@ -356,3 +411,208 @@ async def test_build_pipeline_kwargs_slack_token_creates_adapter():
 
     assert len(result["message_adapters"]) == 1
     mock_slack.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# BriefingConfig write-only fields now read by _build_pipeline_kwargs (audit C1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_build_pipeline_kwargs_reads_persisted_email_top_n():
+    """A persisted BriefingConfig.email_top_n overrides the global settings default.
+
+    Before the fix, _build_pipeline_kwargs always used settings.briefing_email_top_n
+    and never looked at the per-user BriefingConfig row, so `daily config set
+    briefing.email_top_n` had no effect on the actual pipeline run. This test
+    fails without the fix (top_n would be 5, the global default) and passes
+    with it (top_n reflects the persisted per-user value of 20).
+    """
+    from daily.briefing.scheduler import _build_pipeline_kwargs
+    from daily.config import Settings
+
+    mock_config = MagicMock()
+    mock_config.email_top_n = 20
+    mock_config.slack_channels = []
+    mock_ctx, _ = _make_session_ctx([], briefing_config=mock_config)
+
+    with (
+        patch("daily.briefing.scheduler.async_session", return_value=mock_ctx),
+        patch("daily.briefing.scheduler.load_profile", new=AsyncMock(return_value={})),
+    ):
+        settings = Settings(
+            redis_url="redis://localhost:6379/0",
+            openai_api_key="test-key",
+            briefing_email_top_n=5,  # global default — must NOT win
+        )
+        result = await _build_pipeline_kwargs(user_id=1, settings=settings)
+
+    assert result["top_n"] == 20
+
+
+@pytest.mark.asyncio
+async def test_build_pipeline_kwargs_falls_back_to_settings_top_n_when_no_config():
+    """With no BriefingConfig row, top_n falls back to settings.briefing_email_top_n."""
+    from daily.briefing.scheduler import _build_pipeline_kwargs
+    from daily.config import Settings
+
+    mock_ctx, _ = _make_session_ctx([], briefing_config=None)
+
+    with (
+        patch("daily.briefing.scheduler.async_session", return_value=mock_ctx),
+        patch("daily.briefing.scheduler.load_profile", new=AsyncMock(return_value={})),
+    ):
+        settings = Settings(
+            redis_url="redis://localhost:6379/0",
+            openai_api_key="test-key",
+            briefing_email_top_n=7,
+        )
+        result = await _build_pipeline_kwargs(user_id=1, settings=settings)
+
+    assert result["top_n"] == 7
+
+
+@pytest.mark.asyncio
+async def test_build_pipeline_kwargs_reads_persisted_slack_channels():
+    """A persisted BriefingConfig.slack_channels reaches the pipeline kwargs.
+
+    Audit C1: BriefingConfig.slack_channels was persisted but context_builder
+    hardcoded channels=[] regardless, so Slack briefing never respected the
+    configured list. This test fails without the fix (slack_channels would be
+    [], the hardcoded value) and passes with it.
+    """
+    from daily.briefing.scheduler import _build_pipeline_kwargs
+    from daily.config import Settings
+
+    mock_config = MagicMock()
+    mock_config.email_top_n = 5
+    mock_config.slack_channels = ["C01PRIORITY", "C02PRIORITY"]
+    mock_ctx, _ = _make_session_ctx([], briefing_config=mock_config)
+
+    with (
+        patch("daily.briefing.scheduler.async_session", return_value=mock_ctx),
+        patch("daily.briefing.scheduler.load_profile", new=AsyncMock(return_value={})),
+    ):
+        settings = Settings(
+            redis_url="redis://localhost:6379/0",
+            openai_api_key="test-key",
+            briefing_email_top_n=5,
+        )
+        result = await _build_pipeline_kwargs(user_id=1, settings=settings)
+
+    assert result["slack_channels"] == ["C01PRIORITY", "C02PRIORITY"]
+
+
+@pytest.mark.asyncio
+async def test_build_pipeline_kwargs_slack_channels_empty_when_no_config():
+    """With no BriefingConfig row, slack_channels defaults to an empty list."""
+    from daily.briefing.scheduler import _build_pipeline_kwargs
+    from daily.config import Settings
+
+    mock_ctx, _ = _make_session_ctx([], briefing_config=None)
+
+    with (
+        patch("daily.briefing.scheduler.async_session", return_value=mock_ctx),
+        patch("daily.briefing.scheduler.load_profile", new=AsyncMock(return_value={})),
+    ):
+        settings = Settings(
+            redis_url="redis://localhost:6379/0",
+            openai_api_key="test-key",
+            briefing_email_top_n=5,
+        )
+        result = await _build_pipeline_kwargs(user_id=1, settings=settings)
+
+    assert result["slack_channels"] == []
+
+
+# ---------------------------------------------------------------------------
+# Proactive OAuth token refresh job (audit C2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_setup_token_refresh_job_registers_interval_job():
+    """setup_token_refresh_job registers a periodic (interval) job on the scheduler.
+
+    Fails without the fix (no such function/job exists) and passes with it.
+    """
+    from apscheduler.triggers.interval import IntervalTrigger
+
+    from daily.briefing.scheduler import (
+        TOKEN_REFRESH_INTERVAL_MINUTES,
+        _run_token_refresh_job,
+        scheduler,
+        setup_token_refresh_job,
+    )
+
+    with patch.object(scheduler, "add_job") as mock_add_job:
+        setup_token_refresh_job()
+
+    mock_add_job.assert_called_once()
+    call_args, call_kwargs = mock_add_job.call_args
+    assert call_args[0] is _run_token_refresh_job
+    assert call_kwargs["id"] == "token_refresh"
+    assert call_kwargs["replace_existing"] is True
+    trigger = call_kwargs["trigger"]
+    assert isinstance(trigger, IntervalTrigger)
+    assert trigger.interval.total_seconds() == TOKEN_REFRESH_INTERVAL_MINUTES * 60
+
+
+@pytest.mark.asyncio
+async def test_run_token_refresh_job_calls_refresh_expiring_tokens():
+    """_run_token_refresh_job loads the vault key and calls refresh_expiring_tokens.
+
+    This proves the previously-dead refresh_expiring_tokens function is now
+    actually invoked by the scheduler's job wrapper.
+    """
+    from daily.briefing.scheduler import _run_token_refresh_job
+
+    fake_results = [{"provider": "google", "user_id": 1, "success": True, "error": None}]
+
+    with (
+        patch("daily.vault.crypto.load_vault_key", return_value=b"k" * 32) as mock_load_key,
+        patch(
+            "daily.vault.refresh.refresh_expiring_tokens",
+            new=AsyncMock(return_value=fake_results),
+        ) as mock_refresh,
+    ):
+        await _run_token_refresh_job()
+
+    mock_load_key.assert_called_once()
+    mock_refresh.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_run_token_refresh_job_survives_vault_key_failure():
+    """_run_token_refresh_job does not raise if load_vault_key fails."""
+    from daily.briefing.scheduler import _run_token_refresh_job
+
+    with (
+        patch(
+            "daily.vault.crypto.load_vault_key",
+            side_effect=ValueError("bad key"),
+        ),
+        patch(
+            "daily.vault.refresh.refresh_expiring_tokens", new=AsyncMock()
+        ) as mock_refresh,
+    ):
+        # Must not raise
+        await _run_token_refresh_job()
+
+    mock_refresh.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_run_token_refresh_job_survives_refresh_exception():
+    """_run_token_refresh_job does not raise if refresh_expiring_tokens itself raises."""
+    from daily.briefing.scheduler import _run_token_refresh_job
+
+    with (
+        patch("daily.vault.crypto.load_vault_key", return_value=b"k" * 32),
+        patch(
+            "daily.vault.refresh.refresh_expiring_tokens",
+            new=AsyncMock(side_effect=RuntimeError("db down")),
+        ),
+    ):
+        # Must not raise
+        await _run_token_refresh_job()

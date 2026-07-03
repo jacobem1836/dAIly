@@ -271,11 +271,13 @@ class TestSchedulePersistence:
 
     @pytest.mark.asyncio
     async def test_lifespan_reads_db_schedule(self):
-        """Lifespan calls setup_scheduler_for_user for each BriefingConfig row."""
+        """Lifespan calls setup_scheduler_for_user for each BriefingConfig row,
+        including the row's timezone (audit M1 DST fix)."""
         row = MagicMock()
         row.user_id = 1
         row.schedule_hour = 7
         row.schedule_minute = 30
+        row.timezone = "UTC"
 
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = [row]
@@ -286,6 +288,7 @@ class TestSchedulePersistence:
         with (
             patch("daily.main.async_session", return_value=mock_ctx),
             patch("daily.main.setup_scheduler_for_user") as mock_setup,
+            patch("daily.main.setup_token_refresh_job"),
             patch("daily.main.scheduler", mock_sched),
         ):
             from fastapi import FastAPI
@@ -295,7 +298,7 @@ class TestSchedulePersistence:
             async with lifespan(test_app):
                 pass
 
-        mock_setup.assert_called_once_with(hour=7, minute=30, user_id=1)
+        mock_setup.assert_called_once_with(hour=7, minute=30, user_id=1, timezone="UTC")
 
     @pytest.mark.asyncio
     async def test_lifespan_logs_db_schedule(self, caplog):

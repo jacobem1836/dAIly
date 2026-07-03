@@ -2,16 +2,18 @@
 FastAPI application entrypoint for dAIly.
 
 The lifespan context manager wires the APScheduler briefing pipeline cron job:
-  - On startup: parse briefing_schedule_time from Settings, then query BriefingConfig
-    from the database to override with any user-persisted schedule. Falls back to the
-    env/settings default if the DB is unreachable or no config row exists.
-    Calls setup_scheduler, then scheduler.start(). Scheduler runs within the same
-    asyncio event loop.
+  - On startup: query BriefingConfig from the database and register one
+    per-user cron job per row via setup_scheduler_for_user, passing each
+    user's `timezone` through so hour/minute are interpreted as LOCAL
+    wall-clock time (DST-safe — see scheduler.setup_scheduler_for_user).
+    Also registers the periodic OAuth token-refresh job (audit C2 — see
+    scheduler.setup_token_refresh_job). Falls back to zero jobs if the DB is
+    unreachable rather than crashing the app.
   - On shutdown: scheduler.shutdown(wait=False) to stop gracefully.
 
-The default schedule is loaded from Settings.briefing_schedule_time (default "05:00" UTC).
-If the user has saved a config via `daily config set briefing.schedule_time`, the value
-is persisted to BriefingConfig in the database and takes effect on the next app restart.
+Preferences changes made via PUT /users/me/preferences take effect immediately
+(no restart) — users/router.py calls setup_scheduler_for_user again after the
+DB upsert to live-reschedule the running job (audit M1).
 """
 
 import logging
@@ -23,7 +25,12 @@ from sqlalchemy import select
 
 from daily.auth.router import router as auth_router
 from daily.briefing.router import router as briefing_router
-from daily.briefing.scheduler import scheduler, setup_scheduler, setup_scheduler_for_user
+from daily.briefing.scheduler import (
+    scheduler,
+    setup_scheduler,
+    setup_scheduler_for_user,
+    setup_token_refresh_job,
+)
 from daily.config import Settings
 from daily.db.engine import async_session
 from daily.db.models import BriefingConfig
@@ -52,11 +59,17 @@ async def lifespan(app: FastAPI):
                 hour=row.schedule_hour,
                 minute=row.schedule_minute,
                 user_id=row.user_id,
+                timezone=row.timezone,
             )
             registered += 1
         logger.info("Registered %d per-user briefing cron jobs", registered)
     except Exception:
         logger.exception("Failed to load BriefingConfig rows; starting scheduler with no jobs")
+
+    # Audit C2: proactively refresh expiring Google/Microsoft OAuth tokens on
+    # a periodic interval — otherwise every integration silently 401s forever
+    # once its access token expires.
+    setup_token_refresh_job()
 
     scheduler.start()
     logger.info("Briefing scheduler started")
