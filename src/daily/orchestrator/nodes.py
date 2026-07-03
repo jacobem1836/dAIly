@@ -461,14 +461,19 @@ async def draft_node(state: SessionState) -> dict:
                     }
                     for e in page.emails
                 ]
-                logger.warning("draft_node: fallback fetched %d emails", len(email_ctx))
+                # Audit M-2: debug-level — these are diagnostic-only, not
+                # warning-worthy (fallback fetch succeeding is normal).
+                logger.debug("draft_node: fallback fetched %d emails", len(email_ctx))
             except Exception as exc:
-                logger.warning("draft_node: fallback email fetch failed: %s", exc)
+                logger.debug("draft_node: fallback email fetch failed: %s", exc)
                 email_ctx = []
 
-    logger.warning("draft_node: email_ctx has %d entries", len(email_ctx))
+    logger.debug("draft_node: email_ctx has %d entries", len(email_ctx))
     email_context_str = _format_email_context(email_ctx)
-    logger.warning("draft_node: email_context_str preview: %s", email_context_str[:200])
+    # Audit M-2: this preview contains sender addresses + subject lines
+    # (built by _format_email_context) — PII that must not appear at
+    # warning level, which is visible even at LOG_LEVEL=INFO deployments.
+    logger.debug("draft_node: email_context_str preview: %s", email_context_str[:200])
 
     # Build system prompt
     system_content = DRAFT_SYSTEM_PROMPT.format(
