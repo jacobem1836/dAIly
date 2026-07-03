@@ -56,6 +56,30 @@ async def load_user_session_state(
     adapters = await _resolve_email_adapters(user_id, settings)
     set_email_adapters(adapters)
 
+    # ponytail: audit M3 (deferred, lower priority) — this opens a fresh
+    # psycopg connection pool AND re-runs checkpointer.setup() (schema
+    # migration check) on every single LiveKit job dispatch / CLI chat
+    # invocation, instead of once per worker process.
+    #
+    # Deferred rather than fixed in this pass: livekit-agents defaults to
+    # JobExecutorType.PROCESS with idle-process reuse (WorkerOptions.
+    # num_idle_processes), so genuinely sharing this pool across dispatches
+    # means moving pool creation into WorkerOptions.prewarm_fnc and reading
+    # it back from JobContext.proc.userdata in worker/agent.py — but
+    # prewarm_fnc runs synchronously before any event loop exists, and an
+    # asyncpg/psycopg pool created there would be bound to whatever loop is
+    # active at that moment, not necessarily the one each job later runs
+    # on (a classic cross-loop connection-pool bug). There's also no
+    # existing test harness that mocks livekit-agents' proc lifecycle to
+    # verify this safely. cli.py's own use of this same pattern is fine
+    # as-is — one process, one chat session, no cross-session reuse to gain.
+    #
+    # Upgrade path: add a prewarm_fnc in worker/__main__.py that creates the
+    # pool using the process's own loop (e.g. via asyncio.get_event_loop()
+    # inside a loop.run_until_complete, matching livekit-agents' documented
+    # prewarm pattern), store it on JobContext.proc.userdata, and have
+    # load_user_session_state accept an optional pre-built checkpointer
+    # instead of always constructing its own.
     async with AsyncPostgresSaver.from_conn_string(settings.database_url_psycopg) as checkpointer:
         await checkpointer.setup()
         graph = build_graph(checkpointer=checkpointer)

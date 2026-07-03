@@ -672,7 +672,11 @@ async def _run_chat_session(user_id: int = 1) -> None:
     adapters = await _resolve_email_adapters(user_id, settings)
     set_email_adapters(adapters)
 
-    # 2. Build graph with AsyncPostgresSaver (same checkpointer as the LiveKit worker)
+    # 2. Build graph with AsyncPostgresSaver (same checkpointer as the LiveKit worker).
+    # ponytail: audit M3 — this is fine as-is for the CLI (one process, one chat
+    # session, nothing to reuse across). See worker/state.py for the LiveKit
+    # worker side of this same pattern, where per-job-dispatch pool creation is
+    # a real (deferred) cost.
     async with AsyncPostgresSaver.from_conn_string(settings.database_url_psycopg) as checkpointer:
         await checkpointer.setup()
         graph = build_graph(checkpointer=checkpointer)
