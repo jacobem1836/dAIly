@@ -59,6 +59,12 @@ async def test_fallback_on_streaming_not_supported():
     fake_result = {"messages": [SimpleNamespace(content="fallback content")]}
 
     graph = MagicMock()
+    # stream_response awaits graph.aget_state() after the run_session fallback
+    # to check whether the graph paused at an approval interrupt. A plain
+    # MagicMock attribute is not awaitable, so it must be an AsyncMock; return
+    # a state with next=() (falsy) so the "not paused" branch runs and the
+    # fallback content is yielded, matching this test's intent.
+    graph.aget_state = AsyncMock(return_value=SimpleNamespace(next=(), tasks=[]))
     config = {"configurable": {"thread_id": "user-1-2026-04-30"}}
     initial_state = {}
 
@@ -77,7 +83,17 @@ async def test_fallback_on_streaming_not_supported():
 
 @pytest.mark.asyncio
 async def test_initial_state_only_on_first_turn():
-    """initial_state is passed on the first call to stream_response, None on subsequent calls."""
+    """Full initial_state is passed on the first call; only the briefing
+    narrative is carried forward on subsequent calls.
+
+    Per commit b591174 ("fix: resolve 4 live-session bugs ... briefing
+    context"), passing None on follow-up turns caused astream_session to
+    fall back to "(no briefing loaded)" and lose context for questions like
+    "tell me more about those emails". DailyLLMBridge now stores
+    _briefing_narrative at construction and re-injects it (and only it) as
+    stream_init on every non-first turn — this is intentional, not a leak
+    of the full initial_state.
+    """
     from daily.worker.llm_bridge import DailyLLMBridge
 
     captured_states = []
@@ -101,5 +117,7 @@ async def test_initial_state_only_on_first_turn():
             pass
 
     assert len(captured_states) == 2
-    assert captured_states[0] == initial_state, "first turn should pass initial_state"
-    assert captured_states[1] is None, "second turn should pass None"
+    assert captured_states[0] == initial_state, "first turn should pass full initial_state"
+    assert captured_states[1] == {"briefing_narrative": "Morning"}, (
+        "second turn should carry forward only the briefing narrative, not the full initial_state"
+    )
