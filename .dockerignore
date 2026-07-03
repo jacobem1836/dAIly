@@ -1,0 +1,32 @@
+# Secrets — never send these into the build context.
+.env
+.env.*
+!.env.example
+*.pem
+
+# VCS / editor / OS cruft
+.git
+.gitignore
+.DS_Store
+.claude/
+.claude-flow/
+.claire/
+
+# Not needed inside API/worker images
+ios/
+android/
+docs/
+.planning/
+tests/
+*.md
+!README.md
+
+# Python cruft
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.coverage
+*.egg-info/
+dist/
+build/
