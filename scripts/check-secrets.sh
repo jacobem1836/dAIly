@@ -44,7 +44,7 @@ check_pattern() {
 check_pattern \
   'devsecret12345678901234567890123' \
   'the public LiveKit dev-mode secret' \
-  'livekit.yaml' 'docker-compose.yml' 'scripts/check-secrets.sh'
+  'livekit.yaml' 'docker-compose.yml' 'scripts/check-secrets.sh' 'src/daily/config.py' 'tests/test_config_validation.py'
 
 check_pattern \
   'REPLACE_TURN_SECRET|REPLACE_DOMAIN' \
