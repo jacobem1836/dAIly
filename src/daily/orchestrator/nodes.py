@@ -576,6 +576,51 @@ async def approval_node(state: SessionState) -> dict:
     return {"approval_decision": decision}
 
 
+async def _collect_known_addresses() -> set[str]:
+    """Collect addresses the user has actually SENT to, for whitelist purposes.
+
+    Audit H-1: previously this also added every inbound sender's address to
+    known_addresses, so a single unsolicited email from an attacker was
+    enough to permanently whitelist them as an auto-approved send target —
+    "known contact" effectively meant "anyone who ever emailed you." Only
+    the "To" recipient of each email in the lookback window is collected
+    here; an inbound-only sender (someone the user has never actually sent
+    a message to) is never added. check_recipient_whitelist() will reject
+    such an address, and the user must add the contact explicitly (or reply
+    to them, which makes them a real recipient) before the assistant can
+    send to it.
+
+    This is intentionally provider-agnostic: it doesn't rely on a "Sent"
+    folder label (Gmail's labelIds do carry that signal reliably, but
+    Outlook's `labels` field here is user-assigned categories, not folder
+    location — see integrations/microsoft/adapter.py). Using only the
+    recipient field works the same way for both: for an inbound message the
+    recipient is just the user's own address (harmless noise), and for an
+    outbound message the recipient is the actual contact the user sent to.
+
+    Returns:
+        Set of lowercase-independent recipient addresses from the last 90
+        days of mailbox history. Empty set if no adapters are registered or
+        the fetch fails (fails closed — an empty whitelist rejects sends).
+    """
+    known_addresses: set[str] = set()
+    try:
+        from datetime import datetime, timedelta
+
+        from daily.orchestrator.session import get_email_adapters
+
+        adapters = get_email_adapters()
+        if adapters:
+            since = datetime.now() - timedelta(days=90)
+            page = await adapters[0].list_emails(since=since)
+            known_addresses = {
+                _extract_email(e.recipient) for e in page.emails if e.recipient
+            }
+    except Exception as exc:
+        logger.warning("_collect_known_addresses: could not load known_addresses: %s", exc)
+    return known_addresses
+
+
 async def _build_executor_for_type(
     action_type: ActionType,
     user_id: int,
@@ -646,21 +691,7 @@ async def _build_executor_for_type(
         granted_scopes = set(token.scopes.split()) if token.scopes else set()
         access_token = decrypt_token(token.encrypted_access_token, vault_key)
 
-        # Populate known_addresses from recent email metadata
-        known_addresses: set[str] = set()
-        try:
-            from datetime import datetime, timedelta
-
-            from daily.orchestrator.session import get_email_adapters
-
-            adapters = get_email_adapters()
-            if adapters:
-                since = datetime.now() - timedelta(days=90)
-                page = await adapters[0].list_emails(since=since)
-                known_addresses = {_extract_email(e.sender) for e in page.emails if e.sender}
-                known_addresses.update(_extract_email(e.recipient) for e in page.emails if e.recipient)
-        except Exception as exc:
-            logger.warning("_build_executor_for_type: could not load known_addresses: %s", exc)
+        known_addresses = await _collect_known_addresses()
 
         if token.provider == "microsoft":
             from msgraph import GraphServiceClient

@@ -180,3 +180,82 @@ def test_infer_action_type_dm() -> None:
 
     result = _infer_action_type("Please dm John about the project")
     assert result == ActionType.draft_message
+
+
+# ---------------------------------------------------------------------------
+# _collect_known_addresses: audit H-1 — inbound-only senders must not be
+# auto-whitelisted just because they once emailed the user.
+# ---------------------------------------------------------------------------
+
+
+def _make_email(sender: str, recipient: str, message_id: str = "m1"):
+    from datetime import datetime, timezone
+
+    from daily.integrations.models import EmailMetadata
+
+    return EmailMetadata(
+        message_id=message_id,
+        thread_id=f"thread-{message_id}",
+        subject="Test",
+        sender=sender,
+        recipient=recipient,
+        timestamp=datetime(2026, 4, 1, 9, 0, 0, tzinfo=timezone.utc),
+        is_unread=False,
+        labels=[],
+    )
+
+
+@pytest.mark.asyncio
+async def test_collect_known_addresses_excludes_inbound_only_sender() -> None:
+    """An address that only ever appears as a sender is NOT whitelisted (audit H-1).
+
+    Regression test: previously known_addresses included every sender's
+    address too, so a single unsolicited inbound email from an attacker
+    address was enough to permanently whitelist them as an auto-approved
+    send target.
+    """
+    from daily.integrations.models import EmailPage
+    from daily.orchestrator.nodes import _collect_known_addresses
+
+    inbound_only_email = _make_email(
+        sender="attacker@evil.com", recipient="me@user.com", message_id="inbound-1"
+    )
+    outbound_email = _make_email(
+        sender="me@user.com", recipient="alice@example.com", message_id="outbound-1"
+    )
+
+    mock_adapter = AsyncMock()
+    mock_adapter.list_emails = AsyncMock(
+        return_value=EmailPage(emails=[inbound_only_email, outbound_email], next_page_token=None)
+    )
+
+    with patch("daily.orchestrator.session.get_email_adapters", return_value=[mock_adapter]):
+        known_addresses = await _collect_known_addresses()
+
+    assert "attacker@evil.com" not in known_addresses
+    assert "alice@example.com" in known_addresses
+
+
+@pytest.mark.asyncio
+async def test_collect_known_addresses_empty_when_no_adapters() -> None:
+    """_collect_known_addresses returns an empty set (fails closed) with no adapters."""
+    from daily.orchestrator.nodes import _collect_known_addresses
+
+    with patch("daily.orchestrator.session.get_email_adapters", return_value=[]):
+        known_addresses = await _collect_known_addresses()
+
+    assert known_addresses == set()
+
+
+@pytest.mark.asyncio
+async def test_collect_known_addresses_swallows_adapter_failure() -> None:
+    """_collect_known_addresses returns an empty set (fails closed) if the adapter raises."""
+    from daily.orchestrator.nodes import _collect_known_addresses
+
+    mock_adapter = AsyncMock()
+    mock_adapter.list_emails = AsyncMock(side_effect=RuntimeError("API down"))
+
+    with patch("daily.orchestrator.session.get_email_adapters", return_value=[mock_adapter]):
+        known_addresses = await _collect_known_addresses()
+
+    assert known_addresses == set()
