@@ -26,6 +26,8 @@ targets:
       path: dAIly/Info.plist
       properties:
         CFBundleDisplayName: dAIly
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -43,6 +45,8 @@ targets:
         CODE_SIGN_ENTITLEMENTS: dAIly/dAIly.entitlements
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
   dAIlyTests:
     type: bundle.unit-test
     platform: iOS
