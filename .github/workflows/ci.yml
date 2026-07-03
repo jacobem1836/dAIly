@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg15
+        env:
+          POSTGRES_USER: daily
+          POSTGRES_PASSWORD: daily_ci
+          POSTGRES_DB: daily_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U daily -d daily_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7.4
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://daily:daily_ci@localhost:5432/daily_ci
+      DATABASE_URL_PSYCOPG: postgresql://daily:daily_ci@localhost:5432/daily_ci
+      REDIS_URL: redis://localhost:6379/0
+      # Deterministic 32-byte AES-256 key for CI only — not a real secret.
+      VAULT_KEY: z4/mNyeo8P5FFw2D8Ht02ERVNT7dYRe/jgiWV9pRXbo=
+      JWT_SECRET: ci-test-jwt-secret-not-for-production-use
+      LIVEKIT_URL: ws://localhost:7880
+      LIVEKIT_API_KEY: citestkey
+      LIVEKIT_API_SECRET: citestsecret1234567890123456789012
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run database migrations
+        run: uv run alembic upgrade head
+
+      - name: Run unit + integration tests (coverage-gated)
+        run: uv run pytest --cov=src --cov-report=term-missing
+
+      - name: Run e2e smoke tests
+        run: uv run pytest -m e2e
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Scan tracked files for known-bad secrets
+        run: bash scripts/check-secrets.sh
+
+  # Scheme/signing setup for the iOS project is not fully verified in CI yet —
+  # non-blocking (continue-on-error) until a shared, code-sign-free scheme is
+  # confirmed to exist and build cleanly here.
+  ios:
+    runs-on: macos-15
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: List available schemes
+        run: xcodebuild -list -project dAIly.xcodeproj
+
+      - name: Build dAIly (iOS Simulator, unsigned)
+        run: |
+          xcodebuild build \
+            -project dAIly.xcodeproj \
+            -scheme dAIly \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO

@@ -1,26 +1,75 @@
+# Production compose file for a single-VM deployment of dAIly.
+#
+# Ships with self-hosted postgres/redis services below so this file is
+# actually runnable out of the box. For the recommended beta path (managed
+# Postgres/Redis + LiveKit Cloud instead of self-hosted livekit/coturn), see
+# docs/deployment/ops-runbook.md — swap DATABASE_URL/REDIS_URL to the managed
+# provider's connection string and drop the postgres/redis/pg-backup
+# services.
+#
+# Required .env vars: see .env.example. DOMAIN must be a real hostname
+# pointing at this host for Caddy to obtain a TLS certificate.
 services:
-  livekit:
-    image: livekit/livekit-server:v1.11.0
-    command: --config /etc/livekit.yaml
-    network_mode: host
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    entrypoint: ["sh", "/scripts/migrate-entrypoint.sh"]
     volumes:
-      - ./livekit.yaml:/etc/livekit.yaml:ro
-    restart: unless-stopped
+      - ./scripts:/scripts:ro
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      postgres:
+        condition: service_healthy
 
-  coturn:
-    image: coturn/coturn:4.6.2
-    network_mode: host
-    volumes:
-      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
     restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL_PSYCOPG: ${DATABASE_URL_PSYCOPG}
+      REDIS_URL: ${REDIS_URL}
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
 
   worker:
     build:
       context: .
       dockerfile: Dockerfile.worker
     command: ["uv", "run", "python", "-m", "daily.worker", "start"]
+    restart: unless-stopped
     depends_on:
-      - livekit
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_started
     environment:
       LIVEKIT_URL: ${LIVEKIT_URL}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
@@ -28,4 +77,150 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       DATABASE_URL_PSYCOPG: ${DATABASE_URL_PSYCOPG}
       REDIS_URL: ${REDIS_URL}
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'daily.worker' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  livekit:
+    image: livekit/livekit-server:v1.11.0
+    command: --config /etc/livekit.yaml
+    network_mode: host
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7880/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  coturn:
+    image: coturn/coturn:4.6.2
+    network_mode: host
+    entrypoint: ["sh", "/scripts/coturn-entrypoint.sh"]
+    volumes:
+      - ./turnserver.conf:/templates/turnserver.conf:ro
+      - ./scripts:/scripts:ro
+    environment:
+      TURN_SECRET: ${TURN_SECRET}
+      TURN_REALM: ${TURN_REALM}
+    env_file:
+      - path: .env
+        required: false
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  caddy:
+    image: caddy:2.8.4
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN}
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  # Self-hosted Postgres. Prefer a managed provider for beta — see
+  # docs/deployment/ops-runbook.md.
+  postgres:
+    image: postgres:15.8
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  # Self-hosted Redis. Prefer a managed provider for beta — see
+  # docs/deployment/ops-runbook.md.
+  redis:
+    image: redis:7.4
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD} ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  # Optional scheduled pg_dump backup. Not started by default; run with:
+  #   docker compose -f docker-compose.prod.yml --profile backup up -d pg-backup
+  # See docs/deployment/ops-runbook.md for restore steps and the managed-DB
+  # alternative (point-in-time recovery via the provider instead).
+  pg-backup:
+    image: postgres:15.8
+    profiles: ["backup"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+      PGHOST: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgbackups:/backups
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -eu
+        while true; do
+          stamp=$$(date +%Y%m%d-%H%M%S)
+          echo "pg-backup: dumping $$POSTGRES_DB at $$stamp"
+          pg_dump -h "$$PGHOST" -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -F c -f "/backups/$$POSTGRES_DB-$$stamp.dump"
+          find /backups -name '*.dump' -mtime +14 -delete
+          sleep 86400
+        done
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  pgbackups:
+  caddy_data:
+  caddy_config:

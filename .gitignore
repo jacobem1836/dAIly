@@ -24,7 +24,6 @@ graphify-out/
 # Marketing / landing (separate repo)
 landing/
 marketing/
-scripts/
 
 # Coverage + editor artifacts
 .coverage

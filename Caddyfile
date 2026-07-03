@@ -1,0 +1,17 @@
+# Reverse proxy + automatic Let's Encrypt TLS for the dAIly API.
+#
+# DOMAIN must be a real, publicly resolvable hostname pointing at this host
+# (Caddy needs to complete an ACME HTTP-01/TLS-ALPN challenge to issue a
+# certificate) — see docs/deployment/ops-runbook.md.
+{$DOMAIN} {
+	reverse_proxy api:8000
+
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}

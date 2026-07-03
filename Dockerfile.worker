@@ -1,8 +1,10 @@
 FROM python:3.11-slim
 
-# System deps for audio: ffmpeg + libsndfile for audio-frame work the SDK does
+# System deps for audio: ffmpeg + libsndfile for audio-frame work the SDK does.
+# procps provides pgrep, used by the compose healthcheck to confirm the
+# worker process is still alive (the worker exposes no HTTP endpoint).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg libsndfile1 ca-certificates curl \
+    ffmpeg libsndfile1 ca-certificates curl procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv
