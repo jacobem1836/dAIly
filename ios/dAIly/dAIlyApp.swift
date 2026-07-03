@@ -1,5 +1,6 @@
 import SwiftUI
 import LiveKit
+import os
 
 @main
 struct dAIlyApp: App {
@@ -15,9 +16,14 @@ struct dAIlyApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     private let auth = AuthService(baseURL: Config.backendBaseURL)
+    private let tokenRefresher: TokenRefresher
+
+    private static let logger = Logger(subsystem: "com.jacobmarriott.daily", category: "app")
 
     init() {
         FirstLaunchCleanup.runIfNeeded()
+        tokenRefresher = TokenRefresher(auth: auth)
+        MetricsReporter.shared.start()
     }
 
     var body: some Scene {
@@ -57,6 +63,16 @@ struct dAIlyApp: App {
                 Task { @MainActor in
                     await voiceSession.handleForeground()
                 }
+                // Proactively refresh the access token whenever the app returns to the
+                // foreground, so a returning user pays the (cheap) proactive refresh
+                // path instead of the full reactive backoff on their first tap.
+                Task { @MainActor in
+                    do {
+                        try await tokenRefresher.refreshIfNeeded()
+                    } catch {
+                        Self.logger.notice("Proactive token refresh skipped/failed: \(String(describing: error), privacy: .public)")
+                    }
+                }
             case .inactive:
                 // App is transitioning (e.g. lock screen overlay, notification drawer).
                 // Do nothing — wait for .background or .active to be definitive.
@@ -81,7 +97,7 @@ struct dAIlyApp: App {
                         to: nil, from: nil, for: nil
                     )
                 } catch {
-                    print("[dAIly] pair complete failed: \(error)")
+                    Self.logger.error("Pair complete failed: \(String(describing: error), privacy: .public)")
                 }
             }
         }

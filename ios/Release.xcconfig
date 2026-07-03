@@ -1,0 +1,7 @@
+// Release build settings.
+//
+// DAILY_BACKEND_BASE_URL always points at the deployed production backend.
+// This file is separate from Debug.xcconfig specifically so a local dev
+// tunnel URL can never accidentally ship in a Release/TestFlight build —
+// only Debug.xcconfig is expected to be edited for local testing.
+DAILY_BACKEND_BASE_URL = https:/$()/api.getdaily.dev

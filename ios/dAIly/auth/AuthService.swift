@@ -141,21 +141,37 @@ public final class AuthService {
     /// the completion handler without requiring Universal Links / Associated Domains.
     /// The completion handler fires on both success and cancellation; on success it
     /// forwards the deep link URL to dAIlyApp.handleDeepLink so IntegrationState is
-    /// updated reactively.
+    /// updated reactively. On failure (anything other than a user-initiated
+    /// cancel) `onFailure` is invoked on the main thread so the caller can show
+    /// a visible error instead of silently doing nothing.
     ///
     /// Fire-and-forget: returns once the session has started. The caller updates
     /// UI reactively when IntegrationState.markConnected is called from
-    /// dAIlyApp.onOpenURL.
+    /// dAIlyApp.onOpenURL, or via `onFailure` if the session ends without a
+    /// callback for any reason other than the user cancelling.
     @MainActor
-    public func openOAuthSession(url: URL) throws {
+    public func openOAuthSession(url: URL, onFailure: @escaping (Error) -> Void = { _ in }) throws {
         let session = ASWebAuthenticationSession(
             url: url,
             callbackURLScheme: "daily"
-        ) { [weak self] callbackURL, error in
+        ) { callbackURL, error in
             // callbackURL is the daily://oauth/success?provider= redirect.
             // Re-dispatch to the main app via the registered onOpenURL handler
             // by posting a notification that dAIlyApp observes.
-            guard let callbackURL else { return }
+            guard let callbackURL else {
+                // A user-initiated cancel is expected and should stay silent —
+                // surfacing an error here would make dismissing the sheet look
+                // like a broken app. Any other failure is worth telling the user
+                // about since otherwise the Connect button just silently resets
+                // with no explanation.
+                if let sessionError = error as? ASWebAuthenticationSessionError,
+                   sessionError.code == .canceledLogin {
+                    return
+                }
+                let reported = error ?? AuthError.network("OAuth session ended without a callback")
+                DispatchQueue.main.async { onFailure(reported) }
+                return
+            }
             DispatchQueue.main.async {
                 NotificationCenter.default.post(
                     name: .oauthCallbackReceived,
@@ -210,7 +226,13 @@ public final class AuthService {
                 throw AuthError.server(http.statusCode)
             }
             if T.self == EmptyResponse.self {
-                return EmptyResponse() as! T  // swiftlint:disable:this force_cast
+                guard let empty = EmptyResponse() as? T else {
+                    // Unreachable in practice (T.self == EmptyResponse.self was
+                    // just checked), but avoids a force-cast crash if that
+                    // invariant is ever violated by a future refactor.
+                    throw AuthError.decoding
+                }
+                return empty
             }
             do {
                 return try JSONDecoder().decode(T.self, from: data)

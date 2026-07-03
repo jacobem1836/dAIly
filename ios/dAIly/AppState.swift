@@ -13,6 +13,7 @@ enum RootRoute: Equatable {
 
 // MARK: - AppState
 
+@MainActor
 final class AppState: ObservableObject {
     @Published var isAuthenticated: Bool = false
 
