@@ -1,6 +1,6 @@
 """drop content_summary from action_log
 
-Revision ID: 010_drop_action_log_content_summary
+Revision ID: 010_drop_content_summary
 Revises: 009_add_refresh_token_hash
 Create Date: 2026-07-03
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "010_drop_action_log_content_summary"
+revision: str = "010_drop_content_summary"
 down_revision: Union[str, Sequence[str], None] = "009_add_refresh_token_hash"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
