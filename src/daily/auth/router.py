@@ -1,10 +1,12 @@
 """Auth endpoints: pairing + token refresh (Phase 18, D-01..D-04)."""
-import base64
+import hashlib
+import hmac
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
+from redis.asyncio import Redis
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,15 +17,42 @@ from daily.auth.pairing import (
     generate_pairing_code,
     generate_refresh_token,
 )
+from daily.auth.ratelimit import RateLimiter, client_ip, get_redis
 from daily.config import Settings
 from daily.db.engine import async_session
 from daily.db.models import DeviceToken, PairingCode, User
 from daily.email.resend_client import ResendError, send_magic_link
-from daily.vault.crypto import decrypt_token, encrypt_token
+from daily.vault.crypto import decrypt_token, encrypt_token, load_vault_key
 
 _logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Security fix (wave 1 audit remediation, CRITICAL): a 6-digit pairing code
+# has a 900k-value search space and a 5-minute TTL — brute-forceable without
+# rate limiting. These limits are deliberately generous for legitimate users
+# (typos, retries) while making brute force impractical.
+_SEND_LINK_RATE_LIMIT = RateLimiter("pair_send_link", limit=10, window_seconds=60)
+_PAIR_COMPLETE_RATE_LIMIT = RateLimiter("pair_complete", limit=20, window_seconds=300)
+_TOKEN_REFRESH_RATE_LIMIT = RateLimiter("token_refresh", limit=20, window_seconds=300)
+
+# After this many failed pairing-code guesses from the same client within
+# one pairing-code lifetime, proactively invalidate all currently pending
+# (unused, unexpired) pairing codes — forces re-issuance rather than letting
+# an attacker keep guessing against a live window.
+_MAX_FAILED_PAIR_ATTEMPTS = 5
+
+
+def _hash_refresh_token(raw_token: str) -> str:
+    """SHA-256 hex digest of a raw refresh token (audit C4).
+
+    Stored alongside the encrypted ciphertext so /auth/token/refresh can do
+    an indexed equality lookup instead of decrypting every device token in
+    the table. Not a secret itself (one-way, and the raw token is required
+    to derive it) so plain SHA-256 is sufficient here — this is a lookup
+    key, not a password hash.
+    """
+    return hashlib.sha256(raw_token.encode()).hexdigest()
 
 
 async def _get_db() -> AsyncSession:
@@ -37,15 +66,6 @@ def _get_settings() -> Settings:
 
 class SendLinkRequest(BaseModel):
     email: EmailStr
-
-
-class InitiateRequest(BaseModel):
-    user_id: int
-
-
-class InitiateResponse(BaseModel):
-    code: str
-    expires_in: int
 
 
 class CompleteRequest(BaseModel):
@@ -68,7 +88,11 @@ class RefreshResponse(BaseModel):
     expires_in: int
 
 
-@router.post("/pair/send-link", status_code=204)
+@router.post(
+    "/pair/send-link",
+    status_code=204,
+    dependencies=[Depends(_SEND_LINK_RATE_LIMIT)],
+)
 async def pair_send_link(
     req: SendLinkRequest,
     session: AsyncSession = Depends(_get_db),
@@ -99,30 +123,43 @@ async def pair_send_link(
     return None
 
 
-@router.post("/pair/initiate", response_model=InitiateResponse)
-async def pair_initiate(
-    body: InitiateRequest,
-    session: AsyncSession = Depends(_get_db),
-) -> InitiateResponse:
-    # Auto-create user if missing (per Open Question 1 recommendation in RESEARCH.md)
-    user = await session.get(User, body.user_id)
-    if user is None:
-        user = User(id=body.user_id)
-        session.add(user)
-        await session.flush()
+async def _register_failed_pair_attempt(redis: Redis, request: Request, session: AsyncSession) -> None:
+    """Track failed pairing-code guesses per client IP.
 
-    code = generate_pairing_code()
-    pc = PairingCode(user_id=user.id, code=code, expires_at=code_expiry())
-    session.add(pc)
-    await session.commit()
-    return InitiateResponse(code=code, expires_in=PAIRING_CODE_TTL_SECONDS)
+    Security fix (wave 1 audit remediation): beyond generic rate limiting,
+    once a client racks up too many wrong guesses within one pairing-code
+    lifetime, we proactively invalidate every currently pending (unused,
+    unexpired) PairingCode row. The request has no way to identify which
+    code was actually being targeted, so this trades some legitimate-user
+    friction (forced re-issuance) for closing the window an attacker is
+    brute-forcing against.
+    """
+    key = f"pairfail:{client_ip(request)}"
+    count = await redis.incr(key)
+    if count == 1:
+        await redis.expire(key, PAIRING_CODE_TTL_SECONDS)
+    if count >= _MAX_FAILED_PAIR_ATTEMPTS:
+        now = datetime.now(timezone.utc)
+        await session.execute(
+            update(PairingCode)
+            .where(PairingCode.used.is_(False), PairingCode.expires_at > now)
+            .values(used=True)
+        )
+        await session.commit()
+        await redis.delete(key)
 
 
-@router.post("/pair/complete", response_model=CompleteResponse)
+@router.post(
+    "/pair/complete",
+    response_model=CompleteResponse,
+    dependencies=[Depends(_PAIR_COMPLETE_RATE_LIMIT)],
+)
 async def pair_complete(
+    request: Request,
     body: CompleteRequest,
     session: AsyncSession = Depends(_get_db),
     settings: Settings = Depends(_get_settings),
+    redis: Redis = Depends(get_redis),
 ) -> CompleteResponse:
     # Atomic compare-and-swap to prevent race (RESEARCH.md Pitfall 4)
     now = datetime.now(timezone.utc)
@@ -140,6 +177,7 @@ async def pair_complete(
     row = result.first()
     if row is None:
         await session.rollback()
+        await _register_failed_pair_attempt(redis, request, session)
         raise HTTPException(status_code=400, detail="Invalid, used, or expired pairing code")
     _, user_id, pairing_email = row
 
@@ -165,13 +203,14 @@ async def pair_complete(
             user_id = user.id
 
     refresh = generate_refresh_token()
-    key = base64.b64decode(settings.vault_key) if isinstance(settings.vault_key, str) else settings.vault_key
+    key = load_vault_key(settings.vault_key)
     encrypted = encrypt_token(refresh, key)
     expires_at = now + timedelta(days=settings.jwt_refresh_ttl_days)
     dt = DeviceToken(
         user_id=user_id,
         device_name=body.device_name,
         encrypted_refresh_token=encrypted,
+        refresh_token_hash=_hash_refresh_token(refresh),
         expires_at=expires_at,
     )
     session.add(dt)
@@ -185,24 +224,45 @@ async def pair_complete(
     )
 
 
-@router.post("/token/refresh", response_model=RefreshResponse)
+@router.post(
+    "/token/refresh",
+    response_model=RefreshResponse,
+    dependencies=[Depends(_TOKEN_REFRESH_RATE_LIMIT)],
+)
 async def token_refresh(
     body: RefreshRequest,
     session: AsyncSession = Depends(_get_db),
     settings: Settings = Depends(_get_settings),
 ) -> RefreshResponse:
+    """Exchange a refresh token for a new access token.
+
+    Audit C4 fix: previously this scanned every unrevoked, unexpired
+    DeviceToken row and AES-decrypted each one in a Python loop to find a
+    match — O(all devices) per call. Now does an indexed lookup by
+    refresh_token_hash (SHA-256 of the raw token) first, decrypting only
+    the single matched row to confirm via constant-time compare.
+
+    Legacy rows created before refresh_token_hash existed have it as NULL
+    (the hash can't be derived from ciphertext without decrypting first).
+    Those fall back to the old per-row scan, but ONLY among NULL-hash rows
+    — and a successful match backfills the hash so the device hits the
+    fast indexed path on every subsequent refresh.
+    """
     now = datetime.now(timezone.utc)
-    # Scan unrevoked, unexpired tokens; decrypt and compare.
-    # Acceptable for v1.4 scale; for higher scale, store a hash alongside ciphertext.
+    key = load_vault_key(settings.vault_key)
+    target_hash = _hash_refresh_token(body.refresh_token)
+
+    # Fast path: indexed lookup by refresh_token_hash.
     stmt = select(DeviceToken).where(
+        DeviceToken.refresh_token_hash == target_hash,
         DeviceToken.revoked.is_(False),
         DeviceToken.expires_at > now,
     )
     result = await session.execute(stmt)
-    key = base64.b64decode(settings.vault_key) if isinstance(settings.vault_key, str) else settings.vault_key
-    for dt in result.scalars():
+    dt = result.scalar_one_or_none()
+    if dt is not None:
         try:
-            if decrypt_token(dt.encrypted_refresh_token, key) == body.refresh_token:
+            if hmac.compare_digest(decrypt_token(dt.encrypted_refresh_token, key), body.refresh_token):
                 dt.last_used_at = now
                 await session.commit()
                 access = encode_access_token(dt.user_id, settings)
@@ -211,7 +271,34 @@ async def token_refresh(
                     expires_in=settings.jwt_access_ttl_minutes * 60,
                 )
         except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or revoked refresh token",
+        )
+
+    # Fallback: legacy rows with no hash yet (nullable, backfilled lazily).
+    # Scans only NULL-hash rows, never the whole table.
+    legacy_stmt = select(DeviceToken).where(
+        DeviceToken.refresh_token_hash.is_(None),
+        DeviceToken.revoked.is_(False),
+        DeviceToken.expires_at > now,
+    )
+    legacy_result = await session.execute(legacy_stmt)
+    for legacy_dt in legacy_result.scalars():
+        try:
+            if hmac.compare_digest(decrypt_token(legacy_dt.encrypted_refresh_token, key), body.refresh_token):
+                legacy_dt.last_used_at = now
+                legacy_dt.refresh_token_hash = target_hash
+                await session.commit()
+                access = encode_access_token(legacy_dt.user_id, settings)
+                return RefreshResponse(
+                    access_token=access,
+                    expires_in=settings.jwt_access_ttl_minutes * 60,
+                )
+        except Exception:
             continue
+
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid or revoked refresh token",

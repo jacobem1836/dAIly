@@ -122,12 +122,14 @@ async def test_astream_session_yields_token_deltas():
         return_value=_fake_stream("Hello", " there", None, "!")
     )
 
-    with (
-        patch("daily.config.Settings") as mock_settings_cls,
-        patch("openai.AsyncOpenAI", return_value=mock_client),
-    ):
-        mock_settings_cls.return_value.openai_api_key = "fake-key"
-
+    # session.py does `from openai import AsyncOpenAI` and `from daily.config
+    # import Settings`, binding both names directly into its own module
+    # namespace at import time. Patching `openai.AsyncOpenAI` or
+    # `daily.config.Settings` therefore has no effect on those names inside
+    # session.py — the real client/settings classes still get used. Patch
+    # the module's own client-factory function instead so no real network
+    # call or Settings lookup happens.
+    with patch("daily.orchestrator.session._get_openai_client", return_value=mock_client):
         tokens = []
         async for tok in astream_session(
             graph=MagicMock(),
@@ -155,12 +157,7 @@ async def test_astream_session_with_initial_state():
         "preferences": {"tone": "formal", "briefing_length": "brief"},
     }
 
-    with (
-        patch("daily.config.Settings") as mock_settings_cls,
-        patch("openai.AsyncOpenAI", return_value=mock_client),
-    ):
-        mock_settings_cls.return_value.openai_api_key = "fake-key"
-
+    with patch("daily.orchestrator.session._get_openai_client", return_value=mock_client):
         tokens = []
         async for tok in astream_session(
             graph=MagicMock(),
@@ -185,12 +182,7 @@ async def test_astream_session_skips_none_deltas():
         return_value=_fake_stream(None, None, "hi", None)
     )
 
-    with (
-        patch("daily.config.Settings") as mock_settings_cls,
-        patch("openai.AsyncOpenAI", return_value=mock_client),
-    ):
-        mock_settings_cls.return_value.openai_api_key = "fake-key"
-
+    with patch("daily.orchestrator.session._get_openai_client", return_value=mock_client):
         tokens = []
         async for tok in astream_session(
             graph=MagicMock(),

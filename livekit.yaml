@@ -5,7 +5,18 @@ rtc:
   port_range_start: 50000
   port_range_end: 60000
   use_external_ip: false
+# SECURITY: do NOT ship real keys in this file or in git. The pair below is a
+# placeholder, not LiveKit's public quickstart devkey/devsecret (which is
+# publicly known and lets anyone mint a valid room-join token offline).
+# Local dev: override via a git-ignored `livekit.local.yaml` or by exporting
+# LIVEKIT_KEYS="<key>: <secret>" and passing --config as needed.
+# Production: the deploy pipeline MUST inject real values here (e.g. template
+# this file from LIVEKIT_API_KEY/LIVEKIT_API_SECRET at deploy time, or run
+# LiveKit Cloud instead of self-hosting). daily.config.Settings fails fast at
+# app startup if LIVEKIT_API_KEY/LIVEKIT_API_SECRET are missing or match a
+# known-public value — keep this file's values in sync with those, and never
+# reuse the values below.
 keys:
-  devkey: devsecret12345678901234567890123
+  REPLACE_AT_DEPLOY_TIME_key: REPLACE_AT_DEPLOY_TIME_secret_min_32_chars
 turn:
   enabled: false

@@ -96,15 +96,27 @@ async def _fetch_all_emails(
 
 
 async def _fetch_all_messages(
-    adapters: list[MessageAdapter], since: datetime
+    adapters: list[MessageAdapter],
+    since: datetime,
+    channels: list[str] | None = None,
 ) -> list[MessageMetadata]:
     """Fetch all message metadata from all adapters, handling pagination.
 
     Loops through pages until next_cursor is None for each adapter.
 
+    Audit finding C1: `channels` was previously hardcoded to `[]` here, which
+    meant the per-user BriefingConfig.slack_channels value was never read —
+    Slack briefing was silently dead regardless of configuration. `channels`
+    now threads through from BriefingConfig (via build_context) so a configured
+    channel list actually reaches the adapter. An empty/unset list is passed
+    through unchanged — the adapter (e.g. SlackAdapter) decides what "no
+    configured channels" means (default: all channels the bot is a member of).
+
     Args:
         adapters: List of message adapter instances to query.
         since: Only fetch messages after this datetime.
+        channels: Channel IDs to restrict the fetch to. Empty/None means "no
+            explicit configuration" — passed through as `[]` to the adapter.
 
     Returns:
         Combined list of MessageMetadata from all adapters and all pages.
@@ -112,7 +124,7 @@ async def _fetch_all_messages(
     all_messages: list[MessageMetadata] = []
     for adapter in adapters:
         # TODO: Pass cursor to list_messages once MessageAdapter.list_messages accepts cursor param
-        page = await adapter.list_messages(channels=[], since=since)
+        page = await adapter.list_messages(channels=channels or [], since=since)
         all_messages.extend(page.messages)
         # Single page only — adapter signature does not accept cursor yet.
         # Multi-page support requires extending MessageAdapter.list_messages signature.
@@ -127,6 +139,7 @@ async def build_context(
     vip_senders: frozenset[str],
     user_email: str,
     top_n: int = 5,
+    slack_channels: list[str] | None = None,
 ) -> BriefingContext:
     """Assemble a BriefingContext from email, calendar, and Slack data sources.
 
@@ -146,6 +159,9 @@ async def build_context(
         vip_senders: Set of VIP sender email addresses for priority override.
         user_email: User's email address for recipient comparison in ranker.
         top_n: Number of top-ranked emails to include in the briefing.
+        slack_channels: Per-user configured Slack channel IDs (BriefingConfig.
+            slack_channels). Empty/None means no explicit configuration; the
+            adapter decides the default (see SlackAdapter._resolve_default_channels).
 
     Returns:
         BriefingContext with emails, calendar, slack, and raw_bodies populated.
@@ -215,7 +231,9 @@ async def build_context(
     # ── Slack phase ────────────────────────────────────────────────────────────
     slack_ctx = SlackContext(messages=[])
     try:
-        all_messages = await _fetch_all_messages(message_adapters, since)
+        all_messages = await _fetch_all_messages(
+            message_adapters, since, channels=slack_channels
+        )
 
         # Filter to mentions and DMs only (BRIEF-05)
         filtered = [m for m in all_messages if m.is_mention or m.is_dm]

@@ -11,7 +11,39 @@ _REQUIRED_VARS: dict[str, str] = {
     "deepgram_api_key": "DEEPGRAM_API_KEY",
     "cartesia_api_key": "CARTESIA_API_KEY",
     "resend_api_key": "RESEND_API_KEY",
+    "livekit_api_key": "LIVEKIT_API_KEY",
+    "livekit_api_secret": "LIVEKIT_API_SECRET",
 }
+
+# LiveKit's public quickstart credentials (documented in their OSS README/
+# livekit.yaml examples). Anyone can mint a valid room-join token offline
+# with these — they must never be used outside a throwaway local dev
+# container. Reject them outright at startup rather than trusting env
+# presence alone.
+_BAD_LIVEKIT_API_KEYS = {"devkey"}
+_BAD_LIVEKIT_API_SECRETS = {"secret", "devsecret12345678901234567890123"}
+
+# Well-known placeholder/weak values that must never be used as a real JWT
+# signing secret, even if they happen to be >= 32 characters.
+_WEAK_JWT_SECRETS = {
+    "changeme",
+    "change_me",
+    "change-me",
+    "secret",
+    "password",
+    "your-secret-key",
+    "your_secret_key",
+    "supersecret",
+    "super-secret",
+    "super_secret_key",
+    "test",
+    "testsecret",
+    "jwtsecret",
+    "jwt_secret",
+    "jwt-secret",
+    "12345678901234567890123456789012",
+}
+_MIN_JWT_SECRET_LENGTH = 32
 
 
 class Settings(BaseSettings):
@@ -42,8 +74,10 @@ class Settings(BaseSettings):
     # both point at the same server. Use your LiveKit Cloud URL or a publicly
     # accessible tunnel (e.g. wss://your-project.livekit.cloud).
     livekit_url: str = "ws://localhost:7880"
-    livekit_api_key: str = "devkey"
-    livekit_api_secret: str = "secret"
+    # No safe default — these are validated as required, non-quickstart
+    # values below (T-security: public LiveKit devkey/devsecret rejection).
+    livekit_api_key: str = ""
+    livekit_api_secret: str = ""
 
     briefing_email_top_n: int = 5  # per D-05
     briefing_schedule_time: str = "05:00"  # per D-13, default precompute time
@@ -88,4 +122,37 @@ class Settings(BaseSettings):
                 f"Missing required environment variables: {var_list}. "
                 "Copy .env.example to .env and fill them in."
             )
+
+        # Additional strength/legitimacy checks — run only once all required
+        # vars are confirmed present, so these messages are unambiguous.
+        errors: list[str] = []
+
+        if len(self.jwt_secret) < _MIN_JWT_SECRET_LENGTH:
+            errors.append(
+                f"JWT_SECRET must be at least {_MIN_JWT_SECRET_LENGTH} characters "
+                f"(got {len(self.jwt_secret)}). Generate one with "
+                "`openssl rand -hex 32`."
+            )
+        elif self.jwt_secret.lower() in _WEAK_JWT_SECRETS:
+            errors.append(
+                "JWT_SECRET is a well-known placeholder/weak value. Generate a "
+                "real random secret with `openssl rand -hex 32`."
+            )
+
+        if self.livekit_api_key in _BAD_LIVEKIT_API_KEYS:
+            errors.append(
+                "LIVEKIT_API_KEY is set to LiveKit's public quickstart devkey. "
+                "This is publicly known and lets anyone mint a valid room-join "
+                "token — set a real, non-public LIVEKIT_API_KEY."
+            )
+        if self.livekit_api_secret in _BAD_LIVEKIT_API_SECRETS:
+            errors.append(
+                "LIVEKIT_API_SECRET is set to a known public/quickstart value. "
+                "This is publicly known and lets anyone mint a valid room-join "
+                "token — set a real, non-public LIVEKIT_API_SECRET."
+            )
+
+        if errors:
+            raise ValueError(" ".join(errors))
+
         return self

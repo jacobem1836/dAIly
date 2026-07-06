@@ -19,7 +19,6 @@ needing a separate sync engine or psycopg2 dependency (per D-16 review).
 """
 
 import asyncio
-import base64
 
 import typer
 
@@ -47,6 +46,7 @@ async def _upsert_profile(user_id: int, key: str, value: str) -> str:
     Supported keys: tone, briefing_length, category_order (T-03-09: validated before DB write)
     """
     from daily.db.engine import async_session
+    from daily.profile.models import VALID_CATEGORIES
     from daily.profile.service import upsert_preference
 
     valid_keys = {"tone", "briefing_length", "category_order"}
@@ -57,6 +57,19 @@ async def _upsert_profile(user_id: int, key: str, value: str) -> str:
         return f"Invalid tone: {value}. Must be: formal, casual, conversational"
     if key == "briefing_length" and value not in ("concise", "standard", "detailed"):
         return f"Invalid briefing_length: {value}. Must be: concise, standard, detailed"
+    if key == "category_order":
+        # Audit M-4: category_order is joined straight into the narrator
+        # LLM's system prompt — reject unknown categories before the DB
+        # write, same as tone/briefing_length above. upsert_preference()
+        # enforces this too (the actual persistence boundary), but failing
+        # fast here avoids opening a DB session for known-bad input.
+        items = [item.strip() for item in value.split(",")]
+        invalid = [item for item in items if item not in VALID_CATEGORIES]
+        if invalid:
+            return (
+                f"Invalid category_order value(s): {', '.join(invalid)}. "
+                f"Valid categories: {', '.join(sorted(VALID_CATEGORIES))}"
+            )
 
     async with async_session() as session:
         await upsert_preference(user_id, key, value, session)
@@ -284,6 +297,7 @@ def gmail():
         run_google_oauth_flow,
         store_google_tokens,
     )
+    from daily.vault.crypto import load_vault_key
 
     settings = Settings()
 
@@ -294,12 +308,13 @@ def gmail():
         )
         raise typer.Exit(1)
 
-    vault_key = base64.b64decode(settings.vault_key) if settings.vault_key else b""
-    if len(vault_key) != 32:
+    try:
+        vault_key = load_vault_key(settings.vault_key)
+    except ValueError:
         typer.echo(
             "Error: VAULT_KEY must be a 32-byte base64-encoded key", err=True
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     typer.echo("Opening browser for Google OAuth authorization...")
     typer.echo("Scopes: Gmail (read + send) + Google Calendar (read + write)")
@@ -348,6 +363,7 @@ def slack():
         run_slack_oauth_flow,
         store_slack_token,
     )
+    from daily.vault.crypto import load_vault_key
 
     settings = Settings()
 
@@ -358,12 +374,13 @@ def slack():
         )
         raise typer.Exit(1)
 
-    vault_key = base64.b64decode(settings.vault_key) if settings.vault_key else b""
-    if len(vault_key) != 32:
+    try:
+        vault_key = load_vault_key(settings.vault_key)
+    except ValueError:
         typer.echo(
             "Error: VAULT_KEY must be a 32-byte base64-encoded key", err=True
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     scopes_display = ", ".join(SLACK_BOT_SCOPES)
     typer.echo("Opening browser for Slack OAuth authorization...")
@@ -400,6 +417,7 @@ def outlook():
         run_microsoft_oauth_flow,
         store_microsoft_tokens,
     )
+    from daily.vault.crypto import load_vault_key
 
     settings = Settings()
 
@@ -410,12 +428,13 @@ def outlook():
         )
         raise typer.Exit(1)
 
-    vault_key = base64.b64decode(settings.vault_key) if settings.vault_key else b""
-    if len(vault_key) != 32:
+    try:
+        vault_key = load_vault_key(settings.vault_key)
+    except ValueError:
         typer.echo(
             "Error: VAULT_KEY must be a 32-byte base64-encoded key", err=True
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     scopes_display = ", ".join(MICROSOFT_READONLY_SCOPES)
     typer.echo("Opening browser for Microsoft OAuth authorization...")
@@ -457,6 +476,13 @@ from daily.orchestrator.session import (
     run_session,
     set_email_adapters,
 )
+
+# Audit H3: adapter resolution logic used to live here as a private function
+# (and the LiveKit worker imported it directly — see worker/state.py history).
+# It now lives in daily.integrations.resolve as a public, worker-safe
+# function. Imported under the original private name so existing patches
+# (`patch("daily.cli._resolve_email_adapters", ...)`) keep working unchanged.
+from daily.integrations.resolve import resolve_email_adapters as _resolve_email_adapters
 
 # ---------------------------------------------------------------------------
 # Approval flow helpers
@@ -586,64 +612,6 @@ async def _handle_approval_flow(
     return output
 
 
-async def _resolve_email_adapters(user_id: int, settings) -> list:
-    """Load integration tokens and instantiate real email adapters.
-
-    Follows same pattern as briefing/scheduler.py resolve_pipeline_kwargs.
-    Tokens are decrypted in-memory only — never logged (T-03-12).
-
-    Args:
-        user_id: User whose integration tokens to load.
-        settings: Settings instance providing vault_key.
-
-    Returns:
-        List of EmailAdapter instances (GmailAdapter, OutlookAdapter).
-        Empty list if no tokens are stored or vault_key is unset.
-    """
-    from sqlalchemy import select
-
-    from daily.db.engine import async_session
-    from daily.db.models import IntegrationToken
-    from daily.integrations.google.adapter import GmailAdapter
-    from daily.integrations.microsoft.adapter import OutlookAdapter
-    from daily.vault.crypto import decrypt_token
-
-    vault_key = base64.b64decode(settings.vault_key) if settings.vault_key else b""
-    adapters = []
-
-    async with async_session() as session:
-        result = await session.execute(
-            select(IntegrationToken).where(IntegrationToken.user_id == user_id)
-        )
-        tokens = result.scalars().all()
-
-    for token in tokens:
-        try:
-            decrypted = decrypt_token(token.encrypted_access_token, vault_key)
-            if token.provider == "google":
-                from google.oauth2.credentials import Credentials as GoogleCredentials
-                refresh_token = (
-                    decrypt_token(token.encrypted_refresh_token, vault_key)
-                    if token.encrypted_refresh_token else None
-                )
-                creds = GoogleCredentials(
-                    token=decrypted,
-                    refresh_token=refresh_token,
-                    token_uri="https://oauth2.googleapis.com/token",
-                    client_id=settings.google_client_id,
-                    client_secret=settings.google_client_secret,
-                )
-                adapters.append(GmailAdapter(credentials=creds))
-            elif token.provider == "microsoft":
-                # OutlookAdapter expects access_token (str), not credentials=
-                adapters.append(OutlookAdapter(access_token=decrypted))
-        except Exception:
-            # Skip tokens that fail decryption — don't block the session
-            pass
-
-    return adapters
-
-
 async def _run_chat_session(user_id: int = 1) -> None:
     """Async helper for interactive orchestrator chat session.
 
@@ -667,7 +635,11 @@ async def _run_chat_session(user_id: int = 1) -> None:
     adapters = await _resolve_email_adapters(user_id, settings)
     set_email_adapters(adapters)
 
-    # 2. Build graph with AsyncPostgresSaver (same checkpointer as the LiveKit worker)
+    # 2. Build graph with AsyncPostgresSaver (same checkpointer as the LiveKit worker).
+    # ponytail: audit M3 — this is fine as-is for the CLI (one process, one chat
+    # session, nothing to reuse across). See worker/state.py for the LiveKit
+    # worker side of this same pattern, where per-job-dispatch pool creation is
+    # a real (deferred) cost.
     async with AsyncPostgresSaver.from_conn_string(settings.database_url_psycopg) as checkpointer:
         await checkpointer.setup()
         graph = build_graph(checkpointer=checkpointer)

@@ -241,3 +241,83 @@ async def test_concurrent_redaction_with_semaphore():
     for r in results:
         assert isinstance(r, str)
         assert len(r) > 0
+
+
+# ---------------------------------------------------------------------------
+# Test 9: One failed item does not abort the whole batch (audit H7)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_redact_emails_one_failure_does_not_abort_batch():
+    """If one email's OpenAI call raises, the batch still returns all emails.
+
+    Without return_exceptions=True on asyncio.gather, one failed task
+    cancels every sibling task and the exception propagates, aborting the
+    entire briefing. This test fails without the fix (redact_emails raises)
+    and passes with it (all 3 emails come back, the failed one keeping its
+    default empty summary).
+    """
+    emails = [make_ranked_email(f"msg-{i}") for i in range(3)]
+    raw_bodies = {
+        "msg-0": "Body zero.",
+        "msg-1": "Body one — this one will fail.",
+        "msg-2": "Body two.",
+    }
+
+    mock_client = make_mock_openai_client(content="Summarised content.")
+
+    async def _create(*args, **kwargs):
+        messages = kwargs.get("messages", [])
+        if any("fail" in m.get("content", "") for m in messages):
+            raise TimeoutError("OpenAI call timed out")
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Summarised content."
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        return mock_response
+
+    mock_client.chat.completions.create = AsyncMock(side_effect=_create)
+
+    result = await redact_emails(emails, raw_bodies, mock_client)
+
+    assert len(result) == 3
+    by_id = {e.metadata.message_id: e for e in result}
+    assert by_id["msg-0"].summary == "Summarised content."
+    assert by_id["msg-1"].summary == ""  # failed item keeps default empty summary
+    assert by_id["msg-2"].summary == "Summarised content."
+
+
+@pytest.mark.asyncio
+async def test_redact_messages_one_failure_does_not_abort_batch():
+    """If one message's OpenAI call raises, the others still get summarised.
+
+    Fails without return_exceptions=True (redact_messages raises); passes
+    with it (2 of 3 messages come back, the failed one dropped from the dict).
+    """
+    messages = [make_message_metadata(f"slack-{i}") for i in range(3)]
+    raw_texts = {
+        "slack-0": "Text zero.",
+        "slack-1": "Text one — this one will fail.",
+        "slack-2": "Text two.",
+    }
+
+    mock_client = make_mock_openai_client(content="Summarised slack message.")
+
+    async def _create(*args, **kwargs):
+        messages_kw = kwargs.get("messages", [])
+        if any("fail" in m.get("content", "") for m in messages_kw):
+            raise TimeoutError("OpenAI call timed out")
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Summarised slack message."
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        return mock_response
+
+    mock_client.chat.completions.create = AsyncMock(side_effect=_create)
+
+    result = await redact_messages(messages, raw_texts, mock_client)
+
+    assert result["slack-0"] == "Summarised slack message."
+    assert "slack-1" not in result  # failed item dropped from the result dict
+    assert result["slack-2"] == "Summarised slack message."

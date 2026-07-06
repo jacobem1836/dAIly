@@ -24,4 +24,8 @@ graphify-out/
 # Marketing / landing (separate repo)
 landing/
 marketing/
-scripts/
+
+# Coverage + editor artifacts
+.coverage
+ios/dAIly.xcodeproj/xcuserdata/
+ios/dAIly.xcodeproj/project.xcworkspace/xcuserdata/

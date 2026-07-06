@@ -606,3 +606,76 @@ class TestDraftNodeActionTypeInference:
         assert draft is not None
         assert draft.action_type in (ActionType.schedule_event, ActionType.reschedule_event,
                                       ActionType.draft_email, ActionType.compose_email)
+
+
+class TestDraftNodeFallbackLoggingDoesNotLeakPii:
+    """Audit M-2: draft_node's fallback email-context fetch must not log
+    sender addresses or subject lines at WARNING (visible even at
+    LOG_LEVEL=INFO) — this diagnostic logging belongs at DEBUG."""
+
+    @pytest.mark.asyncio
+    async def test_fallback_fetch_does_not_warn_with_email_content(self, caplog):
+        """No WARNING-level record from draft_node contains the sender/subject."""
+        import logging
+
+        state = _make_state()  # email_context defaults to [] -> triggers fallback fetch
+        mock_llm_response = _make_llm_response()
+
+        mock_adapter = AsyncMock()
+        email_meta = _make_mock_email_metadata("sent-001")  # subject="Test email", sender="me@example.com"
+        email_page = EmailPage(emails=[email_meta], next_page_token=None)
+        mock_adapter.list_emails = AsyncMock(return_value=email_page)
+        mock_adapter.get_email_body = AsyncMock(return_value="Hi there.")
+
+        with (
+            patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_openai_cls,
+            patch("daily.orchestrator.nodes.get_email_adapters", return_value=[mock_adapter]),
+            patch("daily.orchestrator.nodes.summarise_and_redact", new=AsyncMock(return_value="[REDACTED]")),
+            caplog.at_level(logging.WARNING, logger="daily.orchestrator.nodes"),
+        ):
+            mock_client = AsyncMock()
+            mock_openai_cls.return_value = mock_client
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_llm_response)
+
+            from daily.orchestrator.nodes import draft_node
+
+            await draft_node(state)
+
+        warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        for record in warning_records:
+            message = record.getMessage()
+            assert email_meta.sender not in message
+            assert email_meta.subject not in message
+
+    @pytest.mark.asyncio
+    async def test_fallback_fetch_logs_are_available_at_debug(self, caplog):
+        """The fallback diagnostic logging still exists, just demoted to DEBUG."""
+        import logging
+
+        state = _make_state()
+        mock_llm_response = _make_llm_response()
+
+        mock_adapter = AsyncMock()
+        email_meta = _make_mock_email_metadata("sent-001")
+        email_page = EmailPage(emails=[email_meta], next_page_token=None)
+        mock_adapter.list_emails = AsyncMock(return_value=email_page)
+        mock_adapter.get_email_body = AsyncMock(return_value="Hi there.")
+
+        with (
+            patch("daily.orchestrator.nodes.AsyncOpenAI") as mock_openai_cls,
+            patch("daily.orchestrator.nodes.get_email_adapters", return_value=[mock_adapter]),
+            patch("daily.orchestrator.nodes.summarise_and_redact", new=AsyncMock(return_value="[REDACTED]")),
+            caplog.at_level(logging.DEBUG, logger="daily.orchestrator.nodes"),
+        ):
+            mock_client = AsyncMock()
+            mock_openai_cls.return_value = mock_client
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_llm_response)
+
+            from daily.orchestrator.nodes import draft_node
+
+            await draft_node(state)
+
+        debug_messages = " ".join(
+            r.getMessage() for r in caplog.records if r.levelno == logging.DEBUG
+        )
+        assert "email_ctx has" in debug_messages

@@ -30,12 +30,21 @@ from daily.profile.service import load_profile
 # across astream_session calls to avoid per-call connection overhead.
 _openai_client: AsyncOpenAI | None = None
 
+# Explicit timeout/max_retries (audit H7) so a slow or transiently-failing
+# OpenAI call can't hang a voice turn indefinitely or abort on one blip.
+_OPENAI_CLIENT_TIMEOUT_SECONDS = 30
+_OPENAI_CLIENT_MAX_RETRIES = 2
+
 
 def _get_openai_client() -> AsyncOpenAI:
     """Return (and lazily create) the module-level OpenAI client."""
     global _openai_client
     if _openai_client is None:
-        _openai_client = AsyncOpenAI(api_key=Settings().openai_api_key)
+        _openai_client = AsyncOpenAI(
+            api_key=Settings().openai_api_key,
+            timeout=_OPENAI_CLIENT_TIMEOUT_SECONDS,
+            max_retries=_OPENAI_CLIENT_MAX_RETRIES,
+        )
     return _openai_client
 
 logger = logging.getLogger(__name__)

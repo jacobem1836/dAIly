@@ -8,6 +8,7 @@ Strategy:
 - Monkeypatched Google Flow.fetch_token and MSAL acquire_token_by_authorization_code
 - respx for mocking async httpx POST to Slack
 """
+import base64
 import os
 from unittest.mock import MagicMock, patch
 
@@ -24,7 +25,12 @@ from daily.db.models import Base, IntegrationToken, User
 # ---------------------------------------------------------------------------
 
 JWT_SECRET = "x" * 32
-VAULT_KEY = "y" * 32  # 32 ASCII bytes — accepted by _vault_key() fallback
+# Standard base64 encoding of 32 raw bytes — decodes to exactly 32 bytes via
+# the canonical load_vault_key() decoder (CRIT-02 fix). Previously this was
+# the raw ASCII string "y" * 32, which relied on _vault_key()'s now-removed
+# raw-bytes fallback (32 ASCII chars is NOT valid base64 for 32 bytes — it
+# decodes to 24 bytes and would now raise ValueError).
+VAULT_KEY = base64.b64encode(b"y" * 32).decode()
 
 
 @pytest.fixture(autouse=True)
@@ -336,6 +342,75 @@ async def test_slack_connect(client, auth_headers):
     body = response.json()
     assert "auth_url" in body
     assert "slack.com/oauth/v2/authorize" in body["auth_url"]
+
+
+# ---------------------------------------------------------------------------
+# Audit C3/H7: blocking OAuth code-exchange calls run off the event loop
+# with a timeout, so a slow/hanging IdP can't stall the whole process.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_blocking_token_exchange_returns_value():
+    """_run_blocking_token_exchange runs a sync callable via to_thread and returns its result."""
+    from daily.integrations.router import _run_blocking_token_exchange
+
+    def sync_fn(a, b, kw=None):
+        return {"a": a, "b": b, "kw": kw}
+
+    result = await _run_blocking_token_exchange(sync_fn, 1, 2, kw="three")
+    assert result == {"a": 1, "b": 2, "kw": "three"}
+
+
+@pytest.mark.asyncio
+async def test_run_blocking_token_exchange_raises_504_on_timeout():
+    """A code-exchange call that never returns in time raises HTTPException 504, not a hang."""
+    import time
+
+    from fastapi import HTTPException
+
+    from daily.integrations.router import _run_blocking_token_exchange
+
+    with patch(
+        "daily.integrations.router.OAUTH_TOKEN_EXCHANGE_TIMEOUT_SECONDS", 0.05
+    ):
+        def slow_fn():
+            time.sleep(1)
+            return "too late"
+
+        with pytest.raises(HTTPException) as exc:
+            await _run_blocking_token_exchange(slow_fn)
+
+    assert exc.value.status_code == 504
+
+
+@pytest.mark.asyncio
+async def test_google_callback_wraps_fetch_token_in_to_thread(client, auth_headers):
+    """google_callback calls flow.fetch_token via _run_blocking_token_exchange (asyncio.to_thread)."""
+    ac, redis, _ = client
+
+    state = "test-google-state-tothread"
+    await redis.setex(f"oauth_state:{state}", 600, "100")
+
+    mock_creds = MagicMock()
+    mock_creds.token = "fake-access-token"
+    mock_creds.refresh_token = "fake-refresh-token"
+    mock_creds.expiry = None
+    mock_creds.scopes = ["https://www.googleapis.com/auth/gmail.readonly"]
+
+    mock_flow = MagicMock()
+    mock_flow.credentials = mock_creds
+
+    with patch("daily.integrations.router.Flow") as MockFlow:
+        MockFlow.from_client_config.return_value = mock_flow
+
+        response = await ac.get(
+            f"/integrations/google/callback?code=fake-code&state={state}",
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 302
+    mock_flow.fetch_token.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

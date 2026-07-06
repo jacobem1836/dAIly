@@ -16,7 +16,8 @@ Security boundaries enforced in this module:
   T-04-09: No tools= parameter on draft_node LLM call; response_format=json_object only
 
 Signal/action capture:
-  D-08: append_signal / append_action_log wrapped in asyncio.create_task() — fire-and-forget.
+  D-08: append_signal / append_action_log wrapped in _spawn_background() — fire-and-forget,
+  with a strong Task reference retained (audit H2, see _background_tasks below).
 """
 
 import asyncio
@@ -38,6 +39,31 @@ from daily.profile.signals import SignalType
 
 logger = logging.getLogger(__name__)
 
+# Audit H2: asyncio.create_task() does not itself keep a strong reference to
+# the returned Task — only the event loop's internal (weak) bookkeeping does
+# — so a Task can be garbage-collected mid-flight before it finishes writing
+# an audit log or profile signal, with no warning beyond a "Task was
+# destroyed but it is pending" log line. These fire-and-forget calls write
+# compliance-relevant data (action_log rows, profile signals), so losing one
+# silently is a real correctness problem, not just a cosmetic one. Holding
+# each Task in this module-level set until it completes (discarding it via
+# the done-callback) keeps a strong reference for its whole lifetime.
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _spawn_background(coro) -> asyncio.Task:
+    """Fire-and-forget a coroutine while retaining a strong reference (audit H2).
+
+    Use this instead of a bare asyncio.create_task() for any fire-and-forget
+    call in this module (signal capture, action log writes) — see the
+    _background_tasks module docstring above for why.
+    """
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
+
+
 _EMAIL_RE = re.compile(r"[\w.+\-]+@[\w.\-]+")
 
 
@@ -51,11 +77,21 @@ def _extract_email(header_value: str) -> str:
     return m.group(0) if m else header_value
 
 
+# Explicit timeout/max_retries (audit H7) so a slow or transiently-failing
+# OpenAI call can't hang a graph node indefinitely or abort on one blip.
+_OPENAI_CLIENT_TIMEOUT_SECONDS = 30
+_OPENAI_CLIENT_MAX_RETRIES = 2
+
+
 def _openai_client() -> AsyncOpenAI:
     """Build AsyncOpenAI with explicit key from Settings (never relies on env)."""
     from daily.config import Settings  # noqa: PLC0415
 
-    return AsyncOpenAI(api_key=Settings().openai_api_key)
+    return AsyncOpenAI(
+        api_key=Settings().openai_api_key,
+        timeout=_OPENAI_CLIENT_TIMEOUT_SECONDS,
+        max_retries=_OPENAI_CLIENT_MAX_RETRIES,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +218,7 @@ async def respond_node(state: SessionState) -> dict:
 
     # Fire-and-forget signal capture (D-08) — does not block voice path
     if state.active_user_id:
-        asyncio.create_task(
+        _spawn_background(
             _capture_signal(state.active_user_id, SignalType.follow_up)
         )
 
@@ -199,7 +235,7 @@ async def summarise_thread_node(state: SessionState) -> dict:
     - No `tools=` parameter (SEC-05/T-03-06)
     - OrchestratorIntent validates LLM output (D-03)
 
-    Fire-and-forget expand signal via asyncio.create_task() (D-08).
+    Fire-and-forget expand signal via _spawn_background() (D-08).
 
     Args:
         state: Current SessionState with messages.
@@ -263,7 +299,7 @@ async def summarise_thread_node(state: SessionState) -> dict:
 
     # Fire-and-forget expand signal (D-08)
     if state.active_user_id:
-        asyncio.create_task(
+        _spawn_background(
             _capture_signal(state.active_user_id, SignalType.expand, target_id=message_id)
         )
 
@@ -277,7 +313,7 @@ async def _capture_signal(
 ) -> None:
     """Fire-and-forget signal capture. Creates its own DB session.
 
-    Called via asyncio.create_task() so it never blocks the graph node's
+    Called via _spawn_background() so it never blocks the graph node's
     return path (D-08 fire-and-forget pattern).
 
     Args:
@@ -451,14 +487,19 @@ async def draft_node(state: SessionState) -> dict:
                     }
                     for e in page.emails
                 ]
-                logger.warning("draft_node: fallback fetched %d emails", len(email_ctx))
+                # Audit M-2: debug-level — these are diagnostic-only, not
+                # warning-worthy (fallback fetch succeeding is normal).
+                logger.debug("draft_node: fallback fetched %d emails", len(email_ctx))
             except Exception as exc:
-                logger.warning("draft_node: fallback email fetch failed: %s", exc)
+                logger.debug("draft_node: fallback email fetch failed: %s", exc)
                 email_ctx = []
 
-    logger.warning("draft_node: email_ctx has %d entries", len(email_ctx))
+    logger.debug("draft_node: email_ctx has %d entries", len(email_ctx))
     email_context_str = _format_email_context(email_ctx)
-    logger.warning("draft_node: email_context_str preview: %s", email_context_str[:200])
+    # Audit M-2: this preview contains sender addresses + subject lines
+    # (built by _format_email_context) — PII that must not appear at
+    # warning level, which is visible even at LOG_LEVEL=INFO deployments.
+    logger.debug("draft_node: email_context_str preview: %s", email_context_str[:200])
 
     # Build system prompt
     system_content = DRAFT_SYSTEM_PROMPT.format(
@@ -561,6 +602,51 @@ async def approval_node(state: SessionState) -> dict:
     return {"approval_decision": decision}
 
 
+async def _collect_known_addresses() -> set[str]:
+    """Collect addresses the user has actually SENT to, for whitelist purposes.
+
+    Audit H-1: previously this also added every inbound sender's address to
+    known_addresses, so a single unsolicited email from an attacker was
+    enough to permanently whitelist them as an auto-approved send target —
+    "known contact" effectively meant "anyone who ever emailed you." Only
+    the "To" recipient of each email in the lookback window is collected
+    here; an inbound-only sender (someone the user has never actually sent
+    a message to) is never added. check_recipient_whitelist() will reject
+    such an address, and the user must add the contact explicitly (or reply
+    to them, which makes them a real recipient) before the assistant can
+    send to it.
+
+    This is intentionally provider-agnostic: it doesn't rely on a "Sent"
+    folder label (Gmail's labelIds do carry that signal reliably, but
+    Outlook's `labels` field here is user-assigned categories, not folder
+    location — see integrations/microsoft/adapter.py). Using only the
+    recipient field works the same way for both: for an inbound message the
+    recipient is just the user's own address (harmless noise), and for an
+    outbound message the recipient is the actual contact the user sent to.
+
+    Returns:
+        Set of lowercase-independent recipient addresses from the last 90
+        days of mailbox history. Empty set if no adapters are registered or
+        the fetch fails (fails closed — an empty whitelist rejects sends).
+    """
+    known_addresses: set[str] = set()
+    try:
+        from datetime import datetime, timedelta
+
+        from daily.orchestrator.session import get_email_adapters
+
+        adapters = get_email_adapters()
+        if adapters:
+            since = datetime.now() - timedelta(days=90)
+            page = await adapters[0].list_emails(since=since)
+            known_addresses = {
+                _extract_email(e.recipient) for e in page.emails if e.recipient
+            }
+    except Exception as exc:
+        logger.warning("_collect_known_addresses: could not load known_addresses: %s", exc)
+    return known_addresses
+
+
 async def _build_executor_for_type(
     action_type: ActionType,
     user_id: int,
@@ -599,11 +685,10 @@ async def _build_executor_for_type(
     from daily.config import Settings
     from daily.db.engine import async_session
     from daily.db.models import IntegrationToken
-    from daily.vault import decrypt_token
+    from daily.vault import decrypt_token, load_vault_key
 
     settings = Settings()
-    import base64
-    vault_key = base64.urlsafe_b64decode(settings.vault_key) if settings.vault_key else b""
+    vault_key = load_vault_key(settings.vault_key)
 
     if action_type in (ActionType.draft_email, ActionType.compose_email):
         async with async_session() as session:
@@ -632,21 +717,7 @@ async def _build_executor_for_type(
         granted_scopes = set(token.scopes.split()) if token.scopes else set()
         access_token = decrypt_token(token.encrypted_access_token, vault_key)
 
-        # Populate known_addresses from recent email metadata
-        known_addresses: set[str] = set()
-        try:
-            from datetime import datetime, timedelta
-
-            from daily.orchestrator.session import get_email_adapters
-
-            adapters = get_email_adapters()
-            if adapters:
-                since = datetime.now() - timedelta(days=90)
-                page = await adapters[0].list_emails(since=since)
-                known_addresses = {_extract_email(e.sender) for e in page.emails if e.sender}
-                known_addresses.update(_extract_email(e.recipient) for e in page.emails if e.recipient)
-        except Exception as exc:
-            logger.warning("_build_executor_for_type: could not load known_addresses: %s", exc)
+        known_addresses = await _collect_known_addresses()
 
         if token.provider == "microsoft":
             from msgraph import GraphServiceClient
@@ -669,19 +740,18 @@ async def _build_executor_for_type(
                 granted_scopes=granted_scopes,
             )
         else:
-            from google.oauth2.credentials import Credentials
             from googleapiclient.discovery import build
+
+            from daily.integrations.resolve import build_google_credentials
 
             refresh_token = (
                 decrypt_token(token.encrypted_refresh_token, vault_key)
                 if token.encrypted_refresh_token else None
             )
-            creds = Credentials(
-                token=access_token,
+            creds = build_google_credentials(
+                access_token=access_token,
                 refresh_token=refresh_token,
-                token_uri="https://oauth2.googleapis.com/token",
-                client_id=settings.google_client_id,
-                client_secret=settings.google_client_secret,
+                settings=settings,
             )
             service = build("gmail", "v1", credentials=creds)
             return GmailExecutor(
@@ -738,15 +808,14 @@ async def _build_executor_for_type(
             if token.encrypted_refresh_token else None
         )
 
-        from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
 
-        creds = Credentials(
-            token=access_token,
+        from daily.integrations.resolve import build_google_credentials
+
+        creds = build_google_credentials(
+            access_token=access_token,
             refresh_token=refresh_token,
-            token_uri="https://oauth2.googleapis.com/token",
-            client_id=settings.google_client_id,
-            client_secret=settings.google_client_secret,
+            settings=settings,
         )
         service = build("calendar", "v3", credentials=creds)
 
@@ -765,7 +834,7 @@ async def execute_node(state: SessionState) -> dict:
 
     Dispatches to the correct ActionExecutor based on action_type and provider.
     Calls executor.validate() (ACT-06 + D-11 scope check) before execute().
-    Logs the outcome via asyncio.create_task (fire-and-forget, D-08).
+    Logs the outcome via _spawn_background (fire-and-forget, D-08).
 
     Decision values:
       'confirm' — build executor, validate, execute, log
@@ -783,7 +852,7 @@ async def execute_node(state: SessionState) -> dict:
     """
     if state.approval_decision != "confirm":
         # Rejected — fire-and-forget log
-        asyncio.create_task(_log_action(state, "rejected", None))
+        _spawn_background(_log_action(state, "rejected", None))
         return {
             "messages": [AIMessage(content="Action cancelled.")],
             "pending_action": None,
@@ -801,7 +870,7 @@ async def execute_node(state: SessionState) -> dict:
         result = await executor.execute(state.pending_action)
 
         outcome = "sent" if result.success else "failed"
-        asyncio.create_task(_log_action(state, "approved", outcome))
+        _spawn_background(_log_action(state, "approved", outcome))
 
         return {
             "messages": [AIMessage(content=f"Done. {result.summary}")],
@@ -811,7 +880,7 @@ async def execute_node(state: SessionState) -> dict:
 
     except ValueError as ve:
         # Validation failure — log as rejected, surface error to user
-        asyncio.create_task(_log_action(state, "rejected", "validation_failed"))
+        _spawn_background(_log_action(state, "rejected", "validation_failed"))
         return {
             "messages": [AIMessage(content=f"Cannot execute: {ve}")],
             "pending_action": None,
@@ -819,7 +888,7 @@ async def execute_node(state: SessionState) -> dict:
         }
     except Exception as exc:
         logger.warning("execute_node: unexpected error: %s", exc)
-        asyncio.create_task(_log_action(state, "approved", "failed"))
+        _spawn_background(_log_action(state, "approved", "failed"))
         return {
             "messages": [AIMessage(content=f"Action failed: {exc}")],
             "pending_action": None,
@@ -834,7 +903,7 @@ async def _log_action(
 ) -> None:
     """Fire-and-forget action audit log. Creates its own DB session.
 
-    Mirrors _capture_signal pattern — called via asyncio.create_task() so
+    Mirrors _capture_signal pattern — called via _spawn_background() so
     it never blocks the voice response path (D-08).
 
     Args:
@@ -858,7 +927,6 @@ async def _log_action(
                 user_id=state.active_user_id,
                 action_type=action.action_type.value,
                 target=target,
-                content_summary=action.body,
                 full_body=action.body,
                 approval_status=status,
                 outcome=outcome,

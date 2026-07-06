@@ -42,7 +42,7 @@ final class RefreshBackoffTests: XCTestCase {
     // Test 4: refreshWithBackoff succeeds on first attempt — no retries needed
     func testSucceedsOnFirstAttempt() async throws {
         var callCount = 0
-        let auth = makeStubAuth { _ in
+        let auth = await makeStubAuth { _ in
             callCount += 1
             // first call succeeds
         }
@@ -53,7 +53,7 @@ final class RefreshBackoffTests: XCTestCase {
     // Test 5: hard 401 escapes immediately — only 1 attempt made
     func testHard401EscapesImmediately() async {
         var callCount = 0
-        let auth = makeStubAuth { _ in
+        let auth = await makeStubAuth { _ in
             callCount += 1
             throw AuthError.unauthorized
         }
@@ -72,7 +72,7 @@ final class RefreshBackoffTests: XCTestCase {
     // Test 6: transient failure retries maxAttempts times then throws
     func testTransientFailureRetriesMaxAttemptsTimes() async {
         var callCount = 0
-        let auth = makeStubAuth { _ in
+        let auth = await makeStubAuth { _ in
             callCount += 1
             throw AuthError.network("transient_error_\(callCount)")
         }
@@ -91,7 +91,7 @@ final class RefreshBackoffTests: XCTestCase {
     // Test 7: succeeds on third (last) attempt after two transient failures
     func testSucceedsOnLastAttempt() async throws {
         var callCount = 0
-        let auth = makeStubAuth { _ in
+        let auth = await makeStubAuth { _ in
             callCount += 1
             if callCount < RefreshBackoff.maxAttempts {
                 throw AuthError.network("transient")
@@ -109,6 +109,7 @@ final class RefreshBackoffTests: XCTestCase {
 /// Creates a minimal AuthService whose `refresh()` call executes `handler`.
 /// Uses a stub URLProtocol so no real network traffic occurs.
 /// The handler receives the attempt index (1-based) via a shared counter in the closure.
+@MainActor
 private func makeStubAuth(handler: @escaping (URLRequest) throws -> Void) -> AuthService {
     // We stub the URLSession used by AuthService.
     // The handler fires when the stub URLProtocol executes — but because RefreshBackoff

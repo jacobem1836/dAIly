@@ -113,8 +113,13 @@ async def test_word_count_soft_gate():
 
 
 def test_system_prompt_contains_constraints():
-    """System prompt enforces word count, no lists, flowing prose (D-06/D-07)."""
-    assert "375 words" in NARRATOR_SYSTEM_PROMPT, "Missing '375 words' in system prompt"
+    """System prompt enforces word count, no lists, flowing prose (D-06/D-07).
+
+    Word-count ceiling was tightened from 375 to 250 words in commit b591174
+    ("fix: resolve 4 live-session bugs ... content bleed") when the hardcoded
+    "Content ideas" paragraph was removed from the briefing structure.
+    """
+    assert "250 words" in NARRATOR_SYSTEM_PROMPT, "Missing '250 words' in system prompt"
     assert "No lists" in NARRATOR_SYSTEM_PROMPT or "no lists" in NARRATOR_SYSTEM_PROMPT.lower() or \
            "No bullet" in NARRATOR_SYSTEM_PROMPT or "bullet" in NARRATOR_SYSTEM_PROMPT.lower(), \
            "Missing list/bullet prohibition in system prompt"

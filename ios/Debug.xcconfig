@@ -1,0 +1,11 @@
+// Debug build settings.
+//
+// DAILY_BACKEND_BASE_URL is injected into Info.plist (see project.yml) and
+// read by Config.swift. Point this at your local backend / tunnel for
+// on-device or simulator testing:
+//   1. Run: cloudflared tunnel --url http://localhost:8000
+//   2. Paste the HTTPS URL below (note the required "$()" between slashes —
+//      xcconfig treats a bare "//" as a comment).
+//   3. Update the `applinks:` entry in dAIly/dAIly.entitlements to match.
+//   4. Re-run `xcodegen generate`.
+DAILY_BACKEND_BASE_URL = https:/$()/api.getdaily.dev

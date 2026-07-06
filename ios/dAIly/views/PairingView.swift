@@ -15,6 +15,8 @@ struct PairingView: View {
     @State private var code: String = ""
     @State private var errorMessage: String? = nil
     @State private var isVerifying: Bool = false
+    @State private var isSendingLink: Bool = false
+    @State private var sendLinkError: String? = nil
 
     init(auth: AuthService, onComplete: @escaping () -> Void) {
         self.auth = auth
@@ -50,15 +52,31 @@ struct PairingView: View {
                 .background(Color(.systemGray6))
                 .cornerRadius(10)
 
-            Button("Send link") {
-                Task {
-                    try? await auth.sendLink(email: email)
-                    state = .sent
-                }
+            if let sendLinkError {
+                Text(sendLinkError)
+                    .foregroundStyle(.red)
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button(isSendingLink ? "Sending\u{2026}" : "Send link") {
+                Task { await sendLink() }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(!email.contains("@"))
+            .disabled(!email.contains("@") || isSendingLink)
         }
+    }
+
+    private func sendLink() async {
+        isSendingLink = true
+        sendLinkError = nil
+        do {
+            try await auth.sendLink(email: email)
+            state = .sent
+        } catch {
+            sendLinkError = "Couldn't send the link. Check your connection and try again."
+        }
+        isSendingLink = false
     }
 
     // MARK: - Sent state: confirmation + manual code entry

@@ -113,9 +113,11 @@ def _e2e_env(monkeypatch):
     monkeypatch.setenv("MICROSOFT_CLIENT_SECRET", "fake-ms-secret")
     monkeypatch.setenv("SLACK_CLIENT_ID", "fake-slack-id")
     monkeypatch.setenv("SLACK_CLIENT_SECRET", "fake-slack-secret")
-    # LiveKit defaults are already set in config.py (devkey / secret) but make explicit
-    monkeypatch.setenv("LIVEKIT_API_KEY", "devkey")
-    monkeypatch.setenv("LIVEKIT_API_SECRET", "secret")
+    # Settings() now rejects LiveKit's known-public quickstart devkey/secret
+    # pair at startup (security fix, wave 1 audit remediation) — use
+    # non-blocklisted test values instead.
+    monkeypatch.setenv("LIVEKIT_API_KEY", "test-e2e-livekit-key")
+    monkeypatch.setenv("LIVEKIT_API_SECRET", "test-e2e-livekit-secret-32chars")
     monkeypatch.setenv("LIVEKIT_URL", "ws://localhost:7880")
 
 

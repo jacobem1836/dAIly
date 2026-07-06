@@ -396,9 +396,41 @@ class TestNodeFunctionStructure:
         assert "from langgraph.types import" in source
         assert "interrupt" in source
 
-    def test_execute_node_uses_asyncio_create_task(self):
-        """execute_node uses asyncio.create_task for fire-and-forget logging."""
+    def test_execute_node_uses_spawn_background_for_fire_and_forget_logging(self):
+        """execute_node fires off action logging without awaiting it.
+
+        Audit H2: previously this called bare asyncio.create_task(), which
+        does not retain a strong reference to the Task — the event loop could
+        garbage-collect it mid-flight before the audit log write completed.
+        execute_node now goes through _spawn_background(), which holds the
+        Task in a module-level set until it finishes (see nodes.py's
+        _background_tasks). _spawn_background() itself still calls
+        asyncio.create_task() internally — this only changes the call site.
+        """
         from daily.orchestrator import nodes
 
         source = inspect.getsource(nodes.execute_node)
-        assert "asyncio.create_task" in source
+        assert "_spawn_background" in source
+        assert "asyncio.create_task" not in source, (
+            "execute_node should go through _spawn_background(), not call "
+            "asyncio.create_task() directly (audit H2)"
+        )
+
+    def test_spawn_background_retains_strong_task_reference(self):
+        """_spawn_background() keeps the Task alive in _background_tasks until done (audit H2)."""
+        import asyncio
+
+        from daily.orchestrator import nodes
+
+        async def _noop():
+            return None
+
+        async def _run():
+            task = nodes._spawn_background(_noop())
+            assert task in nodes._background_tasks
+            await task
+            # Allow the done-callback (scheduled via call_soon) to run.
+            await asyncio.sleep(0)
+            assert task not in nodes._background_tasks
+
+        asyncio.run(_run())

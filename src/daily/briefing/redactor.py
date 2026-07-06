@@ -7,12 +7,20 @@ D-09: Credential regex strips sensitive values before content crosses to narrato
 D-10: Redaction runs per-item (not per-briefing) via GPT-4.1 mini.
 T-02-07: Bounded capture `{1,200}` prevents catastrophic backtracking.
 T-02-15: Semaphore caps concurrent OpenAI calls to prevent rate limiting.
+
+Audit H7: redact_emails/redact_messages gather with return_exceptions=True —
+without it, one item's OpenAI call failing (timeout, rate limit, etc.) would
+cancel every sibling task and abort the whole briefing instead of just
+dropping that one item's summary.
 """
 
 import asyncio
+import logging
 import re
 
 from openai import AsyncOpenAI
+
+logger = logging.getLogger(__name__)
 
 from daily.briefing.models import RankedEmail
 from daily.integrations.models import MessageMetadata
@@ -105,7 +113,14 @@ async def redact_emails(
     concurrently via asyncio.gather — semaphore inside summarise_and_redact
     provides rate-limit protection.
 
-    Returns the same list with summary fields populated.
+    Audit H7: gather uses return_exceptions=True so one email's OpenAI call
+    failing (timeout, rate limit, etc.) does not cancel every sibling task
+    and abort the whole briefing. A failed item keeps its default empty
+    summary — the narrator already falls back to the subject line when
+    summary is empty (see briefing/narrator.py).
+
+    Returns the same list (same length, same order) with summary fields
+    populated where redaction succeeded.
     """
 
     async def _process(email: RankedEmail) -> RankedEmail:
@@ -113,8 +128,19 @@ async def redact_emails(
         email.summary = await summarise_and_redact(body, client)
         return email
 
-    updated = await asyncio.gather(*[_process(e) for e in emails])
-    return list(updated)
+    results = await asyncio.gather(*[_process(e) for e in emails], return_exceptions=True)
+    updated: list[RankedEmail] = []
+    for email, result in zip(emails, results):
+        if isinstance(result, BaseException):
+            logger.warning(
+                "redact_emails: summarisation failed for message_id=%s: %s",
+                email.metadata.message_id,
+                result,
+            )
+            updated.append(email)
+        else:
+            updated.append(result)
+    return updated
 
 
 async def redact_messages(
@@ -123,6 +149,12 @@ async def redact_messages(
     client: AsyncOpenAI,
 ) -> dict[str, str]:
     """Summarise and redact all Slack messages concurrently.
+
+    Audit H7: gather uses return_exceptions=True so one message's OpenAI
+    call failing does not cancel every sibling task. A failed message is
+    dropped from the result dict — the narrator already falls back to an
+    empty string for any message_id missing from summaries (see
+    briefing/narrator.py).
 
     Returns a dict mapping message_id -> redacted summary. Runs all calls
     concurrently via asyncio.gather.
@@ -133,5 +165,15 @@ async def redact_messages(
         summary = await summarise_and_redact(text, client)
         return message.message_id, summary
 
-    pairs = await asyncio.gather(*[_process(m) for m in messages])
+    results = await asyncio.gather(*[_process(m) for m in messages], return_exceptions=True)
+    pairs: list[tuple[str, str]] = []
+    for message, result in zip(messages, results):
+        if isinstance(result, BaseException):
+            logger.warning(
+                "redact_messages: summarisation failed for message_id=%s: %s",
+                message.message_id,
+                result,
+            )
+            continue
+        pairs.append(result)
     return dict(pairs)

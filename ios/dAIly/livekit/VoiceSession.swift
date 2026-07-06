@@ -31,7 +31,10 @@ public enum VoiceSessionError: Error, Equatable {
 ///   2. Fetches a LiveKit room token from POST /livekit/token via LiveKitTokenSource
 ///   3. On 401: calls RefreshBackoff.refreshWithBackoff() (3 attempts: 0→0.5s→1s)
 ///      - Transient exhaustion → .retryable state + user-facing Retry affordance
-///      - Hard 401 (invalid refresh token) → .error("re_pair_required") → routes to onboarding
+///      - Hard 401 (invalid refresh token) → .error("re_pair_required") — VoiceView
+///        observes this specific value and calls AppState.signOut() so the app root
+///        routes back to pairing instead of leaving the user stuck on a broken voice
+///        screen with a Retry that can never succeed (T-22-xx re-pair dead end fix).
 ///   4. Connects to LiveKit room with mic enabled (ConnectOptions.enableMicrophone: true)
 ///   5. An 8-second timeout fires if the room never reaches .listening state (T-19-22)
 ///   6. A 30-second timeout fires if reconnecting does not recover (T-19-28)
@@ -58,6 +61,10 @@ public final class VoiceSession: ObservableObject {
     /// Set by handleBackground() when the app leaves foreground with an active session.
     /// Cleared by handleForeground() after a reconnect attempt or when already idle.
     private var shouldResume: Bool = false
+
+    /// How long to wait, after the room connects, for the agent to join and
+    /// start speaking before surfacing an actionable error (T-22-01).
+    private static let agentJoinTimeout: Duration = .seconds(20)
 
     public init(tokenSource: LiveKitTokenSource,
                 auth: AuthService,
@@ -87,6 +94,8 @@ public final class VoiceSession: ObservableObject {
                 try await RefreshBackoff.refreshWithBackoff(auth)
             } catch AuthError.unauthorized {
                 // Invalid refresh token — terminal failure, user must re-pair.
+                // Route via the dedicated sentinel so the UI can sign the user
+                // out instead of offering a Retry that will fail forever.
                 state = .error("re_pair_required")
                 throw VoiceSessionError.notAuthenticated
             } catch {
@@ -221,13 +230,14 @@ public final class VoiceSession: ObservableObject {
             reconnectTimeoutTask?.cancel()
             reconnectTimeoutTask = nil
             state = .listening
-            // 15-second agent-join timeout: if no agent participant speaks within
-            // 15s of the room connecting, surface an actionable error. This guards
-            // against the worker not running or pointing at a different LiveKit
-            // server — without this the UI stays in .listening forever (T-22-01).
+            // Agent-join timeout: if no agent participant speaks within
+            // Self.agentJoinTimeout of the room connecting, surface an actionable
+            // error. This guards against the worker not running or pointing at a
+            // different LiveKit server — without this the UI stays in .listening
+            // forever (T-22-01).
             agentJoinTimeoutTask?.cancel()
             agentJoinTimeoutTask = Task { [weak self] in
-                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                try? await Task.sleep(for: Self.agentJoinTimeout)
                 await MainActor.run { [weak self] in
                     guard let self else { return }
                     if case .listening = self.state {

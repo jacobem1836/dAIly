@@ -1,12 +1,20 @@
 import SwiftUI
 import AVFoundation
+import os
 
 /// Root onboarding carousel (D-01): TabView with .page style. Hosts 8 tabs:
 /// Welcome → Pairing → Google → Microsoft → Slack → Permissions → Schedule → Completion.
 ///
-/// Gate semantics (D-02): forward swipe is clamped via .onChange — the user
-/// can only advance past a tab when its gate condition is met. Back-swipe
-/// (lower selection) is always allowed (D-03).
+/// Gate semantics (D-02): forward swipe is clamped in the `currentTab` binding's
+/// setter — the user can only advance past a tab when its gate condition is met.
+/// Back-swipe (lower selection) is always allowed (D-03).
+///
+/// Single source of truth: OnboardingCoordinator owns the step + gate machine
+/// (unit-tested by OnboardingFlowTests.swift). OnboardingView used to
+/// reimplement an equivalent `currentTab`/`allowedMaxTab` pair inline — that
+/// duplicate has been removed; this view now only drives the coordinator and
+/// keeps its gate inputs (hasAccessToken, atLeastOneIntegrationConnected,
+/// micPermissionGranted, scheduleSaved) in sync with AppState/IntegrationState.
 ///
 /// State injection: AppState comes from @EnvironmentObject (provided by
 /// dAIlyApp). IntegrationState is also @EnvironmentObject so dAIlyApp's
@@ -18,31 +26,37 @@ struct OnboardingView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var integrationState: IntegrationState
 
-    @State private var currentTab: Int = 0
+    @StateObject private var coordinator = OnboardingCoordinator()
+
     @State private var briefingTime: Date =
         Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: Date()) ?? Date()
-    @State private var scheduleSaved: Bool = false
     @State private var micPermissionGranted: Bool = false
 
-    /// Highest tab index the user is allowed to reach right now.
-    /// (Pitfall 3 mitigation: returns dynamically based on @Published state,
-    /// so SwiftUI re-evaluates whenever hasAccessToken or
-    /// integrationState.connectedProviders change.)
-    private var allowedMaxTab: Int {
-        if !appState.hasAccessToken { return 1 }            // Locked at Pairing
-        if !integrationState.atLeastOneConnected { return 4 } // Locked at Slack (D-12)
-        if !micPermissionGranted { return 5 }               // Locked at Permissions (D-09)
-        if !scheduleSaved { return 6 }                      // Locked at Schedule
-        return 7                                            // Completion reachable
+    private static let logger = Logger(subsystem: "com.jacobmarriott.daily", category: "onboarding")
+
+    /// Bridges TabView's Int selection to the coordinator's OnboardingStep.
+    /// The gate check happens directly in the setter — not in a separate
+    /// .onChange — so there is no window where a stale gate value could be
+    /// read between the write and the check; the clamp and the mutation are
+    /// the same statement.
+    private var currentTab: Binding<Int> {
+        Binding(
+            get: { coordinator.currentStep.rawValue },
+            set: { requested in
+                guard let step = OnboardingStep(rawValue: requested) else { return }
+                let maxStep = coordinator.maximumReachableStep
+                coordinator.currentStep = step.rawValue <= maxStep.rawValue ? step : maxStep
+            }
+        )
     }
 
     var body: some View {
-        TabView(selection: $currentTab) {
+        TabView(selection: currentTab) {
             WelcomeView(onContinue: { advance() })
-                .tag(0)
+                .tag(OnboardingStep.welcome.rawValue)
 
             PairingView(auth: auth, onComplete: { advance() })
-                .tag(1)
+                .tag(OnboardingStep.pairing.rawValue)
 
             IntegrationView(
                 provider: .google,
@@ -51,7 +65,7 @@ struct OnboardingView: View {
                 isLastIntegrationPage: false,
                 onContinue: { advance() }
             )
-            .tag(2)
+            .tag(OnboardingStep.google.rawValue)
 
             IntegrationView(
                 provider: .microsoft,
@@ -60,7 +74,7 @@ struct OnboardingView: View {
                 isLastIntegrationPage: false,
                 onContinue: { advance() }
             )
-            .tag(3)
+            .tag(OnboardingStep.microsoft.rawValue)
 
             IntegrationView(
                 provider: .slack,
@@ -69,23 +83,34 @@ struct OnboardingView: View {
                 isLastIntegrationPage: true,
                 onContinue: { advance() }
             )
-            .tag(4)
+            .tag(OnboardingStep.slack.rawValue)
 
             PermissionsView(onGranted: {
                 micPermissionGranted = true
+                coordinator.micPermissionGranted = true
+                // ponytail: temporary instrumentation to diagnose an intermittent
+                // stuck-at-Permissions repro. A prior session's root-cause theory
+                // — that @State batching makes advance() read a stale gate value
+                // — is almost certainly wrong (SwiftUI/Combine writes are visible
+                // synchronously within the same frame, and PairingView.advance()
+                // uses the identical pattern without the bug). Logging the real
+                // gate inputs at the moment of this transition lets the actual
+                // cause be captured from a device log instead of guessed at.
+                // Remove once the repro is understood and fixed.
+                logGateSnapshot(trigger: "permissions.onGranted")
                 advance()
             })
-            .tag(5)
+            .tag(OnboardingStep.permissions.rawValue)
 
             ScheduleView(
                 auth: auth,
                 onComplete: { savedTime in
                     briefingTime = savedTime
-                    scheduleSaved = true
+                    coordinator.scheduleSaved = true
                     advance()
                 }
             )
-            .tag(6)
+            .tag(OnboardingStep.schedule.rawValue)
 
             CompletionView(
                 auth: auth,
@@ -97,7 +122,7 @@ struct OnboardingView: View {
                     appState.hasCompletedOnboarding = true
                 }
             )
-            .tag(7)
+            .tag(OnboardingStep.completion.rawValue)
         }
         .tabViewStyle(.page)
         .indexViewStyle(.page(backgroundDisplayMode: .always))
@@ -105,35 +130,59 @@ struct OnboardingView: View {
         // .onChange won't fire if hasAccessToken starts as true (no value change),
         // so we also check on task launch.
         .task {
-            if appState.hasAccessToken && currentTab == 1 {
-                withAnimation { currentTab = 2 }
+            syncGates()
+            if appState.hasAccessToken && coordinator.currentStep == .pairing {
+                withAnimation { coordinator.currentStep = .google }
             }
             // Pre-grant: if the user already allowed mic in a previous session,
             // skip the gate so returning users don't re-see the Permissions tab.
             if AVAudioSession.sharedInstance().recordPermission == .granted {
                 micPermissionGranted = true
+                coordinator.micPermissionGranted = true
             }
         }
-        // Forward-only gate (D-02). Clamp on every selection change.
-        // Single-argument form required for iOS 16 deployment target compatibility.
-        .onChange(of: currentTab) { newValue in
-            if newValue > allowedMaxTab {
-                currentTab = allowedMaxTab
-            }
-        }
-        // Auto-advance after pairing succeeds (Pattern 4).
+        // Auto-advance after pairing succeeds (Pattern 4). Also keeps the
+        // coordinator's hasAccessToken gate input in sync.
         .onChange(of: appState.hasAccessToken) { newValue in
-            if newValue && currentTab == 1 {
-                withAnimation { currentTab = 2 }
+            coordinator.hasAccessToken = newValue
+            if newValue && coordinator.currentStep == .pairing {
+                withAnimation { coordinator.currentStep = .google }
             }
+        }
+        // Keeps the coordinator's integration gate input in sync whenever a
+        // provider connects (e.g. via the /oauth/success deep link handled at
+        // the App level).
+        .onChange(of: integrationState.connectedProviders) { _ in
+            coordinator.atLeastOneIntegrationConnected = integrationState.atLeastOneConnected
         }
     }
 
-    /// Advance one tab if the current tab's gate allows it.
+    /// Advance one tab if the coordinator's gate allows it.
     private func advance() {
-        let next = currentTab + 1
-        if next <= allowedMaxTab {
-            withAnimation { currentTab = next }
-        }
+        withAnimation { _ = coordinator.advance() }
+    }
+
+    /// Pushes the current AppState/IntegrationState/local gate inputs into the
+    /// coordinator. Called once on .task; subsequent changes flow through the
+    /// onChange handlers and the closures above.
+    private func syncGates() {
+        coordinator.hasAccessToken = appState.hasAccessToken
+        coordinator.atLeastOneIntegrationConnected = integrationState.atLeastOneConnected
+        coordinator.micPermissionGranted = micPermissionGranted
+    }
+
+    // ponytail: diagnostic logging for the stuck-at-Permissions repro — see
+    // the comment on PermissionsView's onGranted closure above. Logs every
+    // input maximumReachableStep depends on at the moment of the transition.
+    private func logGateSnapshot(trigger: String) {
+        Self.logger.debug("""
+        onboarding gate snapshot [\(trigger, privacy: .public)]: \
+        currentStep=\(coordinator.currentStep.label, privacy: .public) \
+        hasAccessToken=\(coordinator.hasAccessToken, privacy: .public) \
+        atLeastOneIntegrationConnected=\(coordinator.atLeastOneIntegrationConnected, privacy: .public) \
+        micPermissionGranted=\(coordinator.micPermissionGranted, privacy: .public) \
+        scheduleSaved=\(coordinator.scheduleSaved, privacy: .public) \
+        maximumReachableStep=\(coordinator.maximumReachableStep.label, privacy: .public)
+        """)
     }
 }
